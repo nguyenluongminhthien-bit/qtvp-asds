@@ -35,7 +35,7 @@ const getDirectImageLink = (url: string) => {
 // ĐÃ KHỚP 100% ID CHỨNG CHỈ VỚI BẢNG SUPABASE
 const CERTIFICATES = [
   { id: 'cc_atvsld', label: 'ATVSLĐ', icon: ShieldCheck }, { id: 'cc_anbv', label: 'ANBV', icon: ShieldCheck },
-  { id: 'cc_pccc', label: 'PCCC', icon: Flame }, { id: 'cc_cnch', label: 'CHCN', icon: LifeBuoy },
+  { id: 'cc_pccc', label: 'PCCC', icon: Flame }, { id: 'cc_cnch', label: 'CNCH', icon: LifeBuoy },
   { id: 'cc_so_cap_cuu', label: 'Sơ cấp cứu', icon: Heart }, { id: 'cc_cpr', label: 'CPR', icon: Activity },
   { id: 'cc_vo_thuat', label: 'Võ thuật', icon: Dumbbell }, { id: 'giay_phep_lai_xe', label: 'GPLX', icon: Car },
   { id: 'cc_attp', label: 'ATTP', icon: Utensils }, { id: 'cc_pha_che', label: 'Pha chế', icon: Coffee },
@@ -91,6 +91,22 @@ export default function PersonnelPage() {
 
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
   const formData = modal.formData;
+
+  // 🟢 TỰ ĐỘNG CẬP NHẬT TÊN CHỨNG NHẬN ATVSLĐ DỰA VÀO NHÓM ĐỐI TƯỢNG
+  useEffect(() => {
+    if (modal.isOpen && formData.cc_atvsld) {
+      const nhom = String(formData.nhom_doi_tuong || '');
+      let certName = '';
+      if (nhom === '1' || nhom === '2') certName = 'Giấy chứng nhận huấn luyện An toàn, Vệ sinh lao động';
+      else if (nhom === '3') certName = 'Thẻ An toàn lao động';
+      else if (nhom === '4') certName = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
+      else if (nhom === '6') certName = 'Chứng nhận huấn luyện ATVSLĐ';
+
+      if (formData.chung_nhan !== certName) {
+        setModal(prev => ({ ...prev, formData: { ...prev.formData, chung_nhan: certName } }));
+      }
+    }
+  }, [formData.nhom_doi_tuong, formData.cc_atvsld, modal.isOpen]);
 
   const gplxGroups = [
     { title: 'Tùy chọn chung', options: [{ label: 'Không có', value: 'Không có' }] },
@@ -230,14 +246,44 @@ export default function PersonnelPage() {
         String(item.ma_so_nhan_vien || '').toLowerCase().includes(lower) || 
         String(item.ho_ten || '').toLowerCase().includes(lower) || 
         String(donViMap[String(item.id_don_vi)] || '').toLowerCase().includes(lower) ||
-        String(item.chuc_vu || '').toLowerCase().includes(lower) 
+        String(item.chuc_vu || '').toLowerCase().includes(lower) ||
+        String(item.phong_ban || '').toLowerCase().includes(lower) 
       );
     }
 
+    // 🟢 BẢNG THỨ TỰ ƯU TIÊN PHÂN LOẠI NHÂN SỰ
+    const phanLoaiOrder: Record<string, number> = {
+      'Lãnh đạo': 1,
+      'Chủ tịch': 2,
+      'Tổng Giám đốc': 3,
+      'Phó Tổng Giám đốc': 4,
+      'Giám đốc': 5,
+      'Phó Giám đốc': 6,
+      'Trưởng phòng': 7,
+      'Phó phòng': 8,
+      'Trưởng nhóm': 9,
+      'Chuyên viên': 10,
+      'PT DVHT KD': 11,
+      'PT DVHC': 12,
+      'PT NS': 13,
+      'BV, ĐTKH': 14
+    };
+
     return result.sort((a, b) => {
+      // Ưu tiên 1: Lọc trạng thái (Người "Đã nghỉ việc" luôn nằm dưới cùng)
       if (a.trang_thai === 'Đã nghỉ việc' && b.trang_thai !== 'Đã nghỉ việc') return 1;
       if (a.trang_thai !== 'Đã nghỉ việc' && b.trang_thai === 'Đã nghỉ việc') return -1;
-      return 0;
+      
+      // Ưu tiên 2: Xếp theo Phân loại (Theo đúng thứ tự 1 -> 11 ở bảng trên)
+      const orderA = phanLoaiOrder[a.phan_loai || ''] || 99;
+      const orderB = phanLoaiOrder[b.phan_loai || ''] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+
+      // Ưu tiên 3: Nếu cùng Phân loại -> Xếp theo created_at 
+      // (Tạo trước/cũ hơn sẽ hiển thị trước, tạo sau/mới hơn hiển thị sau)
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeA - timeB; 
     });
 
   }, [data, personnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, selectedUnitSubordinates]);
@@ -294,6 +340,7 @@ export default function PersonnelPage() {
     setError(null);
   };
 
+  // 🟢 HÀM LƯU DỮ LIỆU ĐÃ ĐƯỢC NÂNG CẤP: ĐỒNG BỘ TOÀN BỘ TRỪ KHỐI "CÔNG VIỆC/LƯƠNG"
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.id_don_vi) return toast.warning("Vui lòng chọn Đơn vị công tác!");
@@ -321,19 +368,63 @@ export default function PersonnelPage() {
 
     setSubmitting(true); setError(null);
     try {
+      // 1. Lưu bản ghi hiện tại
       const response = await apiService.save(finalDataToSave, modal.mode, "ns_dich_vu");
+      const currentId = response.id || response.newId || finalDataToSave.id || `NS-${Date.now()}`;
+      finalDataToSave.id = currentId;
+
+      // 2. 🟢 TỰ ĐỘNG ĐỒNG BỘ KIÊM NHIỆM (Đồng bộ TẤT CẢ trừ các cột trong hình)
+      if (modal.mode === 'update' && finalDataToSave.ma_so_nhan_vien) {
+        const kiemNhiemList = data.filter(
+          item => item.ma_so_nhan_vien === finalDataToSave.ma_so_nhan_vien && item.id !== currentId
+        );
+
+        if (kiemNhiemList.length > 0) {
+          // Khai báo danh sách các trường "CẤM ĐỤNG VÀO" (Dựa trên hình ảnh yêu cầu)
+          const fieldsToExclude = [
+            'id',                 // Tuyệt đối không chép đè ID
+            'id_don_vi',          // Đơn vị công tác
+            'phong_ban',          // Bộ phận
+            'chuc_vu',            // Chức vụ
+            'phan_loai',          // Phân loại
+            'ngach_luong',        // Ngạch lương
+            'thu_nhap',           // Mức thu nhập
+            'trang_thai',         // Trạng thái làm việc
+            'ngay_nghi_viec',     // (Đi kèm trạng thái)
+            'ngay_vao_lam_lai',   // (Đi kèm trạng thái)
+          ];
+
+          // Tạo Object chỉ chứa những trường ĐƯỢC PHÉP đồng bộ
+          const syncData: any = {};
+          Object.keys(finalDataToSave).forEach(key => {
+            if (!fieldsToExclude.includes(key)) {
+              syncData[key] = finalDataToSave[key];
+            }
+          });
+
+          // Chạy vòng lặp cập nhật âm thầm các bản ghi kiêm nhiệm
+          for (const kn of kiemNhiemList) {
+            const updatedKN = { ...kn, ...syncData };
+            await apiService.save(updatedKN, 'update', "ns_dich_vu");
+            
+            // Cập nhật luôn State ngoài Frontend để thấy kết quả ngay lập tức
+            setData(prev => prev.map(item => item.id === updatedKN.id ? updatedKN : item));
+          }
+          toast.success(`Đã tự động đồng bộ thông tin cho ${kiemNhiemList.length} vị trí kiêm nhiệm!`);
+        }
+      }
+
+      // 3. Cập nhật State cho bản ghi chính
       if (modal.mode === 'create') {
-        finalDataToSave.id = response.id || response.newId || `NS-${Date.now()}`; 
         setData(prev => [...prev, finalDataToSave]); 
       } else {
         setData(prev => prev.map(item => item.id === finalDataToSave.id ? finalDataToSave : item));
       }
+      
       setModal(prev => ({ ...prev, isOpen: false }));  
-      if (modal.mode === 'create') {
-        toast.success("Thêm mới nhân sự thành công!");
-      } else {
-        toast.success("Cập nhật thông tin nhân sự thành công!");
-      }
+      if (modal.mode === 'create') toast.success("Thêm mới nhân sự thành công!");
+      else toast.success("Cập nhật thông tin nhân sự thành công!");
+
     } catch (err: any) { 
       setError(err.message || 'Lỗi lưu dữ liệu.'); 
       toast.error(err.message || "Đã xảy ra lỗi khi lưu thông tin nhân sự!");
@@ -979,12 +1070,7 @@ export default function PersonnelPage() {
 
                 <div className="w-24 h-24 sm:w-28 sm:h-32 rounded-2xl bg-blue-100 text-[#05469B] flex items-center justify-center text-4xl font-black shrink-0 border-4 border-white shadow-md overflow-hidden relative">
                   {viewData.hinh_anh ? (
-                    <img 
-                      src={getDirectImageLink(viewData.hinh_anh)} 
-                      alt={viewData.ho_ten} 
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Lỗi+Ảnh'; }}
-                    />
+                    <img src={getDirectImageLink(viewData.hinh_anh)} alt={viewData.ho_ten} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Lỗi+Ảnh'; }} />
                   ) : (
                     viewData.ho_ten?.charAt(0).toUpperCase() || 'U'
                   )}
@@ -1015,8 +1101,9 @@ export default function PersonnelPage() {
 
               <div>
                 <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2"><Building2 size={18} className="text-[#05469B]"/> Thông tin Công tác</h4>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Đơn vị</p><p className="font-semibold text-gray-800 break-words">{donViMap[String(viewData.id_don_vi)] || viewData.id_don_vi || '---'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Bộ phận</p><p className="font-semibold text-gray-800">{viewData.phong_ban || '---'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Phân loại</p><p className="font-semibold text-gray-800">{viewData.phan_loai || '---'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Ngày nhận việc</p><p className="font-semibold text-gray-800">{viewData.ngay_nhan_vien ? new Date(viewData.ngay_nhan_vien).toLocaleDateString('vi-VN') : '---'}</p></div>
                   
@@ -1026,7 +1113,6 @@ export default function PersonnelPage() {
                     <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Thâm niên</p><p className="font-semibold text-emerald-600">{calculateSeniority(viewData.ngay_nhan_vien, viewData.trang_thai || 'Đang làm việc', viewData.ngay_nghi_viec || '')}</p></div>
                   )}
 
-                  {/* THÊM MỚI: NGẠCH LƯƠNG CÓ CON MẮT */}
                   <div>
                     <p className="text-xs text-gray-500 uppercase font-bold mb-1">Ngạch lương</p>
                     <div className="flex items-center gap-1.5">
@@ -1041,7 +1127,6 @@ export default function PersonnelPage() {
                     </div>
                   </div>
 
-                  {/* HIỂN THỊ NGÀY VÀO LÀM LẠI NẾU CÓ */}
                   {viewData.ngay_vao_lam_lai && (
                     <div className="col-span-2 md:col-span-1">
                       <p className="text-xs text-blue-500 uppercase font-bold mb-1">Vào làm lại</p>
@@ -1050,7 +1135,6 @@ export default function PersonnelPage() {
                       </p>
                     </div>
                   )}
-
                 </div>
               </div>
 
@@ -1106,8 +1190,36 @@ export default function PersonnelPage() {
                       <p className="text-sm text-gray-400 italic">Chưa cập nhật chứng chỉ khác.</p>
                     )}
                   </div>
+
+                  {/* HIỂN THỊ CHI TIẾT ATVSLĐ GỌN TRONG 1 DÒNG */}
+                  {viewData.cc_atvsld && viewData.chung_nhan && (
+                    <div className="mt-2 p-3 sm:p-4 bg-emerald-50 rounded-xl border border-emerald-100 w-full flex flex-col gap-2">
+                      <p className="font-bold text-emerald-800 text-sm">🏅 {viewData.chung_nhan}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-700 font-medium">
+                        {viewData.nhom_doi_tuong && (
+                          <>
+                            <span className="font-bold text-[#05469B]">Nhóm {viewData.nhom_doi_tuong}</span>
+                            <span className="text-gray-300 hidden sm:inline">|</span>
+                          </>
+                        )}
+                        <span>
+                          Khoá huấn luyện: <span className="font-bold">
+                            {viewData.huan_luyen_tu ? new Date(viewData.huan_luyen_tu).toLocaleDateString('vi-VN') : '---'} - {viewData.huan_luyen_den ? new Date(viewData.huan_luyen_den).toLocaleDateString('vi-VN') : '---'}
+                          </span>
+                        </span>
+                        <span className="text-gray-300 hidden sm:inline">|</span>
+                        <span>
+                          Có giá trị đến: <span className="font-black text-emerald-700">
+                            {viewData.gia_tri_den ? new Date(viewData.gia_tri_den).toLocaleDateString('vi-VN') : '---'}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               </div>
+
             </div>
             
             <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end shrink-0">
@@ -1160,75 +1272,95 @@ export default function PersonnelPage() {
                       />
                       <ImageIcon className="absolute left-3 top-2.5 text-gray-400" size={18} />
                     </div>
-                    {formData.hinh_anh && <p className="text-[10px] text-emerald-600 font-bold mt-1">✓ Đã nhận diện đường dẫn ảnh</p>}
                   </div>
                 </div>
               </div>
 
+              {/* 🟢 CÔNG VIỆC CHIA LÀM 3 DÒNG THEO THIẾT KẾ MỚI */}
               <div className="bg-gray-50 p-4 sm:p-5 rounded-xl border border-gray-200">
                 <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-gray-400 rounded-full"></div> Công việc</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-1">
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị công tác *</label>
-                    <select 
-                      required 
-                      name="id_don_vi" 
-                      value={formData.id_don_vi || ''} 
-                      onChange={handleInputChange} 
-                      className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] text-sm"
-                      style={{ fontFamily: 'monospace, sans-serif' }}
-                    >
-                      <option value="">-- Chọn đơn vị --</option>
-                      {buildHierarchicalOptions(donViList.filter(dv => allowedDonViIds.includes(dv.id))).map(({ unit, prefix }) => (
-                        <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
-                          {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại</label>
-                    <select name="phan_loai" value={formData.phan_loai || 'Lãnh đạo'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
-                      <option value="Lãnh đạo">Lãnh đạo</option>
-                      <option value="PT DVHT KD">PT DVHT KD</option>
-                      <option value="PT DVHC">PT DVHC</option>
-                      <option value="PT NS">PT NS</option>
-                      <option value="BV, ĐTKH">BV, ĐTKH</option>
-                      <option value="Chuyên viên">Chuyên viên</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái làm việc</label>
-                    <select name="trang_thai" value={formData.trang_thai || 'Đang làm việc'} onChange={handleInputChange} className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold ${formData.trang_thai === 'Đã nghỉ việc' ? 'text-red-600' : 'text-emerald-600'}`}>
-                      <option value="Đang làm việc">Đang làm việc</option>
-                      <option value="Đã nghỉ việc">Đã nghỉ việc</option>
-                    </select>
-                  </div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc</label><input type="date" name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                  {formData.trang_thai === 'Đã nghỉ việc' && (
-                    <div><label className="block text-xs font-bold text-red-600 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-red-200 rounded-lg bg-red-50 outline-none focus:ring-2 focus:ring-red-500 font-bold" /></div>
-                  )}
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label>
-                    <select name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
-                      <option value="">-- Chọn trình độ --</option>
-                      <option value="Tiểu học">Tiểu học</option>
-                      <option value="Trung học cơ sở">Trung học cơ sở</option>
-                      <option value="Trung học phổ thông">Trung học phổ thông</option>
-                      <option value="Sơ cấp: Chứng chỉ nghề 3 tháng">Sơ cấp: Chứng chỉ nghề 3 tháng</option>
-                      <option value="Sơ cấp: Chứng chỉ nghề 6 tháng">Sơ cấp: Chứng chỉ nghề 6 tháng</option>
-                      <option value="Trung cấp nghề">Trung cấp nghề</option>
-                      <option value="Trung cấp chuyên nghiệp">Trung cấp chuyên nghiệp</option>
-                      <option value="Cao đẳng">Cao đẳng</option>
-                      <option value="Đại học">Đại học</option>
-                      <option value="Thạc sĩ/Tiến sĩ">Thạc sĩ/Tiến sĩ</option>
-                    </select>
-                  </div>
+                <div className="flex flex-col gap-4">
                   
-                  {/* Ô NHẬP MỨC THU NHẬP VÀ NGẠCH LƯƠNG CHIA ĐÔI */}
-                  <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Mức thu nhập (VNĐ)</label><input type="text" name="thu_nhap" value={formatCurrency(formData.thu_nhap)} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                  <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label><input type="text" name="ngach_luong" value={formData.ngach_luong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="VD: Bậc 1" /></div>
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="md:col-span-1">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị công tác *</label>
+                      <select required name="id_don_vi" value={formData.id_don_vi || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] text-sm" style={{ fontFamily: 'monospace, sans-serif' }}>
+                        <option value="">-- Chọn đơn vị --</option>
+                        {buildHierarchicalOptions(donViList.filter(dv => allowedDonViIds.includes(dv.id))).map(({ unit, prefix }) => (
+                          <option key={unit.id} value={unit.id} className="font-normal text-gray-700">{prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận</label>
+                      <input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="VD: Phòng Kinh Doanh" />
+                    </div>
+                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại</label>
+                      <select name="phan_loai" value={formData.phan_loai || 'Chuyên viên'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
+                        <option value="Lãnh đạo">Lãnh đạo</option>
+                        <option value="Giám đốc">Giám đốc</option>
+                        <option value="Phó Giám đốc">Phó Giám đốc</option>
+                        <option value="Trưởng phòng">Trưởng phòng</option>
+                        <option value="Phó phòng">Phó phòng</option>
+                        <option value="Trưởng nhóm">Trưởng nhóm</option>
+                        <option value="Chuyên viên">Chuyên viên</option>
+                        <option value="PT DVHT KD">PT DVHT KD</option>
+                        <option value="PT DVHC">PT DVHC</option>
+                        <option value="PT NS">PT NS</option>
+                        <option value="BV, ĐTKH">BV, ĐTKH</option>
+                      </select>
+                    </div>
+                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc</label><input type="date" name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label>
+                      <select name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
+                        <option value="">-- Chọn trình độ --</option>
+                        <option value="Tiểu học">Tiểu học</option>
+                        <option value="Trung học cơ sở">Trung học cơ sở</option>
+                        <option value="Trung học phổ thông">Trung học phổ thông</option>
+                        <option value="Sơ cấp: Chứng chỉ nghề 3 tháng">Sơ cấp: Chứng chỉ nghề 3 tháng</option>
+                        <option value="Sơ cấp: Chứng chỉ nghề 6 tháng">Sơ cấp: Chứng chỉ nghề 6 tháng</option>
+                        <option value="Trung cấp nghề">Trung cấp nghề</option>
+                        <option value="Trung cấp chuyên nghiệp">Trung cấp chuyên nghiệp</option>
+                        <option value="Cao đẳng">Cao đẳng</option>
+                        <option value="Đại học">Đại học</option>
+                        <option value="Thạc sĩ/Tiến sĩ">Thạc sĩ/Tiến sĩ</option>
+                      </select>
+                    </div>
+                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label><input type="text" name="ngach_luong" value={formData.ngach_luong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="VD: Bậc 1" /></div>
+                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Mức thu nhập (VNĐ)</label><input type="text" name="thu_nhap" value={formatCurrency(formData.thu_nhap)} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái làm việc</label>
+                      <select name="trang_thai" value={formData.trang_thai || 'Đang làm việc'} onChange={handleInputChange} className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold ${formData.trang_thai === 'Đã nghỉ việc' ? 'text-red-600' : 'text-emerald-600'}`}>
+                        <option value="Đang làm việc">Đang làm việc</option>
+                        <option value="Đã nghỉ việc">Đã nghỉ việc</option>
+                      </select>
+                    </div>
+                    {formData.trang_thai === 'Đã nghỉ việc' && (
+                      <div><label className="block text-xs font-bold text-red-600 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-red-200 rounded-lg bg-red-50 outline-none focus:ring-2 focus:ring-red-500 font-bold" /></div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="md:col-span-1">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Nhóm (ATVSLĐ)</label>
+                      <select name="nhom_doi_tuong" value={formData.nhom_doi_tuong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
+                        <option value="">-- Chọn nhóm --</option>
+                        <option value="1">Nhóm 1</option>
+                        <option value="2">Nhóm 2</option>
+                        <option value="3">Nhóm 3</option>
+                        <option value="4">Nhóm 4</option>
+                        <option value="6">Nhóm 6</option>
+                      </select>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -1246,15 +1378,8 @@ export default function PersonnelPage() {
                             const isChecked = currentGPLXList.includes(opt.value);
                             return (
                               <label key={optIdx} className="flex items-start gap-2 cursor-pointer group/cb">
-                                <input 
-                                  type="checkbox" 
-                                  checked={isChecked}
-                                  onChange={(e) => handleGPLXChange(opt.value, e.target.checked)}
-                                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#05469B] focus:ring-[#05469B] cursor-pointer"
-                                />
-                                <span className={`text-sm transition-colors ${isChecked ? 'font-bold text-[#05469B]' : 'font-medium text-gray-600 group-hover/cb:text-[#05469B]'}`}>
-                                  {opt.label}
-                                </span>
+                                <input type="checkbox" checked={isChecked} onChange={(e) => handleGPLXChange(opt.value, e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#05469B] focus:ring-[#05469B] cursor-pointer" />
+                                <span className={`text-sm transition-colors ${isChecked ? 'font-bold text-[#05469B]' : 'font-medium text-gray-600 group-hover/cb:text-[#05469B]'}`}>{opt.label}</span>
                               </label>
                             );
                           })}
@@ -1272,22 +1397,38 @@ export default function PersonnelPage() {
                     const Icon = cert.icon;
                     return (
                       <label key={cert.id} className="flex items-center p-2.5 border border-emerald-200 rounded-lg bg-[#FFFFF0] cursor-pointer hover:border-emerald-500 transition-colors shadow-sm">
-                        
-                        {/* 🟢 ĐÃ FIX LỖI ÉP KIỂU BOOLEAN Ở DÒNG BÊN DƯỚI */}
-                        <input 
-                          type="checkbox" 
-                          name={cert.id} 
-                          checked={formData[cert.id] === true || String(formData[cert.id]).toLowerCase() === 'true'} 
-                          onChange={handleInputChange} 
-                          className="w-4 h-4 text-emerald-600 rounded border-gray-300 mr-2 focus:ring-emerald-500" 
-                        />
-                        
+                        <input type="checkbox" name={cert.id} checked={formData[cert.id] === true || String(formData[cert.id]).toLowerCase() === 'true'} onChange={handleInputChange} className="w-4 h-4 text-emerald-600 rounded border-gray-300 mr-2 focus:ring-emerald-500" />
                         <Icon size={16} className="text-gray-500 mr-1.5 shrink-0" />
                         <span className="text-[11px] sm:text-xs font-bold text-gray-700 leading-tight">{cert.label}</span>
                       </label>
                     );
                   })}
                 </div>
+
+                {/* FORM NHẬP NGÀY THÁNG ATVSLĐ */}
+                {formData.cc_atvsld && (
+                  <div className="mt-5 p-4 sm:p-5 bg-emerald-50 rounded-xl border border-emerald-200 animate-in fade-in slide-in-from-top-2">
+                    <h5 className="font-bold text-emerald-800 text-sm mb-3 flex items-center gap-2"><ShieldCheck size={16}/> Thông tin chứng nhận ATVSLĐ</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-3">
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Loại chứng nhận (Tự động theo Nhóm)</label>
+                        <input type="text" readOnly value={formData.chung_nhan || 'Vui lòng chọn Nhóm đối tượng ở phần Công việc'} className="w-full p-2.5 border border-emerald-200 rounded-lg bg-emerald-100/50 text-emerald-800 font-bold outline-none cursor-not-allowed" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Huấn luyện từ ngày</label>
+                        <input type="date" name="huan_luyen_tu" value={formData.huan_luyen_tu ? formData.huan_luyen_tu.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Đến ngày</label>
+                        <input type="date" name="huan_luyen_den" value={formData.huan_luyen_den ? formData.huan_luyen_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1">Có giá trị đến ngày</label>
+                        <input type="date" name="gia_tri_den" value={formData.gia_tri_den ? formData.gia_tri_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700" />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-orange-50/40 p-4 sm:p-5 rounded-xl border border-orange-100">
