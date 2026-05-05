@@ -97,10 +97,10 @@ export default function PersonnelPage() {
     if (modal.isOpen && formData.cc_atvsld) {
       const nhom = String(formData.nhom_doi_tuong || '');
       let certName = '';
-      if (nhom === '1' || nhom === '2') certName = 'Giấy chứng nhận huấn luyện An toàn, Vệ sinh lao động';
+      if (nhom === '1' || nhom === '2') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
       else if (nhom === '3') certName = 'Thẻ An toàn lao động';
       else if (nhom === '4') certName = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
-      else if (nhom === '6') certName = 'Chứng nhận huấn luyện ATVSLĐ';
+      else if (nhom === '6') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
 
       if (formData.chung_nhan !== certName) {
         setModal(prev => ({ ...prev, formData: { ...prev.formData, chung_nhan: certName } }));
