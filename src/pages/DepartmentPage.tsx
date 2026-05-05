@@ -259,14 +259,25 @@ export default function DepartmentPage() {
       }));
       setTsPcccData(cleanTsPccc);
 
-      const cleanAtvsld = (atvsldResult || []).map((item: any) => ({
-        ...item,
-        ngay_huan_luyen_gan_nhat: normalizeDateToISO(item.ngay_huan_luyen_gan_nhat),
-        ngay_kham_sk_gan_nhat: normalizeDateToISO(item.ngay_ksk),
-        ngay_kham_benh_nghe_nghiep: normalizeDateToISO(item.nngay_kham_bnn),
-        ngay_quan_trac_moi_truong: normalizeDateToISO(item.ngay_quan_trac_mt),
-        ngay_tu_kiem_tra_gan_nhat: normalizeDateToISO(item.ngay_tu_kiem_tra),
-      }));
+      // 🟢 XỬ LÝ LỖI MẤT DỮ LIỆU KHI F5 (ÉP KIỂU JSON)
+      const cleanAtvsld = (atvsldResult || []).map((item: any) => {
+        let parsedStats = item.thong_ke_hl;
+        // Nếu Database trả về dạng chuỗi thì tự động Parse thành Object
+        if (typeof parsedStats === 'string') {
+          try { parsedStats = JSON.parse(parsedStats); } catch (e) { parsedStats = null; }
+        }
+
+        return {
+          ...item,
+          thong_ke_hl: parsedStats, // Dùng dữ liệu đã parse
+          khoa_huan_luyen_tu: normalizeDateToISO(item.khoa_huan_luyen_tu),
+          khoa_huan_luyen_den: normalizeDateToISO(item.khoa_huan_luyen_den),
+          ngay_ksk: normalizeDateToISO(item.ngay_ksk),
+          ngay_kham_bnn: normalizeDateToISO(item.ngay_kham_bnn),
+          ngay_quan_trac_mt: normalizeDateToISO(item.ngay_quan_trac_mt),
+          ngay_tu_kiem_tra: normalizeDateToISO(item.ngay_tu_kiem_tra),
+        };
+      });
       setAtvsldData(cleanAtvsld);
 
       const cleanPctt = (pcttResult || []).map((item: any) => ({
@@ -1594,7 +1605,7 @@ export default function DepartmentPage() {
                   )}
                 </section>
 
-                {/* 🟢 G. AN TOÀN VỆ SINH LAO ĐỘNG */}
+                {/* 🟢 G. AN TOÀN VỆ SINH LAO ĐỘNG (ĐÃ CẬP NHẬT GIAO DIỆN COPY-PASTE) */}
                 <section className="animate-in fade-in duration-500">
                   <div className="flex justify-between items-center mb-5">
                     <h3 className="text-lg font-black text-[#05469B] flex items-center gap-2 uppercase tracking-wider">
@@ -1632,38 +1643,183 @@ export default function DepartmentPage() {
                   })()}
 
                   {currentAtvsld ? (
-                    <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm animate-in fade-in">
-                       <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><HardHat size={18} /> Thông tin ATVSLĐ</h4>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-3">
-                            <h4 className="font-bold text-emerald-700 border-b border-gray-100 pb-2 text-sm flex items-center gap-1.5"><Users size={16}/> Tổ chức & Huấn luyện</h4>
-                            <div className="flex justify-between text-sm"><span className="text-gray-500">Phụ trách ATVSLĐ:</span><span className="font-bold text-[#05469B] text-right">{currentAtvsld.nguoi_phu_trach || '---'}</span></div>
-                            <div className="flex justify-between text-sm"><span className="text-gray-500">Mạng lưới ATVS Viên:</span><span className="font-bold text-gray-800">{currentAtvsld.so_luong_mang_luoi || 0} Người</span></div>
-                            <div className="flex justify-between text-sm"><span className="text-gray-500">Khám SK / Bệnh Nghề nghiệp:</span><span className="font-bold text-gray-800">{formatToVN(currentAtvsld.ngay_ksk) || '---'} / {formatToVN(currentAtvsld.nngay_kham_bnn) || '---'}</span></div>
-                            <div className="flex justify-between text-sm"><span className="text-gray-500">Huấn luyện ATVSLĐ:</span><span className="font-bold text-emerald-600">{currentAtvsld.ty_le_hoan_thanh_hl || '0%'} (Gần nhất: {formatToVN(currentAtvsld.ngay_huan_luyen_gan_nhat) || '---'})</span></div>
-                            <div className="flex justify-between text-sm pt-2 border-t border-gray-50"><span className="text-gray-500">Cấp phát BHLĐ:</span><span className={`font-bold ${currentAtvsld.ty_le_cap_bhld === 'Đầy đủ' ? 'text-emerald-600' : 'text-orange-600'}`}>{currentAtvsld.ty_le_cap_bhld}</span></div>
+                    <div className="space-y-6">
+                      
+                      {/* 🟢 KHỐI 1: BẢNG THỐNG KÊ HUẤN LUYỆN (TỪ COPY PASTE EXCEL) */}
+                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm animate-in fade-in">
+                        <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><ShieldCheck size={18} className="text-emerald-600"/> 1. Công tác Huấn luyện ATVSLĐ</h4>
+                        
+                        <p className="text-sm font-medium text-gray-800 mb-1">
+                          {currentAtvsld.can_cu_quyet_dinh || 'Căn cứ Quyết định số ... của Trường Cao đẳng THACO'}
+                        </p>
+                        <p className="text-sm font-bold text-emerald-700 mb-4">
+                          Khoá huấn luyện: {currentAtvsld.khoa_huan_luyen_tu ? new Date(currentAtvsld.khoa_huan_luyen_tu).toLocaleDateString('vi-VN') : '...'} - {currentAtvsld.khoa_huan_luyen_den ? new Date(currentAtvsld.khoa_huan_luyen_den).toLocaleDateString('vi-VN') : '...'}
+                        </p>
+
+                        {/* 🟢 KHỐI 1: BẢNG THỐNG KÊ HUẤN LUYỆN (STYLE MỚI ĐỒNG BỘ) */}
+                      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col h-full animate-in fade-in">
+                        <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2 border-b border-gray-100 pb-2"><ShieldCheck size={18} className="text-[#05469B]"/> 1. Công tác Huấn luyện ATVSLĐ</h4>
+                        
+                        {/* Quyết định & Thời gian */}
+                        <div className="mb-5 space-y-1">
+                          <p className="text-sm font-medium text-gray-800">{currentAtvsld.can_cu_quyet_dinh || 'Căn cứ Quyết định số ... của Trường Cao đẳng THACO'}</p>
+                          <p className="text-sm font-bold text-emerald-700">Khoá huấn luyện: {currentAtvsld.khoa_huan_luyen_tu ? new Date(currentAtvsld.khoa_huan_luyen_tu).toLocaleDateString('vi-VN') : '...'} - {currentAtvsld.khoa_huan_luyen_den ? new Date(currentAtvsld.khoa_huan_luyen_den).toLocaleDateString('vi-VN') : '...'}</p>
+                        </div>
+
+                        {currentAtvsld.thong_ke_hl ? (() => {
+                          const stats = currentAtvsld.thong_ke_hl;
+                          const groups = ['1', '2', '3', '4', '6'];
+                          
+                          let totalAll = 0;
+                          let totalDatAll = 0;
+                          let totalKhongDatAll = 0;
+                          groups.forEach(nhom => {
+                            if (stats[nhom]) {
+                              totalAll += stats[nhom].total || 0;
+                              totalDatAll += stats[nhom].dat || 0;
+                              totalKhongDatAll += stats[nhom].khong_dat || 0;
+                            }
+                          });
+
+                          const formatPercent = (val: number, total: number) => {
+                            return total > 0 ? Number(((val / total) * 100).toFixed(2)) : 0;
+                          };
+
+                          return (
+                            <>
+                              {/* 🟢 3 Ô THỐNG KÊ TỔNG QUAN (METRIC BOXES) */}
+                              <div className="grid grid-cols-3 gap-4 mb-5">
+                                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 text-center flex flex-col items-center justify-between">
+                                  <p className="text-[10px] font-bold text-gray-500 uppercase mb-1 whitespace-nowrap w-full truncate">Tổng Số Người</p>
+                                  <p className="text-xl font-black text-[#05469B] mt-auto flex-1 flex items-end">{totalAll}</p>
+                                </div>
+                                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center flex flex-col items-center justify-between">
+                                  <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1 whitespace-nowrap w-full truncate">Đạt Yêu Cầu</p>
+                                  <p className="text-xl font-black text-emerald-700 mt-auto flex-1 flex items-end">{totalDatAll}</p>
+                                </div>
+                                <div className="bg-red-50 p-3 rounded-xl border border-red-100 text-center flex flex-col items-center justify-between">
+                                  <p className="text-[10px] font-bold text-red-600 uppercase mb-1 whitespace-nowrap w-full truncate">Không Đạt</p>
+                                  <p className="text-xl font-black text-red-700 mt-auto flex-1 flex items-end">{totalKhongDatAll}</p>
+                                </div>
+                              </div>
+
+                              {/* 🟢 BẢNG CHI TIẾT (VIỀN XÁM, NỀN TRẮNG SÁNG) */}
+                              <div className="overflow-x-auto border border-gray-200 rounded-xl flex-1 custom-scrollbar">
+                                <table className="w-full text-center text-sm border-collapse min-w-max">
+                                  <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr className="text-[11px] text-gray-500 uppercase tracking-wider font-bold">
+                                      <th className="p-3 border-r border-gray-200 whitespace-nowrap">Nhóm</th>
+                                      <th className="p-3 border-r border-gray-200 whitespace-nowrap">Số lượng</th>
+                                      <th className="p-3 border-r border-gray-200 whitespace-nowrap">Tỉ lệ (%)</th>
+                                      <th className="p-3 border-r border-gray-200 whitespace-nowrap">Đạt <span className="text-emerald-600">(SL & %)</span></th>
+                                      <th className="p-3 whitespace-nowrap">Không Đạt <span className="text-red-500">(SL & %)</span></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200 bg-white">
+                                    {groups.map(nhom => {
+                                      const dataNhom = stats[nhom];
+                                      if (!dataNhom || dataNhom.total === 0) return null; 
+                                      
+                                      const tiLeNhom = formatPercent(dataNhom.total, totalAll);
+                                      const tiLeDat = formatPercent(dataNhom.dat, dataNhom.total);
+                                      const tiLeKhongDat = formatPercent(dataNhom.khong_dat, dataNhom.total);
+
+                                      return (
+                                        <tr key={nhom} className="hover:bg-blue-50/30 transition-colors">
+                                          <td className="p-3 font-bold text-[#05469B] border-r border-gray-200 whitespace-nowrap">
+                                            Nhóm {nhom}
+                                          </td>
+                                          <td className="p-3 font-black text-gray-700 border-r border-gray-200 whitespace-nowrap">{dataNhom.total}</td>
+                                          <td className="p-3 font-bold text-orange-600 border-r border-gray-200 whitespace-nowrap">{tiLeNhom}%</td>
+                                          <td className="p-3 border-r border-gray-200 whitespace-nowrap">
+                                            <span className="font-black text-emerald-600">{dataNhom.dat}</span> 
+                                            <span className="text-xs font-semibold text-gray-400 ml-1.5">({tiLeDat}%)</span>
+                                          </td>
+                                          <td className="p-3 whitespace-nowrap">
+                                            <span className="font-black text-red-500">{dataNhom.khong_dat}</span> 
+                                            <span className="text-xs font-semibold text-gray-400 ml-1.5">({tiLeKhongDat}%)</span>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                    
+                                    {/* DÒNG TỔNG CỘNG */}
+                                    <tr className="bg-gray-50/80">
+                                      <td className="p-3 font-black text-gray-800 border-r border-gray-200 uppercase whitespace-nowrap">Tổng cộng</td>
+                                      <td className="p-3 font-black text-[#05469B] border-r border-gray-200 whitespace-nowrap">{totalAll}</td>
+                                      <td className="p-3 font-black text-orange-600 border-r border-gray-200 whitespace-nowrap">{totalAll > 0 ? 100 : 0}%</td>
+                                      <td className="p-3 font-black border-r border-gray-200 whitespace-nowrap">
+                                         <span className="text-emerald-600">{totalDatAll}</span> 
+                                         <span className="text-xs text-gray-500 ml-1.5">({formatPercent(totalDatAll, totalAll)}%)</span>
+                                      </td>
+                                      <td className="p-3 font-black whitespace-nowrap">
+                                         <span className="text-red-500">{totalKhongDatAll}</span> 
+                                         <span className="text-xs text-gray-500 ml-1.5">({formatPercent(totalKhongDatAll, totalAll)}%)</span>
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </>
+                          );
+                        })() : (
+                          <div className="text-center py-8 text-gray-400 border border-dashed border-gray-200 rounded-xl flex-1 flex flex-col items-center justify-center bg-gray-50/50">
+                            <ShieldCheck size={36} className="mb-2 opacity-30"/>
+                            <p className="text-sm font-medium">Chưa có dữ liệu thống kê.</p>
+                            <p className="text-xs mt-1">Vui lòng Copy bảng Excel và Dán vào phần Cập nhật.</p>
                           </div>
-                          <div className="space-y-3 border-l border-gray-100 pl-6">
-                            <h4 className="font-bold text-red-600 border-b border-gray-100 pb-2 text-sm flex items-center gap-1.5"><AlertCircle size={16}/> Máy móc, Môi trường & Hiện trường</h4>
-                            <div className="flex justify-between text-sm"><span className="text-gray-500">Đo kiểm Môi trường:</span><span className="font-semibold text-gray-800 text-right">{formatToVN(currentAtvsld.ngay_quan_trac_mt) || 'Chưa đo'}</span></div>
-                            <div className="flex justify-between text-sm"><span className="text-gray-500">Thiết bị Nghiêm ngặt (Tổng/Quá hạn):</span><span className={`font-black ${Number(currentAtvsld.so_luong_thiet_bi_qua_han_kt) > 0 ? 'text-red-600 animate-pulse' : 'text-emerald-600'}`}>{currentAtvsld.so_luong_thiet_bi_nghiem_ngat || 0} / {currentAtvsld.so_luong_thiet_bi_qua_han_kt || 0}</span></div>
-                            <div className="flex justify-between text-sm"><span className="text-gray-500">Số vụ Tai nạn (Năm):</span><span className={`font-bold ${Number(currentAtvsld.so_tai_nan_trong_nam) > 0 ? 'text-orange-600' : 'text-gray-800'}`}>{currentAtvsld.so_tai_nan_trong_nam || 0} Vụ</span></div>
-                            <div className="mt-2 pt-2 border-t border-gray-50">
-                              <span className="text-gray-500 text-sm block mb-1">Tuần tra & Lỗi hiện trường:</span>
-                              {currentAtvsld.cac_loi_hien_truong ? (
-                                <div className="bg-red-50 text-red-700 p-2 rounded text-xs font-semibold border border-red-100">{currentAtvsld.cac_loi_hien_truong}</div>
-                              ) : (
-                                <div className="bg-emerald-50 text-emerald-600 p-2 rounded text-xs font-semibold border border-emerald-100">Không có lỗi / Đã xử lý (Kiểm tra: {formatToVN(currentAtvsld.ngay_tu_kiem_tra) || '---'})</div>
-                              )}
-                            </div>
+                        )}
+
+                        {/* 🟢 Tỷ lệ chung & Link hồ sơ */}
+                        {currentAtvsld.thong_ke_hl && (
+                          <div className="flex flex-col sm:flex-row justify-between items-center text-sm gap-2 mt-5 pt-4 border-t border-gray-100">
+                            <span className="text-gray-500 flex items-center gap-2 font-medium">
+                              Tỷ lệ hoàn thành HL Chung: 
+                              <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 shadow-sm">{currentAtvsld.ty_le_hoan_thanh_hl || '0%'}</span>
+                            </span>
+                            <span className="text-gray-500 flex items-center gap-2 font-medium">
+                              Link Hồ sơ Quy định: 
+                              {currentAtvsld.link_ho_so_quy_dinh ? 
+                                <a href={currentAtvsld.link_ho_so_quy_dinh} target="_blank" rel="noreferrer" className="text-[#05469B] hover:text-blue-700 hover:underline font-bold transition-colors">Xem file đính kèm</a> 
+                              : <span className="font-semibold text-gray-400">---</span>}
+                            </span>
                           </div>
-                       </div>
+                        )}
+                      </div>
+                      </div>
+
+                      {/* 🟢 KHỐI 2: TỔ CHỨC & Y TẾ */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm h-full">
+                          <h4 className="font-bold text-blue-700 border-b border-gray-100 pb-2 mb-3 text-sm flex items-center gap-1.5"><Users size={16}/> 2. Tổ chức & Y tế</h4>
+                          <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Phụ trách ATVSLĐ:</span><span className="font-bold text-[#05469B] text-right">{currentAtvsld.nguoi_phu_trach || '---'}</span></div>
+                          <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Mạng lưới ATVS Viên:</span><span className="font-bold text-gray-800">{currentAtvsld.so_luong_mang_luoi || 0} Người</span></div>
+                          <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Khám SK / Bệnh Nghề nghiệp:</span><span className="font-bold text-gray-800">{formatToVN(currentAtvsld.ngay_ksk) || '---'} / {formatToVN(currentAtvsld.ngay_kham_bnn) || '---'}</span></div>
+                          <div className="flex justify-between text-sm pt-2 mt-1 border-t border-gray-50"><span className="text-gray-500">Cấp phát BHLĐ:</span><span className={`font-bold ${currentAtvsld.ty_le_cap_bhld === 'Đầy đủ' ? 'text-emerald-600' : 'text-orange-600'}`}>{currentAtvsld.ty_le_cap_bhld}</span></div>
+                        </div>
+
+                        {/* 🟢 KHỐI 3: MÁY MÓC & HIỆN TRƯỜNG */}
+                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm h-full">
+                          <h4 className="font-bold text-red-600 border-b border-gray-100 pb-2 mb-3 text-sm flex items-center gap-1.5"><AlertCircle size={16}/> 3. Máy móc & Hiện trường</h4>
+                          <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Đo kiểm Môi trường:</span><span className="font-semibold text-gray-800 text-right">{formatToVN(currentAtvsld.ngay_quan_trac_mt) || 'Chưa đo'}</span></div>
+                          <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">TB Nghiêm ngặt (Tổng/Quá hạn):</span><span className={`font-black ${Number(currentAtvsld.so_luong_thiet_bi_qua_han_kt) > 0 ? 'text-red-600 animate-pulse' : 'text-emerald-600'}`}>{currentAtvsld.so_luong_thiet_bi_nghiem_ngat || 0} / {currentAtvsld.so_luong_thiet_bi_qua_han_kt || 0}</span></div>
+                          <div className="flex justify-between text-sm mb-2"><span className="text-gray-500">Số vụ Tai nạn (Năm):</span><span className={`font-bold ${Number(currentAtvsld.so_tai_nan_trong_nam) > 0 ? 'text-orange-600' : 'text-gray-800'}`}>{currentAtvsld.so_tai_nan_trong_nam || 0} Vụ</span></div>
+                          <div className="mt-2 pt-2 border-t border-gray-50">
+                            <span className="text-gray-500 text-[11px] uppercase font-bold block mb-1">Tuần tra & Lỗi hiện trường:</span>
+                            {currentAtvsld.cac_loi_hien_truong ? (
+                              <div className="bg-red-50 text-red-700 p-2 rounded text-xs font-semibold border border-red-100">{currentAtvsld.cac_loi_hien_truong}</div>
+                            ) : (
+                              <div className="bg-emerald-50 text-emerald-600 p-2 rounded text-xs font-semibold border border-emerald-100">Không có lỗi / Đã xử lý (Kiểm tra: {formatToVN(currentAtvsld.ngay_tu_kiem_tra) || '---'})</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div onClick={openAtvsldModal} className="bg-white hover:bg-emerald-50/50 cursor-pointer p-10 rounded-2xl border-2 border-dashed border-gray-300 hover:border-emerald-300 text-center transition-all group shadow-sm">
                       <HardHat size={48} className="mx-auto text-gray-300 group-hover:text-emerald-400 mb-4 transition-colors" />
                       <h4 className="text-lg font-bold text-gray-700 group-hover:text-emerald-700 mb-1">Khai báo Hồ sơ ATVSLĐ</h4>
-                      <p className="text-sm text-gray-400">Khai báo thiết bị kiểm định, môi trường, huấn luyện an toàn & sức khỏe.</p>
+                      <p className="text-sm text-gray-400">Khai báo thiết bị kiểm định, dán dữ liệu huấn luyện an toàn & thống kê sức khỏe.</p>
                     </div>
                   )}
                 </section>

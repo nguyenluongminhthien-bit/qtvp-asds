@@ -268,10 +268,13 @@ export interface ATVSLD {
   nguoi_phu_trach: string;
   so_luong_mang_luoi: string | number;
   link_ho_so_quy_dinh: string;
-  ngay_huan_luyen_gan_nhat: string;
+  khoa_huan_luyen_tu: string;
+  khoa_huan_luyen_den: string;
+  can_cu_quyet_dinh: string;
+  thong_ke_hl: any
   ty_le_hoan_thanh_hl: string;
   ngay_ksk: string;
-  nngay_kham_bnn: string;
+  ngay_kham_bnn: string;
   so_luong_thiet_bi_nghiem_ngat: string | number;
   so_luong_thiet_bi_qua_han_kt: string | number;
   ngay_quan_trac_mt: string;
