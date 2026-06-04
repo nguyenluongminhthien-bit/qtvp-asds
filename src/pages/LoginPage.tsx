@@ -48,7 +48,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#f4f7f9] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
         <div className="bg-gradient-to-r from-[#05469B] to-[#032a5e] p-8 text-center shadow-inner">
-          <h1 className="text-3xl font-black text-white tracking-widest">DỊCH VỤ HỖ TRỢ</h1>
+          <h1 className="text-[27px] leading-[33px] font-black text-white tracking-widest font-['Cambay']">QUẢN TRỊ VĂN PHÒNG & AN SINH ĐỜI SỐNG</h1>
           <p className="text-blue-200 mt-2 text-sm uppercase tracking-wider font-semibold">Hệ thống Quản lý Nội bộ</p>
         </div>
         
