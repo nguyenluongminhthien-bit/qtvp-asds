@@ -264,11 +264,11 @@ export default function PolicyPage() {
             <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="p-4 w-40">Số hiệu / Phân loại</th>
+                  <th className="p-4 w-[230px] h-[35px]">Số hiệu / Phân loại</th>
                   <th className="p-4 w-32">Ngày BH</th>
-                  <th className="p-4">Tiêu đề & Trích yếu</th>
-                  <th className="p-4 w-40">Nghiệp vụ</th>
-                  <th className="p-4 w-32 text-center">Hiệu lực</th>
+                  <th className="p-4 w-[410px]">Tiêu đề & Trích yếu</th>
+                  <th className="p-4 w-[130px]">Nghiệp vụ</th>
+                  <th className="p-4 w-[130px] text-center">Hiệu lực</th>
                   <th className="p-4 text-center w-36">Thao tác</th>
                 </tr>
               </thead>
@@ -281,8 +281,8 @@ export default function PolicyPage() {
                   filteredDocs.map((item) => (
                     <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
                       
-                      <td className="p-4">
-                        <span className="font-black text-[#05469B] bg-blue-50 px-2 py-1 rounded text-sm whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
+                      <td className="p-4 w-[230px] h-[130px]">
+                        <span className="font-bold text-[13px] leading-[15px] text-[#05469B] bg-blue-50 px-2 py-1 rounded whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
                         <div className="mt-2 flex flex-col items-start gap-1">
                           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded uppercase border border-emerald-100">{item.phan_loai}</span>
                           {item.isFromVB && (
@@ -291,12 +291,12 @@ export default function PolicyPage() {
                         </div>
                       </td>
 
-                      <td className="p-4 text-sm font-medium text-gray-700 flex flex-col gap-1.5 mt-3">
+                      <td className="py-[35px] pl-[14px] pr-[16px] text-sm font-medium text-gray-700 w-[125px] h-[130px]">
                         <span className="flex items-center gap-1.5"><Calendar size={14} className="text-gray-400"/> {item.ngay_ban_hanh ? new Date(item.ngay_ban_hanh).toLocaleDateString('vi-VN') : '-'}</span>
                       </td>
 
-                      <td className="p-4">
-                        <p className="font-bold text-gray-800 text-base mb-1">{item.tieu_de}</p>
+                      <td className="p-4 w-[410px]">
+                        <p className="font-bold text-gray-800 text-[14px] mb-1">{item.tieu_de}</p>
                         <p className="text-xs text-gray-500 line-clamp-2 mb-2">{item.noi_dung}</p>
                         {item.link_vb && (
                           <a href={item.link_vb} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline hover:text-blue-800 bg-blue-50 px-2 py-1 rounded border border-blue-100">
@@ -305,12 +305,12 @@ export default function PolicyPage() {
                         )}
                       </td>
 
-                      <td className="p-4">
-                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-bold border border-indigo-100">{item.nghiep_vu}</span>
+                      <td className="py-4 pl-[6px] pr-[14px] w-[130px] h-[130px]">
+                        <span className="px-0 pt-0 pb-[1px] m-0 bg-indigo-50 text-indigo-700 rounded-md text-xs font-bold border border-indigo-100">{item.nghiep_vu}</span>
                       </td>
 
-                      <td className="p-4 text-center">
-                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md uppercase border inline-flex items-center justify-center gap-1 w-full max-w-[120px] mx-auto ${
+                      <td className="p-4 text-center w-[115px] h-[130px]">
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md uppercase border inline-flex items-center justify-center gap-1 w-[120px] h-[25px] mt-0 mx-auto ${
                           item.hieu_luc === 'Hết hiệu lực' ? 'bg-red-50 text-red-600 border-red-200' : 
                           item.hieu_luc === 'Sắp có hiệu lực' ? 'bg-orange-50 text-orange-600 border-orange-200' : 
                           'bg-green-50 text-green-600 border-green-200'
@@ -320,7 +320,7 @@ export default function PolicyPage() {
                         </span>
                       </td>
 
-                      <td className="p-4">
+                      <td className="p-4 w-[130px] h-[130px]">
                         <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[100px] mx-auto">
                           <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="w-full py-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm">
                             <Eye size={14} /> Xem

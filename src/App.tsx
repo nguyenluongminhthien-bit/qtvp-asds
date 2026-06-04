@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar';
 import Login from './pages/LoginPage'; 
 
 // Import các Module chính của hệ thống
-import DashboardPage from './pages/DashboardPage'; // 🟢 ĐÃ FIX: GỌI ĐÚNG FILE DASHBOARD MỚI
+import DashboardPage from './pages/DashboardPage';
 import PersonnelPage from './pages/PersonnelPage';
 import DepartmentPage from './pages/DepartmentPage';
 import VehiclePage from './pages/VehiclePage';
@@ -12,6 +12,7 @@ import DocumentPage from './pages/DocumentPage';
 import PolicyPage from './pages/PolicyPage'; 
 import EquipmentPage from './pages/EquipmentPage'; 
 import FireSafetyPage from './pages/FireSafetyPage';
+import AtvsldPage from './pages/AtvsldPage'; // 🟢 ĐÃ THÊM: Import trang ATVSLĐ mới
 
 // Import các trang Hệ thống
 import AccountPage from './pages/AccountPage';
@@ -38,9 +39,9 @@ function AppContent() {
       {/* Khu vực nội dung bên phải */}
       <main className="flex-1 h-full overflow-hidden bg-[#f4f7f9] relative">
         
-        {/* TUYỆT CHIÊU GIỮ CACHE: Tải tất cả các trang cùng lúc, nhưng dùng CSS 'hidden' để ẩn đi những trang chưa cần xem */}
+        {/* TUYỆT CHIÊU GIỮ CACHE */}
         <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'dashboard' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <DashboardPage /> {/* 🟢 ĐÃ FIX: CHÈN COMPONENT XỊN VÀO ĐÂY */}
+          <DashboardPage />
         </div>
         
         <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'personnel' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
@@ -49,6 +50,11 @@ function AppContent() {
 
         <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'firesafety' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
           <FireSafetyPage />
+        </div>
+
+        {/* 🟢 ĐÃ THÊM: KHỐI HIỂN THỊ TRANG ATVSLĐ */}
+        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'atvsld' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
+          <AtvsldPage />
         </div>
         
         <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'vehicles' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>

@@ -2,7 +2,7 @@ import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUn
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, 
-  FileText, Building2, MapPin, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen,
+  FileText, Building2, MapPin, ChevronDown, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen,
   Link as LinkIcon, Calendar, CheckCircle2, Bookmark, Eye, Lock, Zap, Clock, Send,
   PenTool, Hash, Briefcase, Layers, ExternalLink
 } from 'lucide-react';
@@ -310,6 +310,25 @@ export default function DocumentPage() {
     return unit ? unit.ten_don_vi : 'Đơn vị không xác định';
   }, [selectedUnitFilter, donViList]);
 
+  // 🟢 BẮT ĐẦU: STATE VÀ LOGIC PHÂN TRANG (PAGINATION)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number | string>(100);
+
+  const actualRowsPerPage = typeof rowsPerPage === 'number' && rowsPerPage > 0 ? rowsPerPage : 100;
+  const totalPages = Math.ceil(filteredDocs.length / actualRowsPerPage) || 1;
+
+  // Tự động quay về trang 1 nếu người dùng thay đổi bộ lọc
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedUnitFilter, selectedPhanLoai, selectedYear, searchTerm]);
+
+  // Lấy danh sách văn bản của trang hiện tại
+  const paginatedDocs = useMemo(() => {
+    const startIndex = (currentPage - 1) * actualRowsPerPage;
+    return filteredDocs.slice(startIndex, startIndex + actualRowsPerPage);
+  }, [filteredDocs, currentPage, actualRowsPerPage]);
+  // 🟢 KẾT THÚC: LOGIC PHÂN TRANG
+
   const openModal = (mode: 'create' | 'update', item?: any) => {
     setModalMode(mode);
     const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
@@ -501,8 +520,8 @@ export default function DocumentPage() {
       </div>
 
       {/* CỘT PHẢI: BẢNG DỮ LIỆU */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300">
-        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10' : ''}`}>
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col">
+        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10' : ''} shrink-0`}>
           <div>
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><FileText size={28} /> Quản lý Văn bản - Tờ trình</h2>
             <p className="text-sm font-medium text-gray-500 mt-1">Lọc: <span className="text-emerald-600 font-bold">{selectedPhanLoai || 'Tất cả'}</span> • Khu vực: <span className="text-emerald-600 font-bold">{selectedUnitName}</span></p>
@@ -528,80 +547,86 @@ export default function DocumentPage() {
           </div>
         </div>
 
-        {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
+        {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm shrink-0"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
 
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 ${isListCollapsed ? 'ml-10' : ''}`}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1200px]">
-              <thead>
-                <tr className="bg-[#f8fafc] border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="p-4 w-40">Số hiệu / Phân loại</th>
-                  <th className="p-4 w-32">Ngày BH</th>
-                  <th className="p-4">Tiêu đề & Nội dung</th>
-                  <th className="p-4 w-48">Phạm vi áp dụng</th>
-                  <th className="p-4 w-36">Nghiệp vụ</th>
-                  <th className="p-4 w-32">Hiệu lực</th>
-                  <th className="p-4 text-center w-28">Thao tác</th>
+        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 flex flex-col flex-1 ${isListCollapsed ? 'ml-10' : ''}`}>
+          <div className="overflow-x-auto w-full custom-scrollbar flex-1">
+            <table className="w-full text-left border-collapse min-w-[1100px]">
+              <thead className="sticky top-0 bg-[#f8fafc] z-10 shadow-sm">
+                <tr className="border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+                  <th className="py-3 px-3 w-36 bg-[#f8fafc]">Số hiệu / Phân loại</th>
+                  <th className="py-3 px-3 w-28 bg-[#f8fafc]">Ngày BH</th>
+                  <th className="py-3 px-3 min-w-[250px] bg-[#f8fafc]">Tiêu đề & Nội dung</th>
+                  <th className="py-3 px-3 w-44 bg-[#f8fafc]">Phạm vi áp dụng</th>
+                  <th className="py-3 px-3 w-32 bg-[#f8fafc]">Nghiệp vụ</th>
+                  <th className="py-3 px-3 w-28 bg-[#f8fafc]">Hiệu lực</th>
+                  <th className="py-3 px-3 text-center w-28 bg-[#f8fafc]">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr><td colSpan={7} className="p-12 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />Đang tải dữ liệu...</td></tr>
                 ) : filteredDocs.length === 0 ? (
                   <tr><td colSpan={7} className="p-16 text-center text-gray-500"><FileText size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-lg font-medium">Không tìm thấy văn bản phù hợp.</p></td></tr>
                 ) : (
-                  filteredDocs.map((item) => (
+                  paginatedDocs.map((item) => (
                     <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
-                      <td className="p-4">
-                        <div className="flex items-center flex-wrap gap-1.5">
-                          <span className="font-black text-[#05469B] bg-blue-50 px-2 py-1 rounded text-sm whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center flex-wrap gap-1 mb-1">
+                          <span className="font-black text-[#05469B] bg-blue-50 px-1.5 py-0.5 rounded text-xs whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
                           {item.muc_do_khan === 'Hỏa tốc' && <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-black border border-red-200 uppercase">HỎA TỐC</span>}
                           {item.muc_do_khan === 'Khẩn' && <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-black border border-orange-200 uppercase">KHẨN</span>}
                         </div>
-                        <div className="mt-2 text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded inline-block uppercase">{item.phan_loai}</div>
+                        <div className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded inline-block uppercase tracking-wide">{item.phan_loai}</div>
                       </td>
-                      <td className="p-4 text-sm font-medium text-gray-700 flex items-center gap-1.5 mt-2"><Calendar size={14} className="text-gray-400"/> {item.ngay_ban_hanh ? new Date(item.ngay_ban_hanh).toLocaleDateString('vi-VN') : '-'}</td>
-                      <td className="p-4">
-                        <div className="flex items-start gap-2 mb-1">
+                      <td className="py-2.5 px-3 text-xs font-medium text-gray-700">
+                        <div className="flex items-center gap-1.5"><Calendar size={13} className="text-gray-400 shrink-0"/> {item.ngay_ban_hanh ? new Date(item.ngay_ban_hanh).toLocaleDateString('vi-VN') : '-'}</div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-start gap-1.5 mb-1">
                           {isMatDocument(item.mat) && (
-                            <span className="flex items-center gap-1 bg-red-100 text-red-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-red-200 shrink-0 mt-0.5" title="Văn bản Mật">
+                            <span className="flex items-center gap-0.5 bg-red-100 text-red-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-red-200 shrink-0 mt-0.5" title="Văn bản Mật">
                               <Lock size={10} /> MẬT
                             </span>
                           )}
-                          <p className={`font-bold text-base ${isMatDocument(item.mat) ? 'text-red-700' : 'text-gray-800'}`}>{item.tieu_de}</p>
+                          <p className={`font-bold text-sm leading-tight ${isMatDocument(item.mat) ? 'text-red-700' : 'text-gray-800'}`}>{item.tieu_de}</p>
                         </div>
-                        <p className="text-xs text-gray-500 line-clamp-2 mb-2">{item.noi_dung}</p>
-                        {item.link_vb && (
-                          <a href={item.link_vb} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline hover:text-blue-800 bg-blue-50 px-2 py-1 rounded border border-blue-100">
-                            <LinkIcon size={12}/> Mở file gốc
-                          </a>
-                        )}
-                        {item.hieu_luc === 'Thay thế VB khác' && item.van_ban_thay_the && (
-                           <a href={item.van_ban_thay_the} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:underline bg-red-50 px-2 py-1 rounded border border-red-100 ml-2 mt-1">
-                             <LinkIcon size={12}/> Đã thay thế VB cũ
-                           </a>
-                        )}
+                        <p className="text-[11px] text-gray-500 line-clamp-1 mb-1.5">{item.noi_dung}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.link_vb && (
+                            <a href={item.link_vb} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline hover:text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                              <LinkIcon size={10}/> File gốc
+                            </a>
+                          )}
+                          {item.hieu_luc === 'Thay thế VB khác' && item.van_ban_thay_the && (
+                             <a href={item.van_ban_thay_the} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 hover:underline bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                               <LinkIcon size={10}/> File cũ
+                             </a>
+                          )}
+                        </div>
                       </td>
-                      <td className="p-4 text-sm">
-                        <span className="font-semibold text-gray-700">{item.pham_vi_ap_dung === 'Toàn hệ thống' ? '🌍 Toàn hệ thống' : donViMap[String(item.pham_vi_ap_dung)] || item.pham_vi_ap_dung}</span>
-                        <p className="text-[10px] text-gray-400 mt-1 uppercase">Từ: {donViMap[String(item.id_don_vi)] || item.id_don_vi}</p>
+                      <td className="py-2.5 px-3">
+                        <p className="text-xs font-semibold text-gray-700 line-clamp-1" title={item.pham_vi_ap_dung === 'Toàn hệ thống' ? 'Toàn hệ thống' : donViMap[String(item.pham_vi_ap_dung)] || item.pham_vi_ap_dung}>
+                          {item.pham_vi_ap_dung === 'Toàn hệ thống' ? '🌍 Toàn hệ thống' : donViMap[String(item.pham_vi_ap_dung)] || item.pham_vi_ap_dung}
+                        </p>
+                        <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold truncate">Từ: {donViMap[String(item.id_don_vi)] || item.id_don_vi}</p>
                       </td>
-                      <td className="p-4 text-sm">
-                        {item.nghiep_vu ? <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-bold border border-indigo-100">{item.nghiep_vu}</span> : <span className="text-gray-400 italic text-xs">Chưa PL</span>}
+                      <td className="py-2.5 px-3">
+                        {item.nghiep_vu ? <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold border border-indigo-100 inline-block truncate max-w-full" title={item.nghiep_vu}>{item.nghiep_vu}</span> : <span className="text-gray-400 italic text-[11px]">Chưa PL</span>}
                       </td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-1 text-center
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center justify-center gap-1 text-center whitespace-nowrap
                           ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border border-green-200' : 
                             item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-600 border border-gray-300' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
                           {item.hieu_luc === 'Còn hiệu lực' && <CheckCircle2 size={12}/>}
                           {item.hieu_luc}
                         </span>
                       </td>
-                      <td className="p-4">
-                        <div className="flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[100px] mx-auto">
-                          <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="w-full py-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded text-[11px] font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm"><Eye size={13} /> Xem</button>
-                          <button onClick={() => openModal('update', item)} className="w-full py-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded text-[11px] font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm"><Edit size={13} /> Sửa</button>
-                          <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="w-full py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded text-[11px] font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm"><Trash2 size={13} /> Xóa</button>
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[100px] mx-auto">
+                          <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded transition-colors shadow-sm" title="Xem chi tiết"><Eye size={14} /></button>
+                          <button onClick={() => openModal('update', item)} className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded transition-colors shadow-sm" title="Sửa"><Edit size={14} /></button>
+                          <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded transition-colors shadow-sm" title="Xóa"><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -610,6 +635,71 @@ export default function DocumentPage() {
               </tbody>
             </table>
           </div>
+
+          {/* 🟢 GIAO DIỆN PHÂN TRANG (PAGINATION BAR) */}
+          {filteredDocs.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between px-4 h-[40px] bg-gray-50 border-t border-gray-200 gap-4 shrink-0">
+              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                  disabled={currentPage === 1}
+                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Trang trước"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                
+                <span className="flex items-center gap-2">
+                  Trang 
+                  <input 
+                    type="number" 
+                    min={1} 
+                    max={totalPages} 
+                    value={currentPage} 
+                    onChange={(e) => {
+                      let val = parseInt(e.target.value);
+                      if (!isNaN(val)) {
+                        if (val > totalPages) val = totalPages;
+                        if (val < 1) val = 1;
+                        setCurrentPage(val);
+                      }
+                    }}
+                    className="w-12 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B]"
+                  /> 
+                  / {totalPages}
+                </span>
+
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Trang tiếp theo"
+                >
+                  <ChevronRight size={16} />
+                </button>
+
+                <div className="flex items-center gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-300">
+                  <input 
+                    type="number" 
+                    min={1} 
+                    value={rowsPerPage} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRowsPerPage(val === '' ? '' : parseInt(val));
+                      setCurrentPage(1); 
+                    }}
+                    className="w-16 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B] text-[#05469B] font-bold"
+                  />
+                  <span>dòng</span>
+                </div>
+              </div>
+              
+              <div className="text-sm text-gray-500 hidden md:block">
+                Hiển thị {(currentPage - 1) * actualRowsPerPage + 1} - {Math.min(currentPage * actualRowsPerPage, filteredDocs.length)} trong tổng số <span className="font-bold text-gray-800">{filteredDocs.length}</span> văn bản
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -728,7 +818,7 @@ export default function DocumentPage() {
 
               {/* KHỐI 4: THEO DÕI XỬ LÝ & PHỤ TRỢ */}
               <div className="bg-orange-50/40 p-5 rounded-xl border border-orange-100">
-                <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-orange-500 rounded-full"></div> 4. Theo dõi Xử lý & Thông tin Phụ trợ</h4>
+                <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-orange-500 rounded-full"></div> 4. Theo dõi Xử lý & Thông kho Phụ trợ</h4>
                 
                 <div className="space-y-6">
                   {/* Khu vực Xử lý */}

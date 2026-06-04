@@ -32,15 +32,23 @@ export default function AtvsldModal({ isOpen, currentData, selectedUnitId, onSav
     if (isOpen) {
       setError(null);
       setPastedText(''); // Reset lại ô text mỗi khi mở modal
-      setFormData(currentData
-        ? { ...currentData, id: currentData.id || '' }
+      
+      // 🟢 BẢO VỆ DỮ LIỆU: Tự động Parse JSON nếu dữ liệu gốc là String
+      let safeData = currentData ? { ...currentData } : null;
+      if (safeData && typeof safeData.thong_ke_hl === 'string') {
+        try {
+          safeData.thong_ke_hl = JSON.parse(safeData.thong_ke_hl);
+        } catch (e) {
+          safeData.thong_ke_hl = null;
+        }
+      }
+
+      setFormData(safeData
+        ? { ...safeData, id: safeData.id || '' }
         : { ...EMPTY_FORM, id: `AT${Date.now()}`, id_don_vi: selectedUnitId || '' }
       );
     }
   }, [isOpen, currentData, selectedUnitId]);
-
-  // 🟢 LỆNH RETURN SỚM PHẢI NẰM DƯỚI CÙNG CỦA CÁC HOOKS
-  if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -176,6 +184,15 @@ export default function AtvsldModal({ isOpen, currentData, selectedUnitId, onSav
           // Bỏ qua nếu dòng bị ngắn, thiếu cột
           if (!row || row.length < Math.max(colNhom, colKetQua)) continue; 
 
+          // 🟢 BỔ SUNG: LOGIC NHẬN DIỆN VÀ BỎ QUA DÒNG TIÊU ĐỀ THÔNG MINH
+          const checkHeader1 = toUnaccented(row[0] || ''); // Cột STT
+          const checkHeader2 = toUnaccented(row[1] || ''); // Cột Mã NV hoặc Họ tên
+          const checkHeader3 = toUnaccented(row[2] || ''); // Cột Họ tên
+          
+          if (checkHeader1.includes('stt') || checkHeader2.includes('ma') || checkHeader2.includes('msnv') || checkHeader2.includes('ten') || checkHeader3.includes('ten')) {
+            continue; // Phát hiện tiêu đề -> Bỏ qua, đi đếm người tiếp theo
+          }
+
           let nhomRaw = String(row[colNhom] || '').trim();
           let thoiGianRaw = String(row[colThoiGian] || '').trim();
 
@@ -277,6 +294,9 @@ export default function AtvsldModal({ isOpen, currentData, selectedUnitId, onSav
     }
   };
 
+  // 🟢 THÊM ĐÚNG 1 DÒNG NÀY ĐỂ BẢO VỆ MODAL (Ẩn đi khi isOpen = false)
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
@@ -313,7 +333,7 @@ export default function AtvsldModal({ isOpen, currentData, selectedUnitId, onSav
                     </div>
                     <div>
                       <p className="text-sm font-bold text-emerald-800">Dán dữ liệu Huấn luyện từ Excel</p>
-                      <p className="text-[10px] font-medium text-emerald-600/70">Bôi đen bảng Excel, copy và dán vào ô bên dưới.</p>
+                      <p className="text-[10px] font-medium text-emerald-600/70">Bôi đen bảng Excel, copy và dán vào ô bên dưới, có hay không có tiêu đề đều được.</p>
                     </div>
                   </div>
                   

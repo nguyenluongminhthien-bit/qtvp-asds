@@ -3,8 +3,8 @@ import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, 
   Users, ShieldCheck, Flame, LifeBuoy, Heart, Activity, 
   Dumbbell, Car, Utensils, Coffee, Languages, Monitor, Copy, Eye, EyeOff, User as UserIcon, 
-  Building2, Phone, Mail, Info, MapPin, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, CheckCheck, Briefcase,
-  LogOut, AlertTriangle, Image as ImageIcon, RotateCcw, Download, FileSpreadsheet
+  Building2, Phone, Mail, Info, MapPin, ChevronDown, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, CheckCheck, Briefcase,
+  LogOut, AlertTriangle, Image as ImageIcon, RotateCcw, Download, FileSpreadsheet, ClipboardPaste
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Personnel, DonVi, ThietBi } from '../types';
@@ -45,6 +45,30 @@ const CERTIFICATES = [
 const formatCurrency = (val: string | number | undefined | null) => {
   if (!val) return '';
   return val.toString().replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+};
+
+// 🟢 DÁN HÀM XỬ LÝ DẤU TIẾNG VIỆT VÀO ĐÂY
+const toUnaccented = (str: any) => {
+  if (!str) return '';
+  return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]/g, ""); 
+};
+
+// 🟢 HÀM TỰ ĐỘNG TÍNH NGÀY NHẬN VIỆC TỪ MÃ NV (Định dạng YYMMxxx)
+const extractStartDateFromMaNV = (maNV: string) => {
+  if (!maNV || maNV.length < 4) return null;
+  
+  // Bóc tách 2 số đầu (Năm) và 2 số sau (Tháng)
+  const yy = maNV.substring(0, 2);
+  const mm = maNV.substring(2, 4);
+  
+  // Kiểm tra tính hợp lệ của tháng (01 đến 12)
+  const monthNum = parseInt(mm, 10);
+  if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) return null;
+
+  // Giả sử mã nhân sự THACO bắt đầu từ năm 2000 trở đi (vd: 24 -> 2024). 
+  const fullYear = parseInt(yy, 10) > 50 ? `19${yy}` : `20${yy}`; 
+
+  return `${fullYear}-${mm}-01`; // Mặc định ngày 01
 };
 
 export default function PersonnelPage() {
@@ -92,6 +116,12 @@ export default function PersonnelPage() {
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
   const formData = modal.formData;
 
+  // 🟢 STATE CHO TÍNH NĂNG IMPORT HÀNG LOẠT
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState('');
+  const [bulkImportData, setBulkImportData] = useState<any[]>([]);
+  const [isAnalyzingBulk, setIsAnalyzingBulk] = useState(false);
+  
   // 🟢 TỰ ĐỘNG CẬP NHẬT TÊN CHỨNG NHẬN ATVSLĐ DỰA VÀO NHÓM ĐỐI TƯỢNG
   useEffect(() => {
     if (modal.isOpen && formData.cc_atvsld) {
@@ -261,12 +291,16 @@ export default function PersonnelPage() {
       'Phó Giám đốc': 6,
       'Trưởng phòng': 7,
       'Phó phòng': 8,
-      'Trưởng nhóm': 9,
-      'Chuyên viên': 10,
-      'PT DVHT KD': 11,
-      'PT DVHC': 12,
-      'PT NS': 13,
-      'BV, ĐTKH': 14
+      'Trợ lý': 9,
+      'Trưởng nhóm': 10,
+      'Tổ trưởng': 11,
+      'Tổ phó': 12,
+      'Chuyên viên': 13,
+      'PT DVHT KD': 13,
+      'PT DVHC': 14,
+      'PT NS': 15,
+      'BV, ĐTKH': 16,
+      'Nhân viên': 17
     };
 
     return result.sort((a, b) => {
@@ -293,6 +327,25 @@ export default function PersonnelPage() {
     const unit = donViList.find(d => d.id === selectedUnitFilter);
     return unit ? unit.ten_don_vi : 'Đơn vị không xác định';
   }, [selectedUnitFilter, donViList]);
+
+  // 🟢 BẮT ĐẦU: STATE VÀ LOGIC PHÂN TRANG (PAGINATION)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number | string>(100);
+
+  const actualRowsPerPage = typeof rowsPerPage === 'number' && rowsPerPage > 0 ? rowsPerPage : 100;
+  const totalPages = Math.ceil(filteredPersonnel.length / actualRowsPerPage) || 1;
+
+  // Tự động quay về trang 1 nếu người dùng tìm kiếm hoặc đổi Showroom
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedUnitFilter, personnelSearchTerm]);
+
+  // Lấy danh sách nhân sự của trang hiện tại
+  const paginatedPersonnel = useMemo(() => {
+    const startIndex = (currentPage - 1) * actualRowsPerPage;
+    return filteredPersonnel.slice(startIndex, startIndex + actualRowsPerPage);
+  }, [filteredPersonnel, currentPage, actualRowsPerPage]);
+  // 🟢 KẾT THÚC: LOGIC PHÂN TRANG
 
   const handleCopyMail = (roleType: 'LD' | 'DVHT' | 'NS') => {
     let emails: string[] = [];
@@ -361,6 +414,11 @@ export default function PersonnelPage() {
       trang_thai: formData.trang_thai || 'Đang làm việc'
     };
 
+    // 🟢 BỔ SUNG: TỰ ĐỘNG TÍNH NGÀY NHẬN VIỆC TỪ MÃ NV NẾU Ô NGÀY ĐANG TRỐNG
+    if (!finalDataToSave.ngay_nhan_vien && finalDataToSave.ma_so_nhan_vien) {
+      finalDataToSave.ngay_nhan_vien = extractStartDateFromMaNV(finalDataToSave.ma_so_nhan_vien);
+    }
+
     if(!finalDataToSave.nam_sinh) finalDataToSave.nam_sinh = null;
     if(!finalDataToSave.ngay_nhan_vien) finalDataToSave.ngay_nhan_vien = null;
     if(!finalDataToSave.ngay_nghi_viec) finalDataToSave.ngay_nghi_viec = null;
@@ -373,28 +431,18 @@ export default function PersonnelPage() {
       const currentId = response.id || response.newId || finalDataToSave.id || `NS-${Date.now()}`;
       finalDataToSave.id = currentId;
 
-      // 2. 🟢 TỰ ĐỘNG ĐỒNG BỘ KIÊM NHIỆM (Đồng bộ TẤT CẢ trừ các cột trong hình)
+      // 2. TỰ ĐỘNG ĐỒNG BỘ KIÊM NHIỆM
       if (modal.mode === 'update' && finalDataToSave.ma_so_nhan_vien) {
         const kiemNhiemList = data.filter(
           item => item.ma_so_nhan_vien === finalDataToSave.ma_so_nhan_vien && item.id !== currentId
         );
 
         if (kiemNhiemList.length > 0) {
-          // Khai báo danh sách các trường "CẤM ĐỤNG VÀO" (Dựa trên hình ảnh yêu cầu)
           const fieldsToExclude = [
-            'id',                 // Tuyệt đối không chép đè ID
-            'id_don_vi',          // Đơn vị công tác
-            'phong_ban',          // Bộ phận
-            'chuc_vu',            // Chức vụ
-            'phan_loai',          // Phân loại
-            'ngach_luong',        // Ngạch lương
-            'thu_nhap',           // Mức thu nhập
-            'trang_thai',         // Trạng thái làm việc
-            'ngay_nghi_viec',     // (Đi kèm trạng thái)
-            'ngay_vao_lam_lai',   // (Đi kèm trạng thái)
+            'id', 'id_don_vi', 'phong_ban', 'chuc_vu', 'phan_loai', 
+            'ngach_luong', 'thu_nhap', 'trang_thai', 'ngay_nghi_viec', 'ngay_vao_lam_lai', 
           ];
 
-          // Tạo Object chỉ chứa những trường ĐƯỢC PHÉP đồng bộ
           const syncData: any = {};
           Object.keys(finalDataToSave).forEach(key => {
             if (!fieldsToExclude.includes(key)) {
@@ -402,12 +450,9 @@ export default function PersonnelPage() {
             }
           });
 
-          // Chạy vòng lặp cập nhật âm thầm các bản ghi kiêm nhiệm
           for (const kn of kiemNhiemList) {
             const updatedKN = { ...kn, ...syncData };
             await apiService.save(updatedKN, 'update', "ns_dich_vu");
-            
-            // Cập nhật luôn State ngoài Frontend để thấy kết quả ngay lập tức
             setData(prev => prev.map(item => item.id === updatedKN.id ? updatedKN : item));
           }
           toast.success(`Đã tự động đồng bộ thông tin cho ${kiemNhiemList.length} vị trí kiêm nhiệm!`);
@@ -700,6 +745,137 @@ export default function PersonnelPage() {
     setIsExportModalOpen(false);
     toast.success("Đã xuất file Danh bạ (Excel) thành công!");
   };
+  
+  // 🟢 HÀM XỬ LÝ DÁN DỮ LIỆU HÀNG LOẠT (CẬP NHẬT 16 CỘT)
+  const handlePasteBulkData = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const rawText = e.target.value;
+    setBulkImportText(rawText);
+    if (!rawText.trim()) { setBulkImportData([]); return; }
+    setIsAnalyzingBulk(true);
+    
+    setTimeout(() => {
+      try {
+        const rows: string[][] = [];
+        let currentRow: string[] = [];
+        let currentCell = '';
+        let inQuotes = false;
+
+        // Xử lý tách chuỗi Excel chuẩn xác
+        for (let i = 0; i < rawText.length; i++) {
+          const char = rawText[i];
+          if (inQuotes) {
+            if (char === '"') {
+              if (i + 1 < rawText.length && rawText[i + 1] === '"') { currentCell += '"'; i++; } 
+              else { inQuotes = false; }
+            } else { currentCell += char; }
+          } else {
+            if (char === '"') { inQuotes = true; } 
+            else if (char === '\t') { currentRow.push(currentCell.trim()); currentCell = ''; } 
+            else if (char === '\n') { currentRow.push(currentCell.trim()); rows.push(currentRow); currentRow = []; currentCell = ''; } 
+            else if (char === '\r') {} 
+            else { currentCell += char; }
+          }
+        }
+        if (currentCell !== '' || currentRow.length > 0) { currentRow.push(currentCell.trim()); rows.push(currentRow); }
+
+        // Hàm hỗ trợ format Ngày tháng từ DD/MM/YYYY (Excel) sang YYYY-MM-DD (Hệ thống)
+        const formatExcelDate = (dateStr: string) => {
+          if (!dateStr) return '';
+          const parts = dateStr.split(/[\/\-.]/); 
+          if (parts.length === 3) {
+            let d = parts[0].padStart(2, '0');
+            let m = parts[1].padStart(2, '0');
+            let y = parts[2];
+            if (y.length === 2) y = '20' + y;
+            return `${y}-${m}-${d}`;
+          }
+          return dateStr;
+        };
+
+        const parsedData = [];
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length < 3) continue; 
+
+          // 🟢 LOGIC NHẬN DIỆN VÀ BỎ QUA DÒNG TIÊU ĐỀ
+          const checkHeader2 = toUnaccented(row[1] || ''); // Cột Mã
+          const checkHeader3 = toUnaccented(row[2] || ''); // Cột Họ tên
+          if (checkHeader2.includes('ma') || checkHeader3.includes('ten')) {
+            continue; 
+          }
+
+          const maNV = row[1]?.trim() || '';
+          const excelDate = formatExcelDate(row[12]?.trim()); // Cột 13: Ngày nhận việc
+
+          parsedData.push({
+            ma_so_nhan_vien: maNV,                           // Cột 2 (Index 1)
+            ho_ten: row[2]?.trim() || '',                    // Cột 3 (Index 2)
+            chuc_vu: row[3]?.trim() || '',                   // Cột 4 (Index 3) - Lưu vào chuc_vu (Chức danh)
+            phong_ban: row[4]?.trim() || '',                 // Cột 5 (Index 4)
+            phan_loai: row[8]?.trim() || 'Nhân viên',        // Cột 9 (Index 8) - Lưu vào phan_loai (Chức vụ)
+            sdt_cong_ty: row[9]?.trim() || '',               // Cột 10 (Index 9)
+            gioi_tinh: row[10]?.trim() || '',                // Cột 11 (Index 10)
+            nam_sinh: formatExcelDate(row[11]?.trim()),      // Cột 12 (Index 11)
+            
+            // 🟢 LOGIC: Nếu Excel có ngày thì lấy, nếu trống thì tự dịch từ Mã NV
+            ngay_nhan_vien: excelDate ? excelDate : extractStartDateFromMaNV(maNV),
+            
+            sdt_ca_nhan: row[13]?.trim() || '',              // Cột 14 (Index 13)
+            email: row[14]?.trim() || '',                    // Cột 15 (Index 14)
+            ngach_luong: row[15]?.trim() || '',              // Cột 16 (Index 15)
+            id_don_vi: selectedUnitFilter || ''
+          });
+        }
+        setBulkImportData(parsedData.filter(d => d.ma_so_nhan_vien && d.ho_ten));
+        toast.success(`Đã nhận diện ${parsedData.length} nhân sự!`);
+      } catch (err) { toast.error('Lỗi phân tích dữ liệu!'); } 
+      finally { setIsAnalyzingBulk(false); }
+    }, 100);
+  };
+
+  const confirmBulkSave = async () => {
+    if (bulkImportData.length === 0) return;
+    setSubmitting(true);
+    try {
+      let updatedState = [...data];
+      let createCount = 0; let updateCount = 0;
+      for (const item of bulkImportData) {
+        const existingIndex = updatedState.findIndex(d => String(d.ma_so_nhan_vien).toLowerCase() === String(item.ma_so_nhan_vien).toLowerCase());
+        
+        if (existingIndex >= 0) {
+          const existingItem = updatedState[existingIndex];
+          
+          // 🟢 CẬP NHẬT THÔNG MINH: Chỉ ghi đè nếu cột Excel CÓ DỮ LIỆU
+          const mergedData: any = { ...existingItem };
+          Object.keys(item).forEach(key => {
+            if (item[key] !== undefined && item[key] !== '') {
+              mergedData[key] = item[key];
+            }
+          });
+          mergedData.trang_thai = 'Đang làm việc';
+          mergedData.ngay_nghi_viec = null;
+
+          await apiService.save(mergedData, 'update', 'ns_dich_vu');
+          updatedState[existingIndex] = mergedData;
+          updateCount++;
+        } else {
+          // 🟢 TẠO MỚI
+          const newData = { ...item, id: `NS-${Date.now()}-${Math.floor(Math.random() * 1000)}`, trang_thai: 'Đang làm việc' };
+          
+          // Fix mặc định giới tính nếu excel trống
+          if (!newData.gioi_tinh) newData.gioi_tinh = 'Nam';
+
+          await apiService.save(newData, 'create', 'ns_dich_vu');
+          updatedState.push(newData);
+          createCount++;
+        }
+      }
+      setData(updatedState);
+      toast.success(`Thành công! Tạo mới ${createCount}, Cập nhật ${updateCount}.`);
+      setIsBulkImportOpen(false); setBulkImportData([]); setBulkImportText('');
+    } catch (err) { toast.error("Lỗi lưu dữ liệu hàng loạt!"); } 
+    finally { setSubmitting(false); }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, type } = e.target;
@@ -775,25 +951,54 @@ export default function PersonnelPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300">
+      {/* 🟢 NỘI DUNG CHÍNH (CỘT PHẢI) */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col">
         <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
           <div>
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
             <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredPersonnel.length} nhân sự)</p>
           </div>
           
-          <div className="flex flex-col items-end gap-3 w-full xl:w-auto">
-            <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-3">
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input type="text" placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={personnelSearchTerm} onChange={(e) => setPersonnelSearchTerm(e.target.value)} />
+          <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
+            {/* HÀNG 1: TÌM KIẾM & THAO TÁC CHÍNH */}
+            <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                <input 
+                  type="text" 
+                  placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." 
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium" 
+                  value={personnelSearchTerm} 
+                  onChange={(e) => setPersonnelSearchTerm(e.target.value)} 
+                />
               </div>
-              <button onClick={() => openModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Thêm Mới</button>
               
-              {/* 🟢 NÚT GỌI MODAL XUẤT BÁO CÁO EXCEL */}
-              <button onClick={() => setIsExportModalOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><FileSpreadsheet className="w-5 h-5" /> Xuất Danh bạ</button>
+              {user?.quyen === 'ADMIN' && (
+                <>
+                  <button 
+                    onClick={() => {
+                      if (!selectedUnitFilter) {
+                        toast.warning("Vui lòng chọn 1 Đơn vị cụ thể ở cột bên trái trước khi Thêm hàng loạt!");
+                        return;
+                      }
+                      setIsBulkImportOpen(true);
+                    }} 
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-[11px] font-bold shadow-sm transition-all whitespace-nowrap"
+                  >
+                    <ClipboardPaste size={14} /> Thêm Hàng loạt
+                  </button>
+                  <button onClick={() => openModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-[#05469B] hover:bg-[#04367a] text-white px-3 py-1.5 rounded text-[11px] font-bold shadow-sm transition-all whitespace-nowrap">
+                    <Plus size={14} /> Thêm Mới
+                  </button>
+                </>
+              )}
+              
+              <button onClick={() => setIsExportModalOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-[11px] font-bold shadow-sm transition-all whitespace-nowrap">
+                <FileSpreadsheet size={14} /> Xuất Danh bạ
+              </button>
             </div>
             
+            {/* HÀNG 2: CÁC NÚT COPY MAIL */}
             <div className="flex flex-wrap justify-end gap-2 w-full sm:w-auto">
               <button onClick={() => handleCopyMail('LD')} className="text-[11px] font-bold px-3 py-1.5 border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded flex items-center gap-1.5 transition-colors shadow-sm" title="Copy Mail Tổng Giám đốc">
                 {copiedRole === 'LD' ? <CheckCheck size={14} className="text-green-600"/> : <Copy size={14} />} Copy Mail LĐ
@@ -808,20 +1013,20 @@ export default function PersonnelPage() {
           </div>
         </div>
 
-        {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-lg shadow-sm"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
+        {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-lg shadow-sm shrink-0"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
 
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
-          <div className="overflow-x-auto w-full custom-scrollbar">
+        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 flex flex-col flex-1 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+          <div className="overflow-x-auto w-full custom-scrollbar flex-1">
             <table className="w-full text-left border-collapse min-w-[1100px]">
-              <thead>
-                <tr className="bg-[#f8fafc] border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="p-4 w-24 whitespace-nowrap">Mã NV</th>
-                  <th className="p-4 whitespace-nowrap">Họ Tên / Trạng thái</th>
-                  <th className="p-4 whitespace-nowrap">Đơn Vị</th>
-                  <th className="p-4 whitespace-nowrap">Chức vụ</th>
-                  <th className="p-4 w-36 whitespace-nowrap">Điện thoại</th>
-                  <th className="p-4 w-32 whitespace-nowrap">Thâm niên</th>
-                  <th className="p-4 text-center w-48 whitespace-nowrap">Thao tác</th>
+              <thead className="sticky top-0 bg-[#f8fafc] z-10">
+                <tr className="border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  <th className="p-4 w-24 whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
+                  <th className="p-4 whitespace-nowrap bg-[#f8fafc]">Họ Tên / Trạng thái</th>
+                  <th className="p-4 whitespace-nowrap bg-[#f8fafc]">Đơn Vị</th>
+                  <th className="p-4 whitespace-nowrap bg-[#f8fafc]">Chức vụ</th>
+                  <th className="p-4 w-36 whitespace-nowrap bg-[#f8fafc]">Điện thoại</th>
+                  <th className="p-4 w-32 whitespace-nowrap bg-[#f8fafc]">Thâm niên</th>
+                  <th className="p-4 text-center w-48 whitespace-nowrap bg-[#f8fafc]">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -833,7 +1038,8 @@ export default function PersonnelPage() {
                     <p className="text-lg font-medium">Không có nhân sự nào trong danh sách hiển thị.</p>
                   </td></tr>
                 ) : (
-                  filteredPersonnel.map((item: any) => (
+                  // 🟢 THAY ĐỔI: Sử dụng paginatedPersonnel thay vì filteredPersonnel
+                  paginatedPersonnel.map((item: any) => (
                     <tr key={item.id} className={`hover:bg-blue-50/50 transition-colors group ${item.trang_thai === 'Đã nghỉ việc' ? 'opacity-60 bg-gray-50' : ''}`}>
                       <td className="p-4 font-semibold text-gray-800 whitespace-nowrap">{item.ma_so_nhan_vien}</td>
                       <td className="p-4 whitespace-nowrap flex items-center gap-3">
@@ -885,7 +1091,6 @@ export default function PersonnelPage() {
                           )}
                           {item.trang_thai === 'Đã nghỉ việc' && (
                             <>
-                              {/* NÚT VÀO LÀM LẠI */}
                               <button onClick={() => { setPersonnelToRehire(item); setIsRehireModalOpen(true); }} className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors" title="Vào làm lại"><RotateCcw className="w-4 h-4" /></button>
                               <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors" title="Xóa vĩnh viễn"><Trash2 className="w-4 h-4" /></button>
                             </>
@@ -898,6 +1103,71 @@ export default function PersonnelPage() {
               </tbody>
             </table>
           </div>
+
+          {/* 🟢 GIAO DIỆN PHÂN TRANG (PAGINATION BAR) */}
+          {filteredPersonnel.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 gap-4 shrink-0">
+              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                  disabled={currentPage === 1}
+                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Trang trước"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                
+                <span className="flex items-center gap-2">
+                  Trang 
+                  <input 
+                    type="number" 
+                    min={1} 
+                    max={totalPages} 
+                    value={currentPage} 
+                    onChange={(e) => {
+                      let val = parseInt(e.target.value);
+                      if (!isNaN(val)) {
+                        if (val > totalPages) val = totalPages;
+                        if (val < 1) val = 1;
+                        setCurrentPage(val);
+                      }
+                    }}
+                    className="w-12 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B]"
+                  /> 
+                  / {totalPages}
+                </span>
+
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Trang tiếp theo"
+                >
+                  <ChevronRight size={16} />
+                </button>
+
+                <div className="flex items-center gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-300">
+                  <input 
+                    type="number" 
+                    min={1} 
+                    value={rowsPerPage} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRowsPerPage(val === '' ? '' : parseInt(val));
+                      setCurrentPage(1); 
+                    }}
+                    className="w-16 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B] text-[#05469B] font-bold"
+                  />
+                  <span>dòng</span>
+                </div>
+              </div>
+              
+              <div className="text-sm text-gray-500 hidden md:block">
+                Hiển thị {(currentPage - 1) * actualRowsPerPage + 1} - {Math.min(currentPage * actualRowsPerPage, filteredPersonnel.length)} trong tổng số <span className="font-bold text-gray-800">{filteredPersonnel.length}</span> nhân sự
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -1305,11 +1575,15 @@ export default function PersonnelPage() {
                         <option value="Trưởng phòng">Trưởng phòng</option>
                         <option value="Phó phòng">Phó phòng</option>
                         <option value="Trưởng nhóm">Trưởng nhóm</option>
+                        <option value="Trợ lý">Trở lý</option>
+                        <option value="Tổ trưởng">Tổ trưởng</option>
+                        <option value="Tổ phó">Tổ phó</option>
                         <option value="Chuyên viên">Chuyên viên</option>
                         <option value="PT DVHT KD">PT DVHT KD</option>
                         <option value="PT DVHC">PT DVHC</option>
                         <option value="PT NS">PT NS</option>
                         <option value="BV, ĐTKH">BV, ĐTKH</option>
+                        <option value="Nhân viên">Nhân viên</option>
                       </select>
                     </div>
                     <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc</label><input type="date" name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
@@ -1495,6 +1769,66 @@ export default function PersonnelPage() {
             <div className="flex gap-3">
               <button onClick={() => setIsConfirmOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors">Hủy</button>
               <button onClick={confirmDelete} disabled={submitting} className="flex-1 py-3 text-white bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />} Xóa</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🟢 MODAL THÊM MỚI HÀNG LOẠT (BULK IMPORT) */}
+      {isBulkImportOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-indigo-100 bg-indigo-50 rounded-t-2xl">
+              <h3 className="text-xl font-black text-indigo-800 flex items-center gap-2"><ClipboardPaste size={24}/> Dán Dữ Liệu Hàng Loạt</h3>
+              <button onClick={() => setIsBulkImportOpen(false)} className="text-indigo-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm"><X size={24} /></button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
+              <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 text-sm">
+                <p className="font-bold text-[#05469B] mb-1">Cấu trúc dán (Quét từ Cột 1 đến Cột 16, có hay không có Tiêu đề đều được):</p>
+                <p className="text-gray-700 text-xs">Mã NV [Cột 2] | Họ tên [Cột 3] | Chức danh [Cột 4] | Bộ phận [Cột 5] | Chức vụ [Cột 9] | SĐT [Cột 10] | Giới tính [Cột 11] | Năm sinh [Cột 12] | Ngày làm [Cột 13] | SĐT phụ [Cột 14] | Email [Cột 15] | Ngạch [Cột 16]</p>
+                <p className="mt-2 text-indigo-600 font-bold text-xs">✓ Tự động gán vào: {selectedUnitName} (Bỏ trống sẽ giữ nguyên dữ liệu cũ)</p>
+              </div>
+              <textarea 
+                value={bulkImportText} onChange={handlePasteBulkData} disabled={isAnalyzingBulk}
+                placeholder="Ctrl+V bảng Excel vào đây..."
+                className="w-full h-32 p-3 text-sm border-2 border-dashed border-indigo-300 rounded-xl outline-none focus:border-indigo-500 bg-white resize-none"
+              ></textarea>
+              {isAnalyzingBulk && <div className="text-center py-4"><Loader2 className="animate-spin inline mr-2" /> Đang xử lý...</div>}
+              {bulkImportData.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="font-bold mb-2">Xem trước ({bulkImportData.length} người)</h4>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-100 sticky top-0 font-bold">
+                        <tr>
+                          <th className="p-3">Mã NV</th>
+                          <th className="p-3">Họ Tên</th>
+                          <th className="p-3">Bộ phận</th>
+                          <th className="p-3">Chức vụ (PL)</th>
+                          <th className="p-3">Ngạch</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {bulkImportData.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-blue-50/50">
+                            <td className="p-3 font-bold text-[#05469B]">{item.ma_so_nhan_vien}</td>
+                            <td className="p-3">{item.ho_ten}</td>
+                            <td className="p-3">{item.phong_ban}</td>
+                            <td className="p-3">{item.phan_loai}</td>
+                            <td className="p-3">{item.ngach_luong}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-5 border-t bg-gray-50 flex justify-end gap-3">
+              <button onClick={() => { setIsBulkImportOpen(false); setBulkImportData([]); setBulkImportText(''); }} className="px-6 py-2.5 bg-gray-200 rounded-xl font-bold">Hủy</button>
+              <button onClick={confirmBulkSave} disabled={submitting || bulkImportData.length === 0} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold flex items-center gap-2">
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCheck size={20} />} Xác nhận Lưu
+              </button>
             </div>
           </div>
         </div>

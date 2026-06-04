@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, 
-  Car, Building2, MapPin, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen,
+  Car, Building2, MapPin, ChevronDown, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen,
   Receipt, Calendar, Info, Eye, BarChart3, Briefcase, AlertTriangle, ShieldCheck
 } from 'lucide-react';
 import { apiService } from '../services/api';
@@ -236,6 +236,25 @@ export default function VehiclePage() {
     return unit ? unit.ten_don_vi : 'Đơn vị không xác định';
   }, [selectedUnitFilter, donViList]);
 
+  // 🟢 BẮT ĐẦU: STATE VÀ LOGIC PHÂN TRANG (PAGINATION)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number | string>(100);
+
+  const actualRowsPerPage = typeof rowsPerPage === 'number' && rowsPerPage > 0 ? rowsPerPage : 100;
+  const totalPages = Math.ceil(filteredCars.length / actualRowsPerPage) || 1;
+
+  // Tự động quay về trang 1 nếu người dùng tìm kiếm hoặc đổi đơn vị
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedUnitFilter, carSearchTerm]);
+
+  // Lấy danh sách xe của trang hiện tại
+  const paginatedCars = useMemo(() => {
+    const startIndex = (currentPage - 1) * actualRowsPerPage;
+    return filteredCars.slice(startIndex, startIndex + actualRowsPerPage);
+  }, [filteredCars, currentPage, actualRowsPerPage]);
+  // 🟢 KẾT THÚC: LOGIC PHÂN TRANG
+
   const openCarModal = (mode: 'create' | 'update', item?: TS_Xe | any) => {
     setCarModal(prev => ({ ...prev, mode })); setPlateError(false);
     const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
@@ -420,7 +439,7 @@ export default function VehiclePage() {
         await apiService.delete(itemToDelete.id, "ts_xe");
         setXeData(prev => prev.filter(item => item.id !== itemToDelete.id));
         setChiPhiData(prev => prev.filter(item => getCostCarId(item) !== itemToDelete.id));
-        toast.success("Xóa thông tin xe thành công!");
+        toast.success("Xóa thông định xe thành công!");
       } else {
         await apiService.delete(itemToDelete.id, "cp_hoat_dong_xe");
         setChiPhiData(prev => prev.filter(item => getCostId(item) !== itemToDelete.id));
@@ -512,8 +531,8 @@ export default function VehiclePage() {
       </div>
 
       {/* --- CỘT PHẢI (DANH SÁCH XE) --- */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full">
-        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full flex flex-col">
+        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''} shrink-0`}>
           <div>
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Car size={28} /> Quản lý Đội xe</h2>
             <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredCars.length} xe)</p>
@@ -527,11 +546,11 @@ export default function VehiclePage() {
           </div>
         </div>
 
-        {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
+        {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm shrink-0"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
 
         {/* 🟢 THANH CẢNH BÁO HẠN ĐĂNG KIỂM & BẢO HIỂM XE */}
         {expiringCars.length > 0 && !isDismissed && (
-          <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
+          <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''} shrink-0`}>
             <div className="bg-red-50 border border-red-200 rounded-xl overflow-hidden shadow-sm">
               <div className="flex justify-between items-center p-3 sm:p-4">
                 <div 
@@ -591,18 +610,18 @@ export default function VehiclePage() {
         )}
 
         {/* BẢNG DỮ LIỆU CHÍNH */}
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
-          <div className="overflow-x-auto w-full custom-scrollbar">
+        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 flex flex-col flex-1 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+          <div className="overflow-x-auto w-full custom-scrollbar flex-1">
             <table className="w-full text-left border-collapse min-w-[1250px]">
-              <thead>
-                <tr className="bg-[#f8fafc] border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="p-4 w-32">Biển số xe</th>
-                  <th className="p-4 w-48">Hãng - Loại xe</th>
-                  <th className="p-4 w-32">Phương tiện</th>
-                  <th className="p-4 w-36">Mục đích SD</th>
-                  <th className="p-4">Đơn vị quản lý</th>
-                  <th className="p-4 w-36">Tình trạng</th>
-                  <th className="p-4 text-center w-40">Thao tác</th> 
+              <thead className="sticky top-0 bg-[#f8fafc] z-10">
+                <tr className="border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  <th className="p-4 w-32 bg-[#f8fafc]">Biển số xe</th>
+                  <th className="p-4 w-48 bg-[#f8fafc]">Hãng - Loại xe</th>
+                  <th className="p-4 w-32 bg-[#f8fafc]">Phương tiện</th>
+                  <th className="p-4 w-36 bg-[#f8fafc]">Mục đích SD</th>
+                  <th className="p-4 bg-[#f8fafc]">Đơn vị quản lý</th>
+                  <th className="p-4 w-36 bg-[#f8fafc]">Tình trạng</th>
+                  <th className="p-4 text-center w-40 bg-[#f8fafc]">Thao tác</th> 
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -614,7 +633,7 @@ export default function VehiclePage() {
                     <p className="text-lg font-medium">Không có xe nào trong danh sách hiển thị.</p>
                   </td></tr>
                 ) : (
-                  filteredCars.map((item) => (
+                  paginatedCars.map((item) => (
                     <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
                       <td className="p-4 font-black text-[#05469B] text-base whitespace-nowrap">🚙 {item.bien_so}</td>
                       <td className="p-4 font-bold text-gray-800">{item.hieu_xe} {item.loai_xe} {item.phien_ban ? `- ${item.phien_ban}` : ''}</td>
@@ -653,6 +672,71 @@ export default function VehiclePage() {
               </tbody>
             </table>
           </div>
+
+          {/* 🟢 GIAO DIỆN PHÂN TRANG (PAGINATION BAR) */}
+          {filteredCars.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 gap-4 shrink-0">
+              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                  disabled={currentPage === 1}
+                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Trang trước"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                
+                <span className="flex items-center gap-2">
+                  Trang 
+                  <input 
+                    type="number" 
+                    min={1} 
+                    max={totalPages} 
+                    value={currentPage} 
+                    onChange={(e) => {
+                      let val = parseInt(e.target.value);
+                      if (!isNaN(val)) {
+                        if (val > totalPages) val = totalPages;
+                        if (val < 1) val = 1;
+                        setCurrentPage(val);
+                      }
+                    }}
+                    className="w-12 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B]"
+                  /> 
+                  / {totalPages}
+                </span>
+
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Trang tiếp theo"
+                >
+                  <ChevronRight size={16} />
+                </button>
+
+                <div className="flex items-center gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-300">
+                  <input 
+                    type="number" 
+                    min={1} 
+                    value={rowsPerPage} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setRowsPerPage(val === '' ? '' : parseInt(val));
+                      setCurrentPage(1); 
+                    }}
+                    className="w-16 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B] text-[#05469B] font-bold"
+                  />
+                  <span>dòng</span>
+                </div>
+              </div>
+              
+              <div className="text-sm text-gray-500 hidden md:block">
+                Hiển thị {(currentPage - 1) * actualRowsPerPage + 1} - {Math.min(currentPage * actualRowsPerPage, filteredCars.length)} trong tổng số <span className="font-bold text-gray-800">{filteredCars.length}</span> xe
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 

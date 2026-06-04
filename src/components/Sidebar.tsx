@@ -4,6 +4,7 @@ import {
   Building2, 
   Users, 
   Flame,
+  HardHat, // 🟢 ĐÃ THÊM: Icon cho ATVSLĐ
   Car, 
   MonitorSmartphone, 
   FileText, 
@@ -24,7 +25,7 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const { logout, user } = useAuth();
   
-  // TÍNH NĂNG ĐÃ ĐƯỢC KHÔI PHỤC: Trạng thái đóng/mở Sidebar
+  // Trạng thái đóng/mở Sidebar
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
@@ -110,7 +111,6 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               {!isCollapsed && <span className="text-sm">Thông tin Nhân sự</span>}
             </button>
 
-            {/* 🟢 NÚT MỚI: PHÒNG CHÁY CHỮA CHÁY */}
             <button
               onClick={() => setActiveTab('firesafety')}
               title="Phòng cháy chữa cháy"
@@ -120,6 +120,18 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             >
               <Flame size={18} />
               {!isCollapsed && <span className="text-sm">Phòng cháy chữa cháy</span>}
+            </button>
+
+            {/* 🟢 NÚT MỚI: AN TOÀN VỆ SINH LĐ */}
+            <button
+              onClick={() => setActiveTab('atvsld')}
+              title="An toàn vệ sinh LĐ"
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                activeTab === 'atvsld' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <HardHat size={18} />
+              {!isCollapsed && <span className="text-sm">An toàn vệ sinh LĐ</span>}
             </button>
 
             <button
