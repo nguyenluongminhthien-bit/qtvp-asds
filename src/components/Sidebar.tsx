@@ -35,7 +35,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         {!isCollapsed && (
           <div className="animate-in fade-in duration-300">
             <h1 className="text-xl font-black tracking-wide text-white">HỆ THỐNG</h1>
-            <p className="text-[9px] font-bold text-blue-200 tracking-widest uppercase mt-0.5">Quản lý dịch vụ hỗ trợ</p>
+            <p className="text-[9px] font-bold text-blue-200 tracking-widest uppercase mt-0.5">Quản trị VP & An sinh đời sống</p>
           </div>
         )}
         <button 
