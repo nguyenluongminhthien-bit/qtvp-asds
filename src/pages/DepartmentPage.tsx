@@ -1060,7 +1060,7 @@ export default function DepartmentPage() {
 
                 {/* B. HỖ TRỢ & NHÂN SỰ */}
                 <section>
-                  <h3 className="text-lg font-black text-[#05469B] mb-5 flex items-center gap-2 uppercase tracking-wider"><div className="w-1.5 h-6 bg-[#05469B] rounded-full"></div> B. PHỤ TRÁCH DV HỖ TRỢ & PT NHÂN SỰ</h3>
+                  <h3 className="text-lg font-black text-[#05469B] mb-5 flex items-center gap-2 uppercase tracking-wider"><div className="w-1.5 h-6 bg-[#05469B] rounded-full"></div> B. PT QTVP & ASĐS và PT NHÂN SỰ</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     <PersonnelCard title="Dịch vụ Hỗ trợ KD 1" person={dvht1} roleDefault="PT DVHT 1" fieldKey="id_pt_dvht1" />
                     <PersonnelCard title="Dịch vụ Hỗ trợ KD 2" person={dvht2} roleDefault="PT DVHT 2" fieldKey="id_pt_dvht2" />
