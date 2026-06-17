@@ -5,6 +5,29 @@ import { AlertCircle, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { apiService } from '../services/api';
 import { parseDateStrict } from '../utils/formatters';
 
+// 🟢 1. THÊM HÀM TÍNH NGÀY THÔNG MINH (ĐỒNG BỘ VỚI DASHBOARD)
+const extractDateAndAddDuration = (durationRaw: any, startDateRaw: any): Date | null => {
+  const baseDate = parseDateStrict(startDateRaw);
+  if (!baseDate) return null;
+  
+  let monthsToAdd = 0;
+  const s = String(durationRaw).toLowerCase().trim();
+  
+  if (/^\d+$/.test(s)) {
+    monthsToAdd = parseInt(s, 10);
+  } else {
+    const monthMatch = s.match(/(\d+)\s*tháng/);
+    const yearMatch = s.match(/(\d+)\s*năm/);
+    if (monthMatch) monthsToAdd = parseInt(monthMatch[1], 10);
+    else if (yearMatch) monthsToAdd = parseInt(yearMatch[1], 10) * 12;
+  }
+  
+  if (monthsToAdd > 0) {
+    baseDate.setMonth(baseDate.getMonth() + monthsToAdd);
+  }
+  return baseDate;
+};
+
 interface ExpiryItem {
   label: string;
   unitName: string;
@@ -37,8 +60,8 @@ export default function ExpiryAlert({ selectedUnitId, donViMap }: Props) {
         today.setHours(0, 0, 0, 0);
         const WARNING_DAYS = 30;
 
-        const check = (dateStr: any, label: string, unitId: string) => {
-          const d = parseDateStrict(dateStr);
+        // 🟢 2. CẬP NHẬT HÀM CHECK ĐỂ NHẬN TRỰC TIẾP DATE OBJECT
+        const checkDateObj = (d: Date | null, label: string, unitId: string) => {
           if (!d) return;
           d.setHours(0, 0, 0, 0); // Đảm bảo đồng bộ giờ để tính toán chính xác
           
@@ -54,21 +77,45 @@ export default function ExpiryAlert({ selectedUnitId, donViMap }: Props) {
           }
         };
 
+        const checkStr = (dateStr: any, label: string, unitId: string) => {
+          checkDateObj(parseDateStrict(dateStr), label, unitId);
+        };
+
         pcccData.forEach((p: any) => {
           if (selectedUnitId && p.id_don_vi !== selectedUnitId) return;
-          check(p.ngay_het_han_bh, 'Bảo hiểm cháy nổ', p.id_don_vi);
-          check(p.ngay_dien_tap, 'Diễn tập PCCC', p.id_don_vi);
+          checkStr(p.ngay_het_han_bh, 'Bảo hiểm cháy nổ', p.id_don_vi);
+          checkStr(p.ngay_dien_tap, 'Diễn tập PCCC', p.id_don_vi);
         });
 
+        // 🟢 3. ĐỒNG BỘ LOGIC TÍNH NGÀY HỢP ĐỒNG BẢO VỆ TỪ DASHBOARD SANG
         anNinhData.forEach((a: any) => {
           if (selectedUnitId && a.id_don_vi !== selectedUnitId) return;
-          check(a.han_hop_dong, 'Hợp đồng BV', a.id_don_vi);
+          
+          let expDate = null;
+          const directExpRaw = a.ngay_het_han || a.ngay_het_han_hd || a.ngay_ket_thuc || a.ngay_kt;
+          
+          if (directExpRaw) {
+             expDate = parseDateStrict(directExpRaw);
+          }
+
+          if (!expDate) {
+             const durationRaw = a.han_hop_dong || a.han_hd || a.thoi_han_hd || a.thoi_gian_hd || a.thoi_han || a.thoi_gian_luu || ''; 
+             const startRaw = a.ngay_ky_hd || a.ngay_cd || a.ngay_ky || a.ngay_bat_dau || '';
+             expDate = extractDateAndAddDuration(durationRaw, startRaw);
+          }
+
+          const giaHanThem = Number(a.gia_han_them) || 0;
+          if (expDate && giaHanThem > 0) {
+            expDate.setMonth(expDate.getMonth() + giaHanThem);
+          }
+
+          checkDateObj(expDate, 'Hợp đồng BV', a.id_don_vi);
         });
 
         atvsldData.forEach((at: any) => {
           if (selectedUnitId && at.id_don_vi !== selectedUnitId) return;
-          check(at.ngay_huan_luyen_gan_nhat, 'Huấn luyện ATVSLĐ', at.id_don_vi);
-          check(at.ngay_ksk, 'Khám sức khỏe', at.id_don_vi);
+          checkStr(at.ngay_huan_luyen_gan_nhat, 'Huấn luyện ATVSLĐ', at.id_don_vi);
+          checkStr(at.ngay_ksk, 'Khám sức khỏe', at.id_don_vi);
         });
 
         // Chỉ lấy những cái đã Quá hạn để hiển thị (Bạn có thể bỏ .filter nếu muốn hiện cả Sắp hết hạn)
@@ -101,7 +148,7 @@ export default function ExpiryAlert({ selectedUnitId, donViMap }: Props) {
           </h3>
         </div>
 
-        {/* 🟢 KHỐI NÚT THAO TÁC Ở GÓC PHẢI (CHUẨN ĐỒNG BỘ) */}
+        {/* KHỐI NÚT THAO TÁC Ở GÓC PHẢI */}
         <div className="flex items-center gap-2 text-gray-400 shrink-0">
           <button 
             onClick={() => setIsOpen(!isOpen)}
