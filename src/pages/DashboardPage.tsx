@@ -518,31 +518,43 @@ export default function DashboardPage() {
               </div>
 
               {/* Ô TỔNG NHÂN SỰ VÀ CƠ CẤU (CHIẾM 2 CỘT NGANG) */}
-              <div className="xl:col-span-2 bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between relative overflow-hidden gap-4">
+              <div className="xl:col-span-2 bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between relative overflow-hidden gap-4 h-full">
+                
                 {/* Khối bên trái: Số lượng Tổng */}
-                <div className="flex items-center gap-3 shrink-0 z-10 pl-2 border-r border-gray-100 pr-6">
-                  <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm border border-emerald-100"><Users size={24}/></div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-0.5">Tổng Nhân sự</p>
-                    <p className="text-3xl font-black text-gray-800 leading-none">{widgetStats.totalStaff}</p>
+                <div className="flex items-center gap-3 shrink-0 z-10 pl-2 border-r border-gray-100 pr-4 sm:pr-6 h-full">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm border border-emerald-100">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </div>
+                  <div className="flex flex-col justify-center">
+                    <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Tổng Nhân sự</p>
+                    <p className="text-2xl sm:text-3xl font-black text-gray-800 leading-none">{widgetStats.totalStaff}</p>
                   </div>
                 </div>
                 
                 {/* Khối bên phải: 3 cột cơ cấu nhỏ */}
-                <div className="flex-1 grid grid-cols-3 gap-3 z-10">
-                  <div className="bg-blue-50/70 rounded-xl py-2 px-1 text-center border border-blue-100/50 hover:bg-blue-100 transition-colors cursor-help" title="Nhân sự Phụ trách Dịch vụ Hỗ trợ Kinh doanh">
-                    <p className="text-[10px] font-bold text-[#05469B]/70 mb-0.5 uppercase">NS PT DVHT KD</p>
-                    <p className="font-black text-[#05469B] text-xl">{staffRolesStats.dvht}</p>
+                <div className="flex-1 grid grid-cols-3 gap-2 sm:gap-3 z-10 h-full py-1">
+                  <div className="bg-blue-50/70 rounded-xl p-1.5 sm:p-2 text-center border border-blue-100/50 hover:bg-blue-100 transition-colors cursor-help flex flex-col justify-between h-full" title="Nhân sự Phụ trách Quản trị văn phòng & An sinh đời sống">
+                    <div className="h-8 flex items-center justify-center mb-1 sm:mb-2">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-[#05469B]/70 uppercase leading-tight line-clamp-2">NS PT QTVP & ASĐS</p>
+                    </div>
+                    <p className="font-black text-[#05469B] text-lg sm:text-xl leading-none">{staffRolesStats.dvht}</p>
                   </div>
-                  <div className="bg-blue-50/70 rounded-xl py-2 px-1 text-center border border-blue-100/50 hover:bg-blue-100 transition-colors cursor-help" title="Nhân sự Bảo vệ, Đối tác Khách hàng">
-                    <p className="text-[10px] font-bold text-[#05469B]/70 mb-0.5 uppercase">NS BV, ĐTKH</p>
-                    <p className="font-black text-[#05469B] text-xl">{staffRolesStats.bv}</p>
+                  
+                  <div className="bg-blue-50/70 rounded-xl p-1.5 sm:p-2 text-center border border-blue-100/50 hover:bg-blue-100 transition-colors cursor-help flex flex-col justify-between h-full" title="Nhân sự Bảo vệ, Đón tiếp Khách hàng">
+                    <div className="h-8 flex items-center justify-center mb-1 sm:mb-2">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-[#05469B]/70 uppercase leading-tight line-clamp-2">NS BV, ĐTKH</p>
+                    </div>
+                    <p className="font-black text-[#05469B] text-lg sm:text-xl leading-none">{staffRolesStats.bv}</p>
                   </div>
-                  <div className="bg-blue-50/70 rounded-xl py-2 px-1 text-center border border-blue-100/50 hover:bg-blue-100 transition-colors cursor-help" title="Nhân sự Phục vụ Hành chính">
-                    <p className="text-[10px] font-bold text-[#05469B]/70 mb-0.5 uppercase">NS PVHC</p>
-                    <p className="font-black text-[#05469B] text-xl">{staffRolesStats.pvhc}</p>
+                  
+                  <div className="bg-blue-50/70 rounded-xl p-1.5 sm:p-2 text-center border border-blue-100/50 hover:bg-blue-100 transition-colors cursor-help flex flex-col justify-between h-full" title="Nhân sự Phục vụ Hành chính">
+                    <div className="h-8 flex items-center justify-center mb-1 sm:mb-2">
+                      <p className="text-[9px] sm:text-[10px] font-bold text-[#05469B]/70 uppercase leading-tight line-clamp-2">NS PVHC</p>
+                    </div>
+                    <p className="font-black text-[#05469B] text-lg sm:text-xl leading-none">{staffRolesStats.pvhc}</p>
                   </div>
                 </div>
+
                 <div className="absolute right-0 bottom-0 opacity-[0.03] pointer-events-none"><Users size={150}/></div>
               </div>
             </div>
