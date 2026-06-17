@@ -890,19 +890,26 @@ export default function PersonnelPage() {
   //🟢 PHẦN 3: GIAO DIỆN BỘ LỌC VÀ TAB DANH SÁCH (info)
 
   // =================================================================================
-  // 🟢 LOGIC NÚT COPY EMAIL TỔNG HỢP (Hỗ trợ chọn nhiều Ngạch lương)
+  // 🟢 LOGIC NÚT COPY EMAIL TỔNG HỢP (Bản chống lỗi TypeScript)
   // =================================================================================
   const [isCopyEmailDropdownOpen, setIsCopyEmailDropdownOpen] = useState(false);
-  const [selectedNgach, setSelectedNgach] = useState<string[]>([]); // Mảng lưu các ngạch được tick chọn
+  const [selectedNgach, setSelectedNgach] = useState<string[]>([]);
+  const [selectedDiaDiem, setSelectedDiaDiem] = useState<string[]>([]); 
 
-  // Lấy danh sách Ngạch lương thực tế
   const availableNgachLuong = useMemo(() => {
     const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
     const ngachList = activeStaff.map(p => p.ngach_luong).filter(n => n && n.trim() !== '');
     return Array.from(new Set(ngachList)).sort();
   }, [filteredPersonnel]);
 
-  // Hàm xử lý Copy cho các nút bấm 1 lần (Lãnh đạo, PT NS...)
+  // 🟢 Dùng (p as any) để TypeScript không báo lỗi khi gọi tên biến chưa được định nghĩa
+  const availableDiaDiem = useMemo(() => {
+    const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
+    // Quét linh hoạt cả 2 trường hợp tên biến hay dùng nhất
+    const locationList = activeStaff.map(p => (p as any).dia_diem_lam_viec || (p as any).noi_lam_viec).filter(n => n && String(n).trim() !== '');
+    return Array.from(new Set(locationList)).sort();
+  }, [filteredPersonnel]);
+
   const handleCopyTargetEmails = (type: string) => {
     const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
     let targetPersonnel: any[] = [];
@@ -918,38 +925,50 @@ export default function PersonnelPage() {
 
     const emails = targetPersonnel.map(p => p.email?.trim()).filter(Boolean);
     
-    if (emails.length === 0) {
-      toast.warning('Không tìm thấy email hợp lệ nào cho nhóm này!');
-    } else {
-      navigator.clipboard.writeText(emails.join('; '));
-      toast.success(`Đã copy thành công ${emails.length} email!`);
-    }
+    if (emails.length === 0) toast.warning('Không tìm thấy email hợp lệ nào cho nhóm này!');
+    else { navigator.clipboard.writeText(emails.join('; ')); toast.success(`Đã copy ${emails.length} email!`); }
+    
     setIsCopyEmailDropdownOpen(false); 
-    setSelectedNgach([]); // Reset checkbox
+    setSelectedNgach([]); 
+    setSelectedDiaDiem([]); 
   };
 
-  // Hàm xử lý Copy khi chọn nhiều Ngạch lương
   const handleCopyMultiNgach = () => {
     if (selectedNgach.length === 0) return;
-    
     const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
     const targetPersonnel = activeStaff.filter(p => selectedNgach.includes(p.ngach_luong || ''));
     const emails = targetPersonnel.map(p => p.email?.trim()).filter(Boolean);
 
-    if (emails.length === 0) {
-      toast.warning('Không tìm thấy email hợp lệ nào trong các ngạch đã chọn!');
-    } else {
-      navigator.clipboard.writeText(emails.join('; '));
-      toast.success(`Đã copy ${emails.length} email của ${selectedNgach.length} ngạch!`);
-    }
+    if (emails.length === 0) toast.warning('Không có email nào trong ngạch đã chọn!');
+    else { navigator.clipboard.writeText(emails.join('; ')); toast.success(`Đã copy ${emails.length} email của ${selectedNgach.length} ngạch!`); }
+    
     setIsCopyEmailDropdownOpen(false);
-    setSelectedNgach([]); // Reset checkbox sau khi copy
+    setSelectedNgach([]);
+    setSelectedDiaDiem([]);
   };
 
-  // Hàm toggle Checkbox
-  const toggleNgach = (nl: string) => {
-    setSelectedNgach(prev => prev.includes(nl) ? prev.filter(item => item !== nl) : [...prev, nl]);
+  const handleCopyMultiDiaDiem = () => {
+    if (selectedDiaDiem.length === 0) return;
+    const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
+    
+    // 🟢 Trích xuất địa điểm an toàn bằng (p as any)
+    const targetPersonnel = activeStaff.filter(p => {
+      const loc = (p as any).dia_diem_lam_viec || (p as any).noi_lam_viec || '';
+      return selectedDiaDiem.includes(loc);
+    });
+    
+    const emails = targetPersonnel.map(p => p.email?.trim()).filter(Boolean);
+
+    if (emails.length === 0) toast.warning('Không có email nào trong địa điểm đã chọn!');
+    else { navigator.clipboard.writeText(emails.join('; ')); toast.success(`Đã copy ${emails.length} email của ${selectedDiaDiem.length} địa điểm!`); }
+    
+    setIsCopyEmailDropdownOpen(false);
+    setSelectedNgach([]);
+    setSelectedDiaDiem([]);
   };
+
+  const toggleNgach = (nl: string) => setSelectedNgach(prev => prev.includes(nl) ? prev.filter(item => item !== nl) : [...prev, nl]);
+  const toggleDiaDiem = (loc: string) => setSelectedDiaDiem(prev => prev.includes(loc) ? prev.filter(item => item !== loc) : [...prev, loc]);
 
   if (loading) return <PageWithFilterSkeleton rows={8} />;
 
@@ -1018,7 +1037,7 @@ export default function PersonnelPage() {
               <button onClick={() => setIsExportModalOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-[11px] font-bold shadow-sm transition-all whitespace-nowrap"><FileSpreadsheet size={14} /> Xuất Danh bạ</button>
             </div>
             
-            {/* 🟢 HÀNG 2: COPY MAIL (NÚT DROPDOWN CHỌN NHIỀU) */}
+            {/* 🟢 HÀNG 2: COPY MAIL (NÚT DROPDOWN CHỌN NHIỀU - TÍCH HỢP ĐỊA ĐIỂM) */}
             <div className="relative">
               <button 
                 onClick={() => setIsCopyEmailDropdownOpen(!isCopyEmailDropdownOpen)} 
@@ -1029,63 +1048,78 @@ export default function PersonnelPage() {
 
               {isCopyEmailDropdownOpen && (
                 <>
-                  {/* Lớp phủ click ra ngoài thì đóng và reset */}
-                  <div className="fixed inset-0 z-[40]" onClick={() => { setIsCopyEmailDropdownOpen(false); setSelectedNgach([]); }}></div>
+                  {/* Lớp phủ click ra ngoài thì đóng và reset toàn bộ */}
+                  <div className="fixed inset-0 z-[40]" onClick={() => { setIsCopyEmailDropdownOpen(false); setSelectedNgach([]); setSelectedDiaDiem([]); }}></div>
                   
-                  <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 bg-white shadow-2xl rounded-xl border border-gray-200 z-[50] w-64 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+                  {/* Khung Dropdown */}
+                  <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 bg-white shadow-2xl rounded-xl border border-gray-200 z-[50] w-[280px] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
                     
-                    {/* Phần 1: Các nút copy 1 chạm (Giữ nguyên) */}
-                    <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-100 shrink-0">Theo chức danh (Copy ngay)</div>
-                    <ul className="flex flex-col shrink-0">
-                      <li><button onClick={() => handleCopyTargetEmails('lanh_dao')} className="w-full text-left px-4 py-2 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors border-b border-gray-50"><Briefcase size={14} className="inline mr-2 text-orange-500" /> Cấp Lãnh đạo</button></li>
-                      <li><button onClick={() => handleCopyTargetEmails('pt_qtvp')} className="w-full text-left px-4 py-2 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors border-b border-gray-50"><ShieldCheck size={14} className="inline mr-2 text-emerald-500" /> Phụ trách QTVP & ASĐS</button></li>
-                      <li><button onClick={() => handleCopyTargetEmails('pt_ns')} className="w-full text-left px-4 py-2 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors"><Users size={14} className="inline mr-2 text-purple-500" /> Phụ trách Nhân sự</button></li>
-                    </ul>
-                    
-                    {/* Phần 2: Khối Ngạch Lương (Cho phép tick nhiều checkbox) */}
-                    {availableNgachLuong.length > 0 && (
-                      <>
-                        <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-y border-gray-200 shrink-0 flex justify-between items-center">
-                          <span>Theo Ngạch Lương</span>
-                          <button 
-                            onClick={() => selectedNgach.length === availableNgachLuong.length ? setSelectedNgach([]) : setSelectedNgach([...availableNgachLuong])}
-                            className="text-[#05469B] hover:text-blue-700 underline text-[9px] font-black"
-                          >
-                            {selectedNgach.length === availableNgachLuong.length ? 'Bỏ chọn' : 'Chọn tất cả'}
-                          </button>
-                        </div>
-                        
-                        {/* Danh sách cuộn */}
-                        <ul className="max-h-48 overflow-y-auto custom-scrollbar flex flex-col flex-1">
-                          {availableNgachLuong.map((nl, idx) => (
-                            <li key={idx}>
-                              <label className="flex items-center px-4 py-2 cursor-pointer hover:bg-blue-50 transition-colors group/cb">
-                                <input 
-                                  type="checkbox" 
-                                  checked={selectedNgach.includes(nl)} 
-                                  onChange={() => toggleNgach(nl)} 
-                                  className="w-4 h-4 rounded border-gray-300 text-[#05469B] focus:ring-[#05469B] mr-3 cursor-pointer"
-                                />
-                                <span className="text-sm font-semibold text-gray-600 group-hover/cb:text-[#05469B]">
-                                  Ngạch: <span className="text-[#05469B] font-black">{nl}</span>
-                                </span>
-                              </label>
-                            </li>
-                          ))}
-                        </ul>
+                    {/* BỘ KHUNG CUỘN CHÍNH (Giới hạn chiều cao để không trôi khỏi màn hình) */}
+                    <div className="max-h-[65vh] overflow-y-auto custom-scrollbar flex flex-col">
+                      
+                      {/* --- PHẦN 1: COPY CHỨC DANH --- */}
+                      <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-100 shrink-0 sticky top-0 z-20">Theo chức danh (Copy ngay)</div>
+                      <ul className="flex flex-col shrink-0">
+                        <li><button onClick={() => handleCopyTargetEmails('lanh_dao')} className="w-full text-left px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors border-b border-gray-50"><Briefcase size={14} className="inline mr-2 text-orange-500" /> Cấp Lãnh đạo</button></li>
+                        <li><button onClick={() => handleCopyTargetEmails('pt_qtvp')} className="w-full text-left px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors border-b border-gray-50"><ShieldCheck size={14} className="inline mr-2 text-emerald-500" /> Phụ trách QTVP & ASĐS</button></li>
+                        <li><button onClick={() => handleCopyTargetEmails('pt_ns')} className="w-full text-left px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors"><Users size={14} className="inline mr-2 text-purple-500" /> Phụ trách Nhân sự</button></li>
+                      </ul>
+                      
+                      {/* --- PHẦN 2: COPY THEO NGẠCH LƯƠNG --- */}
+                      {availableNgachLuong.length > 0 && (
+                        <>
+                          <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-y border-gray-200 shrink-0 flex justify-between items-center sticky top-0 z-20">
+                            <span>Theo Ngạch Lương</span>
+                            <button onClick={() => selectedNgach.length === availableNgachLuong.length ? setSelectedNgach([]) : setSelectedNgach([...availableNgachLuong])} className="text-[#05469B] hover:text-blue-700 underline text-[9px] font-black">
+                              {selectedNgach.length === availableNgachLuong.length ? 'Bỏ chọn' : 'Chọn tất cả'}
+                            </button>
+                          </div>
+                          <ul className="flex flex-col shrink-0">
+                            {availableNgachLuong.map((nl, idx) => (
+                              <li key={idx}>
+                                <label className="flex items-center px-4 py-2 cursor-pointer hover:bg-blue-50 transition-colors group/cb">
+                                  <input type="checkbox" checked={selectedNgach.includes(nl)} onChange={() => toggleNgach(nl)} className="w-4 h-4 rounded border-gray-300 text-[#05469B] focus:ring-[#05469B] mr-3 cursor-pointer" />
+                                  <span className="text-sm font-semibold text-gray-600 group-hover/cb:text-[#05469B]">Ngạch: <span className="text-[#05469B] font-black">{nl}</span></span>
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="p-2 bg-white border-t border-gray-100 shrink-0 sticky bottom-0 z-20">
+                            <button onClick={handleCopyMultiNgach} disabled={selectedNgach.length === 0} className="w-full py-2 bg-[#05469B] text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#04367a] transition-colors disabled:opacity-50 shadow-md">
+                              <Copy size={14}/> Copy {selectedNgach.length > 0 ? `(${selectedNgach.length})` : ''} Ngạch đã chọn
+                            </button>
+                          </div>
+                        </>
+                      )}
 
-                        {/* Nút bấm Copy cho riêng Ngạch Lương (Luôn ghim ở dưới cùng) */}
-                        <div className="p-2 bg-white border-t border-gray-100 shrink-0">
-                          <button 
-                            onClick={handleCopyMultiNgach}
-                            disabled={selectedNgach.length === 0}
-                            className="w-full py-2 bg-[#05469B] text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#04367a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-                          >
-                            <Copy size={14}/> Copy {selectedNgach.length > 0 ? `(${selectedNgach.length})` : ''} Ngạch đã chọn
-                          </button>
-                        </div>
-                      </>
-                    )}
+                      {/* --- PHẦN 3: COPY THEO ĐỊA ĐIỂM --- */}
+                      {availableDiaDiem.length > 0 && (
+                        <>
+                          <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-y border-gray-200 shrink-0 flex justify-between items-center sticky top-0 z-20">
+                            <span>Theo Địa điểm làm việc</span>
+                            <button onClick={() => selectedDiaDiem.length === availableDiaDiem.length ? setSelectedDiaDiem([]) : setSelectedDiaDiem([...availableDiaDiem])} className="text-emerald-700 hover:text-emerald-800 underline text-[9px] font-black">
+                              {selectedDiaDiem.length === availableDiaDiem.length ? 'Bỏ chọn' : 'Chọn tất cả'}
+                            </button>
+                          </div>
+                          <ul className="flex flex-col shrink-0">
+                            {availableDiaDiem.map((loc, idx) => (
+                              <li key={idx}>
+                                <label className="flex items-center px-4 py-2 cursor-pointer hover:bg-emerald-50 transition-colors group/cb">
+                                  <input type="checkbox" checked={selectedDiaDiem.includes(loc)} onChange={() => toggleDiaDiem(loc)} className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 mr-3 cursor-pointer" />
+                                  <span className="text-sm font-semibold text-gray-600 group-hover/cb:text-emerald-700"><span className="text-emerald-700 font-bold">{loc}</span></span>
+                                </label>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="p-2 bg-white border-t border-gray-100 shrink-0 sticky bottom-0 z-20">
+                            <button onClick={handleCopyMultiDiaDiem} disabled={selectedDiaDiem.length === 0} className="w-full py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50 shadow-md">
+                              <Copy size={14}/> Copy {selectedDiaDiem.length > 0 ? `(${selectedDiaDiem.length})` : ''} Địa điểm
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                    </div>
                   </div>
                 </>
               )}
