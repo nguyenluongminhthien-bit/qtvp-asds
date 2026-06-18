@@ -59,6 +59,15 @@ export default function EquipmentPage() {
   const [selectedUnitFilter, setSelectedUnitFilter] = useState<string | null>(null);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
 
+  // 🟢 STATE PHÂN TRANG (PAGINATION)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
+
+  // 🟢 Reset về trang 1 mỗi khi đổi bộ lọc hoặc tìm kiếm
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedUnitFilter]);
+
   // Modals Thiết bị
   const [isTbModalOpen, setIsTbModalOpen] = useState(false);
   const [tbModalMode, setTbModalMode] = useState<'create' | 'update'>('create');
@@ -268,6 +277,20 @@ export default function EquipmentPage() {
       return item.thong_so_ky_thuat || item.mo_ta_dac_diem || '-';
     }
   };
+
+  // Reset về trang 1 mỗi khi đổi bộ lọc hoặc tìm kiếm
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedUnitFilter]);
+
+  // TÍNH TOÁN DỮ LIỆU CỦA TRANG HIỆN TẠI (Đã thêm luồng an toàn)
+  const totalPages = Math.ceil((filteredTBs?.length || 0) / rowsPerPage);
+  
+  const currentTableData = useMemo(() => {
+    if (!filteredTBs) return [];
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredTBs.slice(start, start + rowsPerPage);
+  }, [filteredTBs, currentPage, rowsPerPage]);
 
   // --- XỬ LÝ THIẾT BỊ ---
   const openTbModal = (mode: 'create' | 'update', item?: any) => {
@@ -604,7 +627,7 @@ export default function EquipmentPage() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {loading ? (<tr><td colSpan={7} className="p-12 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />Đang tải...</td></tr>) : filteredTBs.length === 0 ? (<tr><td colSpan={7} className="p-16 text-center text-gray-500"><Package size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-lg font-medium">Không có tài sản nào hiển thị.</p></td></tr>) : (
-                  filteredTBs.map((item) => (
+                  currentTableData.map((item) => (
                     <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
                       <td className="p-4 align-top">
                         <div className="font-black text-[#05469B] text-[13px] whitespace-nowrap mb-1">🏷️ {item.ma_tai_san || 'Chưa cấp mã'}</div>
@@ -651,6 +674,65 @@ export default function EquipmentPage() {
               </tbody>
             </table>
           </div>
+
+          {/* 🟢 DÁN TOÀN BỘ CODE PHÂN TRANG VÀO KHOẢNG TRỐNG NÀY 🟢 */}
+                  {filteredTBs.length > 0 && (
+                    <div className="p-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                          disabled={currentPage === 1}
+                          className="p-1.5 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronRight size={16} className="rotate-180" />
+                        </button>
+                        <span className="font-medium flex items-center gap-1">
+                          Trang 
+                          <input 
+                            type="number" 
+                            min="1" 
+                            max={totalPages}
+                            value={currentPage}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              if (val >= 1 && val <= totalPages) setCurrentPage(val);
+                            }}
+                            className="w-12 text-center border border-gray-300 rounded py-0.5 outline-none focus:border-[#05469B] font-bold text-[#05469B]"
+                          /> 
+                          / {totalPages}
+                        </span>
+                        <button 
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                          disabled={currentPage === totalPages}
+                          className="p-1.5 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+
+                        <div className="w-px h-5 bg-gray-300 mx-2"></div>
+
+                        <select 
+                          value={rowsPerPage} 
+                          onChange={(e) => {
+                            setRowsPerPage(Number(e.target.value));
+                            setCurrentPage(1);
+                          }}
+                          className="border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] font-bold text-[#05469B] cursor-pointer"
+                        >
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                          <option value={200}>200</option>
+                          <option value={500}>500</option>
+                        </select>
+                        <span className="font-medium hidden sm:inline">dòng</span>
+                      </div>
+                      
+                      <div className="font-medium text-xs sm:text-sm text-gray-500">
+                        Hiển thị <b className="text-gray-800">{(currentPage - 1) * rowsPerPage + 1}</b> - <b className="text-gray-800">{Math.min(currentPage * rowsPerPage, filteredTBs.length)}</b> trong tổng số <b className="text-[#05469B]">{filteredTBs.length}</b> tài sản
+                      </div>
+                    </div>
+                  )}
+
         </div>
       </div>
 
