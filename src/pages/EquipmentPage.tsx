@@ -356,7 +356,7 @@ export default function EquipmentPage() {
     setNkFormData({
       id: '', id_ts_thiet_bi: tb.id, id_don_vi: tb.id_don_vi, ngay_ghi_nhan: new Date().toISOString().split('T')[0], 
       loai_nhat_ky: 'Cấp phát/Thu hồi', chi_phi: '', msnv_nguoi_dung: '', ho_ten_nguoi_dung: '', bp_quan_ly_su_dung: '', 
-      tinh_trang_ghi_nhan_thiet_bi: '', hinh_anh_minh_chung: '', ghi_chu_sua_chua_nang_cap: '', tinh_trang_ghi_nhan_thiet_bi: ''
+      tinh_trang_ghi_nhan_thiet_bi: '', hinh_anh_minh_chung: '', ghi_chu_sua_chua_nang_cap: ''
     });
     setIsNkModalOpen(true);
   };
@@ -867,7 +867,7 @@ export default function EquipmentPage() {
             
             <div className="flex-1 overflow-y-auto bg-gray-50 flex flex-col custom-scrollbar">
               <form onSubmit={handleNkSave} className="p-5 bg-white border-b shadow-sm space-y-4 z-10 shrink-0">
-                <div className="flex justify-between items-center mb-2"><h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-1.5"><Calendar size={16} className="text-purple-600"/> Khai báo nhật ký mới</h4>{nkModalMode === 'update' && <button type="button" onClick={() => {setNkModalMode('create'); setNkFormData({id: '', id_ts_thiet_bi: selectedTbForNk.id, id_don_vi: selectedTbForNk.id_don_vi, ngay_ghi_nhan: new Date().toISOString().split('T')[0], loai_nhat_ky: 'Cấp phát/Thu hồi', chi_phi: '', msnv_nguoi_dung: '', ho_ten_nguoi_dung: '', bp_quan_ly_su_dung: '', tinh_trang_ghi_nhan_thiet_bi: '', hinh_anh_minh_chung: '', ghi_chu_sua_chua_nang_cap: '', tinh_trang_ghi_nhan_thiet_bi: ''})}} className="text-xs font-bold text-purple-600 flex items-center"><Plus size={14}/> Thêm mới</button>}</div>
+                <div className="flex justify-between items-center mb-2"><h4 className="font-bold text-gray-800 text-sm uppercase flex items-center gap-1.5"><Calendar size={16} className="text-purple-600"/> Khai báo nhật ký mới</h4>{nkModalMode === 'update' && <button type="button" onClick={() => {setNkModalMode('create'); setNkFormData({id: '', id_ts_thiet_bi: selectedTbForNk.id, id_don_vi: selectedTbForNk.id_don_vi, ngay_ghi_nhan: new Date().toISOString().split('T')[0], loai_nhat_ky: 'Cấp phát/Thu hồi', chi_phi: '', msnv_nguoi_dung: '', ho_ten_nguoi_dung: '', bp_quan_ly_su_dung: '', tinh_trang_ghi_nhan_thiet_bi: '', hinh_anh_minh_chung: '', ghi_chu_sua_chua_nang_cap: ''})}} className="text-xs font-bold text-purple-600 flex items-center"><Plus size={14}/> Thêm mới</button>}</div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">Ngày ghi nhận *</label><input type="date" required name="ngay_ghi_nhan" value={nkFormData.ngay_ghi_nhan || ''} onChange={(e)=>setNkFormData((prev: any)=>({...prev, ngay_ghi_nhan: e.target.value}))} className="w-full p-2 border rounded-lg bg-[#FFFFF0] font-bold text-purple-900" /></div>
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">Loại sự kiện *</label><select required name="loai_nhat_ky" value={nkFormData.loai_nhat_ky || 'Cấp phát/Thu hồi'} onChange={(e)=>setNkFormData((prev: any)=>({...prev, loai_nhat_ky: e.target.value}))} className="w-full p-2 border rounded-lg bg-[#FFFFF0] font-bold text-indigo-700"><option value="Cấp phát/Thu hồi">Cấp phát / Thu hồi</option><option value="Sửa chữa/Bảo dưỡng">Sửa chữa / Bảo dưỡng</option><option value="Nâng cấp">Nâng cấp</option><option value="Kiểm kê">Kiểm kê</option><option value="Báo hỏng">Báo hỏng / Báo mất</option></select></div>

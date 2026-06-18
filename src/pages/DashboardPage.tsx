@@ -13,7 +13,7 @@ import {
   Flame, AlertTriangle, Activity, Briefcase, BellRing, FileText, ShieldAlert, ShieldCheck, Video, Tag, Car
 } from 'lucide-react';
 
-import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy'; 
+import { buildHierarchicalOptions, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy'; 
 
 // 🟢 2. THUẬT TOÁN TỰ ĐỘNG CỘNG THÁNG VÀO NGÀY BẮT ĐẦU
 const extractDateAndAddDuration = (durationRaw: any, startDateRaw: any): Date | null => {

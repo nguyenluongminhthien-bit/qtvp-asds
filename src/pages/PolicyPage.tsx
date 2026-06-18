@@ -5,19 +5,14 @@ import {
   PenTool, Hash, Layers, FileText, ExternalLink
 } from 'lucide-react';
 import { apiService } from '../services/api';
-import { QuyDinhQuyTrinh, VB_TB } from '../types'; 
+import { VB_TB } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 
 
-interface PolicyItem extends QuyDinhQuyTrinh {
+interface PolicyItem extends Partial<VB_TB> {
   isFromVB?: boolean;
-  hieu_luc?: string; 
-  nguoi_ky?: string;
-  chuc_vu?: string;
-  nguoi_lay_so?: string;
-  bo_phan_lay_so?: string;
 }
 
 export default function PolicyPage() {
@@ -50,7 +45,7 @@ export default function PolicyPage() {
     setLoading(true); setError(null);
     try {
       const [qdResult, vbResult] = await Promise.all([
-        apiService.getQuyDinh().catch(() => [] as QuyDinhQuyTrinh[]),
+        apiService.getQuyDinh().catch(() => [] as any[]),
         apiService.getVanBan().catch(() => [] as VB_TB[]) 
       ]);
 

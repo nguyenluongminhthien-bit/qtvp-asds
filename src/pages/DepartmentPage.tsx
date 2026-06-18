@@ -563,13 +563,6 @@ export default function DepartmentPage() {
 
   const isSelectedUnitDimmed = selectedUnit?.trang_thai === 'Đại lý' || selectedUnit?.trang_thai === 'Đầu tư mới';
 
-  const handleButVietChange = (color: string, isChecked: boolean) => {
-    let currentColors = phFormData.but_viet ? phFormData.but_viet.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
-    if (isChecked) { if (!currentColors.includes(color)) currentColors.push(color); } 
-    else { currentColors = currentColors.filter((c: string) => c !== color); }
-    setPhFormData({ ...phFormData, but_viet: currentColors.join(', ') });
-  };
-
   const handleKinhDoanhChange = (val: string, isChecked: boolean) => {
     let currentList = formData.kinh_doanh ? formData.kinh_doanh.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
     if (isChecked) { if (!currentList.includes(val)) currentList.push(val); } 
@@ -755,22 +748,10 @@ export default function DepartmentPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>, formType: 'pn' | 'ph' | 'sec' | 'pvhc' | 'pccc' | 'atvsld' | 'pctt' = 'pn') => {
     const { name, value, type } = e.target;
     let finalValue: string | boolean = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-    if (formType === 'pn') { setPnFormData(prev => ({ ...prev, [name]: finalValue })); } 
-    else if (formType === 'ph') { setPhFormData(prev => ({ ...prev, [name]: finalValue })); } 
-    else if (formType === 'sec') {
-      if (name === 'chi_phi_thue') finalValue = value.replace(/\D/g, '');
-      setSecurityFormData(prev => ({ ...prev, [name]: finalValue }));
-    }
-    else if (formType === 'pvhc') {
-      if (name === 'chi_phi_thue') finalValue = value.replace(/\D/g, '');
-      setPvhcFormData((prev: any) => ({ ...prev, [name]: finalValue }));
-    }
-    else if (formType === 'pccc') { 
+    if (formType === 'pccc') { 
       if (name.includes('sdt') || name.includes('std')) finalValue = formatPhoneNumber(value as string);
       setPcccFormData((prev: any) => ({ ...prev, [name]: finalValue })); 
     }
-    else if (formType === 'atvsld') { setAtvsldFormData((prev: any) => ({ ...prev, [name]: finalValue })); }
-    else if (formType === 'pctt') { setPcttFormData((prev: any) => ({ ...prev, [name]: finalValue })); }
   };
 
   const confirmDelete = async () => {
@@ -2033,16 +2014,16 @@ export default function DepartmentPage() {
                             <table className="w-full text-left text-sm border-collapse">
                               <thead className="bg-gray-50 border-b border-gray-200"><tr className="text-xs text-gray-600 uppercase tracking-wider"><th className="p-3 border-r border-gray-200 w-1/3 whitespace-nowrap">Phân loại theo Mục đích</th><th className="p-3 border-r border-gray-200 w-24 text-center">SL</th><th className="p-3 whitespace-nowrap">Phân loại theo Loại xe</th></tr></thead>
                               <tbody className="divide-y divide-gray-200">
-                                {Object.entries(xeStats.grouped).map(([purpose, pData]) => (
+                                {(Object.entries(xeStats.grouped) as [string, any][]).map(([purpose, pData]) => (
                                   <React.Fragment key={purpose}>
                                     <tr className="bg-gray-100/80"><td className="p-3 font-bold text-gray-800 border-r border-gray-200 flex items-center gap-2"><Tag size={14} className="text-[#05469B]" /> {purpose}</td><td className="p-3 font-black text-[#05469B] text-center border-r border-gray-200">{pData.total}</td><td className="p-3 bg-gray-50/50"></td></tr>
-                                    {Object.entries(pData.brands).map(([brand, bData]) => (
+                                    {(Object.entries(pData.brands) as [string, any][]).map(([brand, bData]) => (
                                       <tr key={`${purpose}-${brand}`} className="bg-white hover:bg-blue-50/30 transition-colors">
                                         <td className="p-3 text-gray-600 italic border-r border-gray-200 pl-10 font-medium">{brand}</td>
                                         <td className="p-3 text-center font-bold text-gray-700 border-r border-gray-200">{bData.total}</td>
                                         <td className="p-3">
                                           <div className="flex flex-col gap-1.5">
-                                            {Object.entries(bData.models).map(([model, count]) => (
+                                            {Object.entries(bData.models as Record<string, number>).map(([model, count]) => (
                                               <div key={model} className="flex items-center gap-2 text-xs font-semibold text-gray-700"><Car size={14} className="text-gray-400 shrink-0" /> <span className="truncate">{model}:</span> <span className="text-[#05469B] font-bold whitespace-nowrap">{count} xe</span></div>
                                             ))}
                                           </div>

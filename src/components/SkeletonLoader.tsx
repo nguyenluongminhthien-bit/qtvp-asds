@@ -1,7 +1,7 @@
 import React from 'react';
 
 // Component xương sống chung — dùng được ở mọi nơi
-const Pulse = ({ className }: { className?: string }) => (
+const Pulse = ({ className }: { className?: string; key?: React.Key }) => (
   <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
 );
 

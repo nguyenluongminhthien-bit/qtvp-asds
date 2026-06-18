@@ -258,7 +258,6 @@ export interface NhatKyThietBi {
   ghi_chu_sua_chua_nang_cap: string;
   tinh_trang_ghi_nhan_thiet_bi: string;
   chi_phi: string | number;
-  tinh_trang_ghi_nhan_thiet_bi: string;
   [key: string]: any;
 }
 
