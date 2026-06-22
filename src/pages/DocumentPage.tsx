@@ -30,7 +30,7 @@ const getNoiGuiNhanLabel = (phanLoai: string) => {
   }
 };
 
-// COMPONENT AUTOCOMPLETE TÙY CHỈNH (HỖ TRỢ NÚT XÓA)
+// COMPONENT AUTOCOMPLETE TÙY CHỈNH
 const CustomAutocomplete = ({ name, value, onChange, placeholder, suggestions, onRemove, className }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -92,6 +92,22 @@ const CustomAutocomplete = ({ name, value, onChange, placeholder, suggestions, o
 
 export default function DocumentPage() {
   const { user } = useAuth();
+  
+  // 🟢 BỘ QUÉT QUYỀN "MẠNH MẼ" CHỐNG LỖI CỘT DATABASE VÀ KHOẢNG TRẮNG
+  const isViewerHanChe = useMemo(() => {
+    if (!user) return false;
+    const roles = [
+      String(user.quyen || ''),
+      String((user as any).role || ''),
+      String((user as any).quyen_truy_cap || ''),
+      String((user as any).user_metadata?.quyen || ''),
+      String((user as any).chuc_danh || '')
+    ].map(s => s.trim().toLowerCase());
+    
+    // Nếu có bất kỳ cột nào chứa chữ viewer_hanche thì sẽ kích hoạt khóa
+    return roles.some(r => r.includes('viewer_hanche'));
+  }, [user]);
+
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [vbData, setVbData] = useState<any[]>([]);
   
@@ -121,14 +137,9 @@ export default function DocumentPage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  // --- STATE LƯU TRỮ DANH SÁCH BỊ XÓA GỢI Ý ---
   const [blacklist, setBlacklist] = useState<string[]>(() => {
     const saved = localStorage.getItem('doc_suggestions_blacklist');
-    return saved ? JSON.parse(saved) : [
-      'Phạm Đăng Châu',
-      'Đàm Đình Thông',
-      'Nguyễn Thiện Mỹ'
-    ];
+    return saved ? JSON.parse(saved) : ['Phạm Đăng Châu', 'Đàm Đình Thông', 'Nguyễn Thiện Mỹ'];
   });
 
   const handleRemoveSuggestion = (item: string) => {
@@ -163,7 +174,6 @@ export default function DocumentPage() {
     return map;
   }, [donViList]);
 
-  // PHÂN QUYỀN HIỂN THỊ VĂN BẢN
   const visibleDocuments = useMemo(() => {
     if (!user) return [];
     const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
@@ -182,7 +192,6 @@ export default function DocumentPage() {
     });
   }, [vbData, user, donViList]);
 
-  // TẠO DANH SÁCH GỢI Ý TỪ LỊCH SỬ NHẬP LIỆU (ĐÃ LỌC BLACKLIST ĐỂ XÓA)
   const { suggestNguoiky, suggestChucvu, suggestNguoilayso, suggestBPlayso, suggestNghiepvu, suggestDonViXuLy } = useMemo(() => {
     const getUnique = (field: string) => {
       const allValues = vbData.map(item => item[field]).filter(Boolean);
@@ -200,7 +209,6 @@ export default function DocumentPage() {
     };
   }, [vbData, blacklist]);
 
-  // LỌC VÀ TẠO CÂY ĐƠN VỊ BÊN TRÁI
   const allowedDonViIds = useMemo(() => {
     if (!user) return [];
     const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
@@ -215,7 +223,6 @@ export default function DocumentPage() {
     return donViList.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
   }, [user, donViList]);
 
-  // FIX TÌM KIẾM CÂY THƯ MỤC CỰC THÔNG MINH
   const filteredUnits = useMemo(() => {
     let baseUnits = donViList.filter(dv => allowedDonViIds.includes(dv.id));
     if (!unitSearchTerm) return baseUnits;
@@ -252,12 +259,8 @@ export default function DocumentPage() {
   }, [donViList, unitSearchTerm, allowedDonViIds]);
 
   const parentUnits = useMemo(() => filteredUnits.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly), [filteredUnits]);
-  
   const getChildUnits = (parentId: string) => sortDonViByThuTu(filteredUnits.filter(item => item.cap_quan_ly === parentId));
-
-  const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => {
-    return groupParentUnits(parentUnits);
-  }, [parentUnits]);
+  const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => groupParentUnits(parentUnits), [parentUnits]);
 
   const toggleParent = (parentId: string) => {
     setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
@@ -273,10 +276,17 @@ export default function DocumentPage() {
     return Array.from(years).sort((a, b) => Number(b) - Number(a));
   }, [visibleDocuments]);
 
-  // LỌC VĂN BẢN TRÊN BẢNG
+  // 🟢 LỌC VĂN BẢN TRÊN BẢNG (ÁP DỤNG QUYỀN)
   const filteredDocs = useMemo(() => {
     let result = [...visibleDocuments];
     
+    // Nếu là tài khoản giới hạn -> Chỉ lấy Thông báo & Quyết định
+    if (isViewerHanChe) {
+      result = result.filter(item => 
+        item.phan_loai === 'Thông báo' || item.phan_loai === 'Quyết định'
+      );
+    }
+
     if (selectedUnitFilter) result = result.filter(item => String(item.id_don_vi) === String(selectedUnitFilter) || String(item.pham_vi_ap_dung) === String(selectedUnitFilter));
     if (selectedPhanLoai) result = result.filter(item => item.phan_loai === selectedPhanLoai);
     if (selectedYear !== 'all') {
@@ -302,7 +312,7 @@ export default function DocumentPage() {
     });
 
     return result;
-  }, [visibleDocuments, searchTerm, selectedUnitFilter, selectedPhanLoai, selectedYear]);
+  }, [visibleDocuments, searchTerm, selectedUnitFilter, selectedPhanLoai, selectedYear, isViewerHanChe]);
 
   const selectedUnitName = useMemo(() => {
     if (!selectedUnitFilter) return 'Toàn hệ thống';
@@ -310,24 +320,21 @@ export default function DocumentPage() {
     return unit ? unit.ten_don_vi : 'Đơn vị không xác định';
   }, [selectedUnitFilter, donViList]);
 
-  // 🟢 BẮT ĐẦU: STATE VÀ LOGIC PHÂN TRANG (PAGINATION)
+  // PHÂN TRANG
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState<number | string>(100);
 
   const actualRowsPerPage = typeof rowsPerPage === 'number' && rowsPerPage > 0 ? rowsPerPage : 100;
   const totalPages = Math.ceil(filteredDocs.length / actualRowsPerPage) || 1;
 
-  // Tự động quay về trang 1 nếu người dùng thay đổi bộ lọc
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedUnitFilter, selectedPhanLoai, selectedYear, searchTerm]);
 
-  // Lấy danh sách văn bản của trang hiện tại
   const paginatedDocs = useMemo(() => {
     const startIndex = (currentPage - 1) * actualRowsPerPage;
     return filteredDocs.slice(startIndex, startIndex + actualRowsPerPage);
   }, [filteredDocs, currentPage, actualRowsPerPage]);
-  // 🟢 KẾT THÚC: LOGIC PHÂN TRANG
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
     setModalMode(mode);
@@ -395,7 +402,6 @@ export default function DocumentPage() {
       }
       setIsModalOpen(false); 
       
-      // 🟢 Thêm thông báo thành công tại đây (Phân biệt hành động)
       if (modalMode === 'create') {
         toast.success("Ban hành văn bản thành công!");
       } else {
@@ -404,10 +410,7 @@ export default function DocumentPage() {
 
     } catch (err: any) { 
       setError(err.message || 'Lỗi lưu dữ liệu Văn bản.'); 
-      
-      // 🔴 Thêm thông báo lỗi tại đây
       toast.error(err.message || "Đã xảy ra lỗi khi lưu văn bản!");
-      
     } finally { 
       setSubmitting(false); 
     }
@@ -430,11 +433,9 @@ export default function DocumentPage() {
       setVbData(prev => prev.filter(item => String(item.id) !== String(itemToDelete)));
       setIsConfirmOpen(false); 
       setItemToDelete(null); 
-      // 🟢 Thêm thông báo thành công tại đây
       toast.success("Xóa văn bản thành công!");
     } catch (err: any) { 
       setError(err.message || 'Lỗi xóa dữ liệu.'); 
-       // 🔴 Thêm thông báo lỗi tại đây
       toast.error(err.message || "Đã xảy ra lỗi khi xóa!");
     } finally { 
       setSubmitting(false); 
@@ -483,12 +484,19 @@ export default function DocumentPage() {
             <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-[#05469B] hover:bg-blue-50 rounded-md transition-colors"><PanelLeftClose size={18} /></button>
           </div>
           
+          {/* 🟢 KHỐI NÚT LỌC NHANH (Tự động giấu đi CV Đi, Tờ trình nếu là Viewer_HanChe) */}
           <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-lg mb-4">
             <button onClick={() => setSelectedPhanLoai('Thông báo')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Thông báo' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>T.Báo</button>
             <button onClick={() => setSelectedPhanLoai('Quyết định')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Quyết định' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>Q.Định</button>
-            <button onClick={() => setSelectedPhanLoai('Công văn đến')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Công văn đến' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>CV Đến</button>
-            <button onClick={() => setSelectedPhanLoai('Công văn đi')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Công văn đi' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>CV Đi</button>
-            <button onClick={() => setSelectedPhanLoai('Tờ trình')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Tờ trình' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>T.Trình</button>
+            
+            {!isViewerHanChe && (
+              <>
+                <button onClick={() => setSelectedPhanLoai('Công văn đến')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Công văn đến' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>CV Đến</button>
+                <button onClick={() => setSelectedPhanLoai('Công văn đi')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Công văn đi' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>CV Đi</button>
+                <button onClick={() => setSelectedPhanLoai('Tờ trình')} className={`py-1.5 text-xs font-bold rounded-md transition-all ${selectedPhanLoai === 'Tờ trình' ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>T.Trình</button>
+              </>
+            )}
+            
             <button onClick={() => setSelectedPhanLoai(null)} className={`py-1.5 text-xs font-bold rounded-md transition-all ${!selectedPhanLoai ? 'bg-white text-[#05469B] shadow-sm' : 'text-gray-500 hover:text-[#05469B]'}`}>Tất cả</button>
           </div>
 
@@ -523,7 +531,9 @@ export default function DocumentPage() {
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col">
         <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10' : ''} shrink-0`}>
           <div>
-            <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><FileText size={28} /> Quản lý Văn bản - Tờ trình</h2>
+            <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2">
+              <FileText size={28} /> Quản lý Văn bản
+              </h2>
             <p className="text-sm font-medium text-gray-500 mt-1">Lọc: <span className="text-emerald-600 font-bold">{selectedPhanLoai || 'Tất cả'}</span> • Khu vực: <span className="text-emerald-600 font-bold">{selectedUnitName}</span></p>
           </div>
           
@@ -543,7 +553,11 @@ export default function DocumentPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input type="text" placeholder="Tìm số hiệu, tiêu đề, nghiệp vụ..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            <button onClick={() => openModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Ban hành</button>
+            
+            {/* 🟢 ẨN NÚT BAN HÀNH VỚI VIEWER_HANCHE */}
+            {!isViewerHanChe && (
+              <button onClick={() => openModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Ban hành</button>
+            )}
           </div>
         </div>
 
@@ -622,12 +636,20 @@ export default function DocumentPage() {
                           {item.hieu_luc}
                         </span>
                       </td>
+
+                      {/* 🟢 KHÓA CỘT THAO TÁC NẾU LÀ TÀI KHOẢN HẠN CHẾ */}
                       <td className="py-2.5 px-3">
-                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[100px] mx-auto">
-                          <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded transition-colors shadow-sm" title="Xem chi tiết"><Eye size={14} /></button>
-                          <button onClick={() => openModal('update', item)} className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded transition-colors shadow-sm" title="Sửa"><Edit size={14} /></button>
-                          <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded transition-colors shadow-sm" title="Xóa"><Trash2 size={14} /></button>
-                        </div>
+                        {isViewerHanChe ? (
+                          <div className="text-center w-full">
+                            <span className="px-2 py-1 bg-gray-100 text-gray-400 rounded text-[10px] font-bold border border-gray-200">Chỉ xem</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[100px] mx-auto">
+                            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded transition-colors shadow-sm" title="Xem chi tiết"><Eye size={14} /></button>
+                            <button onClick={() => openModal('update', item)} className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded transition-colors shadow-sm" title="Sửa"><Edit size={14} /></button>
+                            <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded transition-colors shadow-sm" title="Xóa"><Trash2 size={14} /></button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -636,7 +658,6 @@ export default function DocumentPage() {
             </table>
           </div>
 
-          {/* 🟢 GIAO DIỆN PHÂN TRANG (PAGINATION BAR) */}
           {filteredDocs.length > 0 && (
             <div className="flex flex-col sm:flex-row items-center justify-between px-4 h-[40px] bg-gray-50 border-t border-gray-200 gap-4 shrink-0">
               <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
@@ -843,7 +864,6 @@ export default function DocumentPage() {
                     </div>
                   )}
 
-                  {/* Khu vực Phụ trợ (ĐÃ THAY BẰNG CUSTOM AUTOCOMPLETE) */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Người ký</label>
@@ -897,7 +917,7 @@ export default function DocumentPage() {
         </div>
       )}
 
-      {/* 🟢 MODAL XEM CHI TIẾT (BỐ CỤC 1 CỘT, LÀM NỔI BẬT THÔNG TIN NGƯỜI KÝ & NGHIỆP VỤ) */}
+      {/* MODAL XEM CHI TIẾT */}
       {isViewModalOpen && viewData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
@@ -979,7 +999,6 @@ export default function DocumentPage() {
                 </div>
               )}
 
-              {/* 🟢 KHỐI NGƯỜI KÝ & NGHIỆP VỤ ĐƯỢC DÀN HÀNG NGANG */}
               <div className="bg-white p-5 rounded-xl border border-blue-100 shadow-sm mb-8">
                 <h4 className="text-sm font-bold text-[#05469B] mb-4 flex items-center gap-2 uppercase tracking-wider"><Briefcase size={18} /> Phân công & Nghiệp vụ</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

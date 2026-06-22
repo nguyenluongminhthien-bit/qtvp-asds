@@ -4,7 +4,7 @@ import {
   Building2, 
   Users, 
   Flame,
-  HardHat, // 🟢 ĐÃ THÊM: Icon cho ATVSLĐ
+  HardHat, 
   Car, 
   MonitorSmartphone, 
   FileText, 
@@ -27,6 +27,17 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   
   // Trạng thái đóng/mở Sidebar
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // 🟢 TRẠM KIỂM SOÁT QUYỀN (Tự động đọc Checkbox từ Database)
+  const checkPermission = (moduleId: string) => {
+    if (!user) return false;
+    // Nếu là ADMIN hoặc được tick ô ALL -> Mở khóa toàn bộ
+    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
+      return true;
+    }
+    // Nếu là User thường -> Kiểm tra xem có được tick cấp quyền module này không
+    return String(user.quyen_truy_cap || '').includes(moduleId);
+  };
 
   return (
     <aside className={`${isCollapsed ? 'w-20' : 'w-64'} h-full bg-[#05408A] flex flex-col shadow-xl shrink-0 text-white transition-all duration-300 z-50`}>
@@ -59,7 +70,8 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
               {user?.ho_ten || 'Người dùng'}
             </span>
             <span className="text-[9px] font-black mt-1 bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-full inline-block w-max border border-teal-500/30">
-              {user?.quyen === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : 'NHÂN VIÊN'}
+              {String(user?.quyen).toUpperCase() === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : 
+               String(user?.quyen).toLowerCase() === 'viewer_hanche' ? 'CHỈ XEM' : 'Chuyên viên'}
             </span>
           </div>
         )}
@@ -68,7 +80,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       {/* DANH SÁCH MENU */}
       <nav className={`flex-1 py-6 space-y-6 overflow-y-auto custom-scrollbar ${isCollapsed ? 'px-2' : 'px-3'}`}>
         
-        {/* Nhóm 1: Bảng điều khiển */}
+        {/* Nhóm 1: Bảng điều khiển (Ai cũng xem được) */}
         <div>
           {!isCollapsed && <p className="px-3 text-[10px] font-bold text-blue-300/80 uppercase tracking-widest mb-2 animate-in fade-in">Bảng điều khiển</p>}
           <div className="space-y-1">
@@ -85,103 +97,119 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           </div>
         </div>
 
-        {/* Nhóm 2: Quản lý hoạt động */}
+        {/* Nhóm 2: Quản lý hoạt động (ĐÃ BỌC ĐIỀU KIỆN PHÂN QUYỀN) */}
         <div>
           {!isCollapsed && <p className="px-3 text-[10px] font-bold text-blue-300/80 uppercase tracking-widest mb-2 animate-in fade-in">Quản lý hoạt động</p>}
           <div className="space-y-1">
-            <button
-              onClick={() => setActiveTab('departments')}
-              title="Thông tin Công ty"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'departments' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <Building2 size={18} />
-              {!isCollapsed && <span className="text-sm">Thông tin Công ty</span>}
-            </button>
+            
+            {checkPermission('CongTy') && (
+              <button
+                onClick={() => setActiveTab('departments')}
+                title="Thông tin Công ty"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'departments' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Building2 size={18} />
+                {!isCollapsed && <span className="text-sm">Thông tin Công ty</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => setActiveTab('personnel')}
-              title="Thông tin Nhân sự"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'personnel' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <Users size={18} />
-              {!isCollapsed && <span className="text-sm">Thông tin Nhân sự</span>}
-            </button>
+            {checkPermission('NhanSu') && (
+              <button
+                onClick={() => setActiveTab('personnel')}
+                title="Thông tin Nhân sự"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'personnel' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Users size={18} />
+                {!isCollapsed && <span className="text-sm">Thông tin Nhân sự</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => setActiveTab('firesafety')}
-              title="Phòng cháy chữa cháy"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'firesafety' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <Flame size={18} />
-              {!isCollapsed && <span className="text-sm">Phòng cháy chữa cháy</span>}
-            </button>
+            {checkPermission('PCCC') && (
+              <button
+                onClick={() => setActiveTab('firesafety')}
+                title="Phòng cháy chữa cháy"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'firesafety' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Flame size={18} />
+                {!isCollapsed && <span className="text-sm">Phòng cháy chữa cháy</span>}
+              </button>
+            )}
 
-            {/* 🟢 NÚT MỚI: AN TOÀN VỆ SINH LĐ */}
-            <button
-              onClick={() => setActiveTab('atvsld')}
-              title="An toàn vệ sinh LĐ"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'atvsld' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <HardHat size={18} />
-              {!isCollapsed && <span className="text-sm">An toàn vệ sinh LĐ</span>}
-            </button>
+            {checkPermission('ATVSLD') && (
+              <button
+                onClick={() => setActiveTab('atvsld')}
+                title="An toàn vệ sinh LĐ"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'atvsld' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <HardHat size={18} />
+                {!isCollapsed && <span className="text-sm">An toàn vệ sinh LĐ</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => setActiveTab('vehicles')}
-              title="Thông tin Xe"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'vehicles' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <Car size={18} />
-              {!isCollapsed && <span className="text-sm">Thông tin Xe</span>}
-            </button>
+            {checkPermission('Xe') && (
+              <button
+                onClick={() => setActiveTab('vehicles')}
+                title="Thông tin Xe"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'vehicles' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <Car size={18} />
+                {!isCollapsed && <span className="text-sm">Thông tin Xe</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => setActiveTab('equipments')}
-              title="Thông tin TTB VP"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'equipments' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <MonitorSmartphone size={18} />
-              {!isCollapsed && <span className="text-sm">Thông tin TTB VP</span>}
-            </button>
+            {checkPermission('ThietBi') && (
+              <button
+                onClick={() => setActiveTab('equipments')}
+                title="Thông tin TTB VP"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'equipments' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <MonitorSmartphone size={18} />
+                {!isCollapsed && <span className="text-sm">Thông tin TTB VP</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => setActiveTab('documents')}
-              title="Văn bản - Thông báo"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'documents' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <FileText size={18} />
-              {!isCollapsed && <span className="text-sm">Văn bản - Thông báo</span>}
-            </button>
+            {checkPermission('VanBan') && (
+              <button
+                onClick={() => setActiveTab('documents')}
+                title="Văn bản - Thông báo"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'documents' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <FileText size={18} />
+                {!isCollapsed && <span className="text-sm">Văn bản - Thông báo</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => setActiveTab('policies')}
-              title="Quy định - Quy trình"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'policies' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <BookOpen size={18} />
-              {!isCollapsed && <span className="text-sm">Quy định - Quy trình</span>}
-            </button>
+            {checkPermission('QuyDinh') && (
+              <button
+                onClick={() => setActiveTab('policies')}
+                title="Quy định - Quy trình"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'policies' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <BookOpen size={18} />
+                {!isCollapsed && <span className="text-sm">Quy định - Quy trình</span>}
+              </button>
+            )}
           </div>
         </div>
 
         {/* Nhóm 3: Hệ thống (Chỉ ADMIN) */}
-        {user?.quyen === 'ADMIN' && (
+        {String(user?.quyen).toUpperCase() === 'ADMIN' && (
           <div>
             {!isCollapsed && <p className="px-3 text-[10px] font-bold text-blue-300/80 uppercase tracking-widest mb-2 animate-in fade-in">Hệ thống</p>}
             <div className="space-y-1">
