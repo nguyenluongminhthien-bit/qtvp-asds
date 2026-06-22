@@ -71,7 +71,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             </span>
             <span className="text-[9px] font-black mt-1 bg-teal-500/20 text-teal-300 px-2 py-0.5 rounded-full inline-block w-max border border-teal-500/30">
               {String(user?.quyen).toUpperCase() === 'ADMIN' ? 'QUẢN TRỊ VIÊN' : 
-               String(user?.quyen).toLowerCase() === 'viewer_hanche' ? 'CHỈ XEM' : 'Chuyên viên'}
+               String(user?.quyen).toLowerCase() === 'viewer_hanche' ? 'CHỈ XEM' : 'CHUYÊN VIÊN'}
             </span>
           </div>
         )}
