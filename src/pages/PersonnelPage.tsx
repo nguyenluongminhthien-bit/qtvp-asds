@@ -104,6 +104,25 @@ export default function PersonnelPage() {
   const [bulkImportText, setBulkImportText] = useState('');
   const [bulkImportData, setBulkImportData] = useState<any[]>([]);
   const [isAnalyzingBulk, setIsAnalyzingBulk] = useState(false);
+
+  // 🟢 TỰ ĐỘNG TÍNH NGÀY HẾT HẠN ATVSLĐ (Bơm IQ cho phần mềm)
+  useEffect(() => {
+    // Nếu đang mở form và người dùng đã nhập ngày kết thúc học (huan_luyen_den)
+    if (modal.isOpen && formData.huan_luyen_den) {
+      const endDate = new Date(formData.huan_luyen_den);
+      const nhom = String(formData.nhom_doi_tuong || '');
+      // Nhóm 4 -> 1 năm. Còn lại -> 2 năm
+      const yearsToAdd = nhom.includes('4') ? 1 : 2;
+      endDate.setFullYear(endDate.getFullYear() + yearsToAdd);
+      
+      const formattedDate = endDate.toISOString().split('T')[0];
+      
+      // Tự động điền vào ô Giá trị đến nếu nó chưa khớp
+      if (formData.gia_tri_den !== formattedDate) {
+        setModal(prev => ({ ...prev, formData: { ...prev.formData, gia_tri_den: formattedDate } }));
+      }
+    }
+  }, [formData.huan_luyen_den, formData.nhom_doi_tuong, modal.isOpen]);
   
   useEffect(() => {
     if (modal.isOpen && formData.cc_atvsld) {
@@ -1267,10 +1286,10 @@ export default function PersonnelPage() {
                     <p className="text-[10px] text-gray-500">Bảng đã được khóa cứng chiều ngang (table-fixed) vừa khít màn hình.</p>
                   </div>
                 </div>
-                {/* Ẩn hẳn thanh cuộn ngang bằng overflow-x-hidden */}
-                <div className="overflow-x-hidden">
+                {/* 🟢 Cuộn dọc với max-h và đóng băng thead */}
+                <div className="overflow-y-auto overflow-x-hidden max-h-[350px] custom-scrollbar relative">
                   <table className="w-full table-fixed text-center text-[10px] border-collapse">
-                    <thead>
+                    <thead className="sticky top-0 z-30 bg-white shadow-sm">
                       <tr className="bg-[#fff2cc] font-black text-[#002060]">
                         {/* Chia tỷ lệ cột: Cột đầu 24%, 2 khối giữa mỗi khối 30%, Tổng 16% */}
                         <th className="p-1 border border-gray-300 w-[24%]" rowSpan={2}>BỘ PHẬN / PHÂN LOẠI</th>
@@ -1335,13 +1354,13 @@ export default function PersonnelPage() {
                     <p className="text-[10px] text-gray-500">Bảng đã được khóa cứng chiều ngang (table-fixed) vừa khít màn hình.</p>
                   </div>
                 </div>
-                {/* Ẩn hẳn thanh cuộn ngang bằng overflow-x-hidden */}
-                <div className="overflow-x-hidden">
+                {/* 🟢 Cuộn dọc với max-h và đóng băng thead */}
+                <div className="overflow-y-auto overflow-x-hidden max-h-[500px] custom-scrollbar relative">
                   <table className="w-full table-fixed text-center text-[10px] border-collapse">
-                    <thead>
+                    <thead className="sticky top-0 z-30 bg-white shadow-sm">
                       <tr>
-                        {/* Ép cứng cột Bộ phận chiếm 22% */}
-                        <th className="p-1 border border-gray-200 bg-[#f8fafc] text-left align-bottom font-black text-[#05469B] uppercase sticky left-0 z-20 w-[22%]" rowSpan={2}>BỘ PHẬN</th>
+                        {/* Ép cứng cột Bộ phận chiếm 22% và Nâng z-index lên 40 để đè lên các hàng cuộn */}
+                        <th className="p-1 border border-gray-200 bg-[#f8fafc] text-left align-bottom font-black text-[#05469B] uppercase sticky left-0 top-0 z-[40] w-[22%]" rowSpan={2}>BỘ PHẬN</th>
                         {deptTabStats.groupedColumns.map((group, idx) => (
                           <th key={idx} colSpan={group.activeRoles.length} className={`p-1 border font-black uppercase tracking-tighter text-[9px] leading-tight ${group.headerColor}`}>
                             {group.label}
@@ -1667,7 +1686,18 @@ export default function PersonnelPage() {
                     </p>
                     <p>
                       <span className="text-gray-500 w-36 inline-block font-medium">Giá trị đến:</span> 
-                      <span className="font-black text-emerald-700 text-base">{viewData.gia_tri_den ? new Date(viewData.gia_tri_den).toLocaleDateString('vi-VN') : '...'}</span>
+                      <span className="font-black text-emerald-700 text-base">
+                        {viewData.gia_tri_den 
+                          ? new Date(viewData.gia_tri_den).toLocaleDateString('vi-VN') 
+                          : viewData.huan_luyen_den 
+                            ? (() => {
+                                const d = new Date(viewData.huan_luyen_den);
+                                d.setFullYear(d.getFullYear() + (String(viewData.nhom_doi_tuong || '').includes('4') ? 1 : 2));
+                                return d.toLocaleDateString('vi-VN') + " (Tự tính tạm)";
+                              })()
+                            : '...'
+                        }
+                      </span>
                     </p>
                   </div>
                 </div>
