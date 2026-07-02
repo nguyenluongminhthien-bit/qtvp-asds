@@ -767,7 +767,7 @@ export default function DocumentPage() {
           <p className="text-[11px] text-gray-500 line-clamp-1 mb-1.5">{item.noi_dung}</p>
           {item.link_vb && (
             <a href={item.link_vb} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline hover:text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-              <LinkIcon size={10}/> File gốc
+              <LinkIcon size={10}/> File đính kèm
             </a>
           )}
         </td>
