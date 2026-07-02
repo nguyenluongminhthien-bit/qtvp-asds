@@ -18,6 +18,16 @@ const isMatDocument = (val: any) => {
   return false;
 };
 
+// HÀM KIỂM TRA VĂN BẢN MỚI (TRONG VÒNG 7 NGÀY)
+const isNewDocument = (dateString: string | null) => {
+  if (!dateString) return false;
+  const docDate = new Date(dateString).getTime();
+  const now = new Date().getTime();
+  const diffInDays = (now - docDate) / (1000 * 3600 * 24);
+  // Hiển thị nhãn Mới nếu văn bản ban hành từ 0-7 ngày trước (hoặc tính cả ngày hôm nay)
+  return diffInDays >= -1 && diffInDays <= 7;
+};
+
 // HÀM LẤY NHÃN HIỂN THỊ ĐỘNG CHO NƠI GỬI/NHẬN
 const getNoiGuiNhanLabel = (phanLoai: string) => {
   switch(phanLoai) {
@@ -437,6 +447,30 @@ export default function DocumentPage() {
     }
   };
 
+  // HÀM CẬP NHẬT NHANH TRẠNG THÁI HIỆU LỰC
+  const handleQuickUpdateStatus = async (item: any, newStatus: string) => {
+    if (item.hieu_luc === newStatus) return;
+    
+    // Yêu cầu mở modal nếu chọn "Thay thế VB khác" để nhập link
+    if (newStatus === 'Thay thế VB khác') {
+      toast.warning("Vui lòng chọn nút 'Sửa' để cập nhật Link văn bản thay thế!");
+      return;
+    }
+
+    const originalStatus = item.hieu_luc;
+    // Cập nhật giao diện ngay lập tức
+    setVbData(prev => prev.map(vb => String(vb.id) === String(item.id) ? { ...vb, hieu_luc: newStatus } : vb));
+
+    try {
+      const updatedItem = { ...item, hieu_luc: newStatus };
+      await apiService.save(updatedItem, 'update', "vb_tb");
+      toast.success("Cập nhật trạng thái thành công!");
+    } catch (err: any) {
+      setVbData(prev => prev.map(vb => String(vb.id) === String(item.id) ? { ...vb, hieu_luc: originalStatus } : vb));
+      toast.error(err.message || "Lỗi cập nhật trạng thái!");
+    }
+  };
+  
   const confirmDelete = async () => {
     if (!itemToDelete) return; 
     setSubmitting(true);
@@ -677,7 +711,7 @@ export default function DocumentPage() {
               <thead className="sticky top-0 bg-[#f8fafc] z-10 shadow-sm">
                 <tr className="border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
                   <th className="py-3 px-3 w-36 bg-[#f8fafc]">Số hiệu / Phân loại</th>
-                  <th className="py-3 px-3 w-28 bg-[#f8fafc]">Ngày BH</th>
+                  <th className="py-3 px-3 w-[125px] bg-[#f8fafc]">Ngày Ban hành</th>
                   <th className="py-3 px-3 min-w-[250px] bg-[#f8fafc]">Tiêu đề & Nội dung</th>
                   <th className="py-3 px-3 w-44 bg-[#f8fafc]">Phạm vi áp dụng</th>
                   <th className="py-3 px-3 w-32 bg-[#f8fafc]">Nghiệp vụ</th>
@@ -686,107 +720,109 @@ export default function DocumentPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="p-12 text-center text-gray-500">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />
-                      Đang tải dữ liệu...
-                    </td>
-                  </tr>
-                ) : filteredDocs.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-16 text-center text-gray-500">
-                      <FileText size={48} className="mx-auto text-gray-300 mb-4" />
-                      <p className="text-lg font-medium">Không tìm thấy văn bản phù hợp.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedDocs.map((item) => (
-                    <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-center flex-wrap gap-1 mb-1">
-                          <span className="font-black text-[#05469B] bg-blue-50 px-1.5 py-0.5 rounded text-xs whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
-                          {item.muc_do_khan === 'Hỏa tốc' && <span className="text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-black border border-red-200 uppercase">HỎA TỐC</span>}
-                          {item.muc_do_khan === 'Khẩn' && <span className="text-[9px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-black border border-orange-200 uppercase">KHẨN</span>}
-                        </div>
-                        <div className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded inline-block uppercase tracking-wide">{item.phan_loai}</div>
-                      </td>
-                      <td className="py-2.5 px-3 text-xs font-medium text-gray-700">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar size={13} className="text-gray-400 shrink-0"/> 
-                          {item.ngay_ban_hanh ? new Date(item.ngay_ban_hanh).toLocaleDateString('vi-VN') : '-'}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-start gap-1.5 mb-1">
-                          {isMatDocument(item.mat) && (
-                            <span className="flex items-center gap-0.5 bg-red-100 text-red-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-red-200 shrink-0 mt-0.5" title="Văn bản Mật">
-                              <Lock size={10} /> MẬT
-                            </span>
-                          )}
-                          <p className={`font-bold text-sm leading-tight ${isMatDocument(item.mat) ? 'text-red-700' : 'text-gray-800'}`}>{item.tieu_de}</p>
-                        </div>
-                        <p className="text-[11px] text-gray-500 line-clamp-1 mb-1.5">{item.noi_dung}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.link_vb && (
-                            <a href={item.link_vb} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline hover:text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                              <LinkIcon size={10}/> File gốc
-                            </a>
-                          )}
-                          {item.hieu_luc === 'Thay thế VB khác' && item.van_ban_thay_the && (
-                             <a href={item.van_ban_thay_the} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 hover:underline bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
-                               <LinkIcon size={10}/> File cũ
-                             </a>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <p className="text-xs font-semibold text-gray-700 line-clamp-1" title={item.pham_vi_ap_dung === 'Toàn hệ thống' ? 'Toàn hệ thống' : donViMap[String(item.pham_vi_ap_dung)] || item.pham_vi_ap_dung}>
-                          {item.pham_vi_ap_dung === 'Toàn hệ thống' ? '🌍 Toàn hệ thống' : donViMap[String(item.pham_vi_ap_dung)] || item.pham_vi_ap_dung}
-                        </p>
-                        <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold truncate">Từ: {donViMap[String(item.id_don_vi)] || item.id_don_vi}</p>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        {item.nghiep_vu ? (
-                          <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold border border-indigo-100 inline-block truncate max-w-full" title={item.nghiep_vu}>
-                            {item.nghiep_vu}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 italic text-[11px]">Chưa PL</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center justify-center gap-1 text-center whitespace-nowrap
-                          ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border border-green-200' : 
-                            item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-600 border border-gray-300' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
-                          {item.hieu_luc === 'Còn hiệu lực' && <CheckCircle2 size={12}/>}
-                          {item.hieu_luc}
-                        </span>
-                      </td>
+  {loading ? (
+    <tr>
+      <td colSpan={7} className="p-12 text-center text-gray-500">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />
+        Đang tải dữ liệu...
+      </td>
+    </tr>
+  ) : filteredDocs.length === 0 ? (
+    <tr>
+      <td colSpan={7} className="p-16 text-center text-gray-500">
+        <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+        <p className="text-lg font-medium">Không tìm thấy văn bản phù hợp.</p>
+      </td>
+    </tr>
+  ) : (
+    paginatedDocs.map((item) => (
+      <tr 
+        key={item.id} 
+        className={`transition-all duration-200 group ${item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-50/80 opacity-60 hover:opacity-100 hover:bg-gray-100 grayscale-[20%]' : 'bg-white hover:bg-blue-50/50'}`}
+      >
+        {/* 1. Số hiệu / Phân loại (Đã có nhãn MỚI) */}
+        <td className="py-2.5 px-3">
+          <div className="flex items-center flex-wrap gap-1 mb-1">
+            <span className="font-black text-[#05469B] bg-blue-50 px-1.5 py-0.5 rounded text-xs whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">{item.phan_loai}</span>
+            {isNewDocument(item.ngay_ban_hanh) && (
+              <span className="text-[8px] font-black text-white bg-red-500 px-1.5 py-0.5 rounded animate-pulse uppercase tracking-wider shrink-0">Mới</span>
+            )}
+          </div>
+        </td>
 
-                      <td className="py-2.5 px-3">
-                        {isViewerHanChe ? (
-                          <div className="text-center w-full">
-                            <span className="px-2 py-1 bg-gray-100 text-gray-400 rounded text-[10px] font-bold border border-gray-200">Chỉ xem</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[100px] mx-auto">
-                            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded transition-colors shadow-sm" title="Xem chi tiết">
-                              <Eye size={14} />
-                            </button>
-                            <button onClick={() => openModal('update', item)} className="p-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded transition-colors shadow-sm" title="Sửa">
-                              <Edit size={14} />
-                            </button>
-                            <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded transition-colors shadow-sm" title="Xóa">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
+        {/* 2. Ngày ban hành */}
+        <td className="py-2.5 px-3 text-xs font-medium text-gray-700">
+          <div className="flex items-center gap-1.5">
+            <Calendar size={13} className="text-gray-400 shrink-0"/> 
+            {item.ngay_ban_hanh ? new Date(item.ngay_ban_hanh).toLocaleDateString('vi-VN') : '-'}
+          </div>
+        </td>
+
+        {/* 3. Tiêu đề & Nội dung */}
+        <td className="py-2.5 px-3">
+          <p className={`font-bold text-sm leading-tight ${isMatDocument(item.mat) ? 'text-red-700' : 'text-gray-800'}`}>{item.tieu_de}</p>
+          <p className="text-[11px] text-gray-500 line-clamp-1 mb-1.5">{item.noi_dung}</p>
+          {item.link_vb && (
+            <a href={item.link_vb} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline hover:text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+              <LinkIcon size={10}/> File gốc
+            </a>
+          )}
+        </td>
+
+        {/* 4. Phạm vi áp dụng (Khôi phục các khối màu) */}
+        <td className="py-2.5 px-3">
+          <div className="flex flex-col gap-1">
+             <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+                {item.pham_vi_ap_dung === 'Toàn hệ thống' && <span>🌍</span>}
+                {donViMap[String(item.pham_vi_ap_dung)] || item.pham_vi_ap_dung}
+             </div>
+             <p className="text-[9px] text-gray-400 uppercase font-bold truncate">Từ: {donViMap[String(item.id_don_vi)] || item.id_don_vi}</p>
+          </div>
+        </td>
+
+        {/* 5. Nghiệp vụ (Khôi phục khối màu) */}
+        <td className="py-2.5 px-3">
+          {item.nghiep_vu ? (
+            <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold border border-indigo-100 inline-block truncate max-w-full">
+              {item.nghiep_vu}
+            </span>
+          ) : (
+            <span className="text-gray-400 italic text-[11px]">Chưa PL</span>
+          )}
+        </td>
+
+        {/* 6. Hiệu lực (Dropdown màu) */}
+        <td className="py-2.5 px-3">
+          <div className="relative group w-full max-w-[120px]">
+            <select
+              value={item.hieu_luc}
+              onChange={(e) => handleQuickUpdateStatus(item, e.target.value)}
+              className={`w-full appearance-none pl-2 pr-5 py-1 rounded-md text-[10px] font-bold text-center cursor-pointer border shadow-sm
+                ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border-green-200' : 
+                  item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-yellow-50 text-yellow-700 border-yellow-300'}`}
+            >
+              <option value="Còn hiệu lực">Còn hiệu lực</option>
+              <option value="Hết hiệu lực">Hết hiệu lực</option>
+              <option value="Thay thế VB khác">Thay thế VB khác</option>
+            </select>
+          </div>
+        </td>
+
+        {/* 7. Thao tác */}
+        <td className="py-2.5 px-3 text-center">
+          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 text-emerald-600"><Eye size={14} /></button>
+            <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600"><Edit size={14} /></button>
+            <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-red-600"><Trash2 size={14} /></button>
+          </div>
+        </td>
+      </tr>
+    ))
+  )}
+</tbody>
             </table>
           </div>
 
@@ -798,10 +834,17 @@ export default function DocumentPage() {
               <div className="p-10 text-center text-gray-500"><FileText size={48} className="mx-auto text-gray-300 mb-4" /> Không tìm thấy văn bản.</div>
             ) : (
               paginatedDocs.map((item) => (
-                <div key={item.id} className="bg-white p-4 rounded-2xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-gray-100 relative overflow-hidden active:scale-[0.98] transition-transform">
+                <div 
+                  key={item.id} 
+                  className={`p-4 rounded-2xl relative overflow-hidden active:scale-[0.98] transition-all duration-200
+                    ${item.hieu_luc === 'Hết hiệu lực'
+                      ? 'bg-gray-50 border border-gray-200 opacity-60 grayscale-[20%]'
+                      : 'bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-gray-100'
+                    }`}
+                >
                   
                   {/* Đường kẻ màu bên trái thể hiện hiệu lực */}
-                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-emerald-500' : item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-400' : 'bg-orange-500'}`}></div>
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-emerald-500' : item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-400' : 'bg-yellow-400'}`}></div>
                   
                   <div className="flex justify-between items-start mb-2 pl-2">
                     <div className="flex items-center flex-wrap gap-1.5">
@@ -827,14 +870,25 @@ export default function DocumentPage() {
                   </div>
 
                   {/* Nút thao tác trên Mobile */}
-                  <div className="pl-2 flex gap-2 mt-3 pt-3 border-t border-gray-100">
+                  <div className="pl-2 flex gap-2 mt-3 pt-3 border-t border-gray-100 items-center">
                     {isViewerHanChe ? (
                        <span className="w-full text-center py-2 bg-gray-100 text-gray-400 rounded-lg text-xs font-bold border border-gray-200">Chỉ xem</span>
                     ) : (
                       <>
-                        <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg flex justify-center items-center gap-1 text-xs border border-emerald-200"><Eye size={14}/> Xem</button>
-                        <button onClick={() => openModal('update', item)} className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg flex justify-center items-center gap-1 text-xs border border-blue-200"><Edit size={14}/> Sửa</button>
-                        <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="py-2 px-4 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg flex justify-center items-center border border-red-200"><Trash2 size={14}/></button>
+                        <select
+                          value={item.hieu_luc}
+                          onChange={(e) => handleQuickUpdateStatus(item, e.target.value)}
+                          className={`flex-1 py-2 px-1 rounded-lg text-[11px] font-bold border text-center outline-none cursor-pointer truncate
+                            ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border-green-200' :
+                              item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-yellow-50 text-yellow-700 border-yellow-300'}`}
+                        >
+                          <option value="Còn hiệu lực">Còn hiệu lực</option>
+                          <option value="Hết hiệu lực">Hết hiệu lực</option>
+                          <option value="Thay thế VB khác">Thay thế...</option>
+                        </select>
+                        <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg flex justify-center items-center border border-emerald-200"><Eye size={14}/></button>
+                        <button onClick={() => openModal('update', item)} className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg flex justify-center items-center border border-blue-200"><Edit size={14}/></button>
+                        <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg flex justify-center items-center border border-red-200"><Trash2 size={14}/></button>
                       </>
                     )}
                   </div>

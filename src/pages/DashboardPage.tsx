@@ -823,7 +823,7 @@ export default function DashboardPage() {
                     onChange={(e) => setDocYear(Number(e.target.value))} 
                     className="bg-blue-50 text-[#05469B] text-xs font-bold py-1.5 px-2 rounded-lg outline-none border border-blue-100 cursor-pointer shadow-sm"
                   >
-                    {[currentYear + 1, currentYear, currentYear - 1, currentYear - 2].map(y => <option key={y} value={y}>Năm {y}</option>)}
+                    {[currentYear, currentYear - 1, currentYear - 2, currentYear - 3, currentYear - 4].map(y => <option key={y} value={y}>Năm {y}</option>)}
                   </select>
                 </div>
 
