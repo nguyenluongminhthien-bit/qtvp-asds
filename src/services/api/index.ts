@@ -1,0 +1,50 @@
+import { setCurrentUser, login } from './auth';
+import { writeLog } from './logs';
+import {
+  getPersonnel,
+  getDonVi,
+  getAnNinh,
+  getXe,
+  getChiPhiXe,
+  getPhapNhan,
+  getPhongHop,
+  getQuyDinh,
+  getThietBi,
+  getNhatKyThietBi,
+  getVanBan,
+  getPVHC,
+  getATVSLD,
+  getPCTT,
+  getPCCC,
+  getTsPCCC,
+  getUsers,
+  getLogs,
+  save,
+  deleteRecord
+} from './modules';
+
+export const apiService = {
+  setCurrentUser,
+  writeLog,
+  login,
+  getPersonnel,
+  getDonVi,
+  getAnNinh,
+  getXe,
+  getChiPhiXe,
+  getPhapNhan,
+  getPhongHop,
+  getQuyDinh,
+  getThietBi,
+  getNhatKyThietBi,
+  getVanBan,
+  getPVHC,
+  getATVSLD,
+  getPCTT,
+  getPCCC,
+  getTsPCCC,
+  getUsers,
+  getLogs,
+  save,
+  delete: deleteRecord
+};

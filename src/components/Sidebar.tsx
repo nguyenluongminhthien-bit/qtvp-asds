@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -13,7 +13,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   UserCog,         
-  ClipboardList    
+  ClipboardList,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -25,8 +27,28 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const { logout, user } = useAuth();
   
-  // Trạng thái đóng/mở Sidebar
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Trạng thái đóng/mở Sidebar (Mặc định đóng trên di động)
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  // 🟢 TRẠNG THÁI GIAO DIỆN BAN ĐÊM (DARK MODE)
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark-mode', 'dark');
+      document.body.classList.add('dark-mode', 'dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark-mode', 'dark');
+      document.body.classList.remove('dark-mode', 'dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
 
   // 🟢 TRẠM KIỂM SOÁT QUYỀN (Tự động đọc Checkbox từ Database)
   const checkPermission = (moduleId: string) => {
@@ -40,7 +62,27 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   };
 
   return (
-    <aside className={`${isCollapsed ? 'w-20' : 'w-64'} h-full bg-[#05408A] flex flex-col shadow-xl shrink-0 text-white transition-all duration-300 z-50`}>
+    <>
+      {/* Nút bấm nổi mở Menu trên di động */}
+      <button 
+        onClick={() => setIsCollapsed(!isCollapsed)} 
+        className="fixed left-3 bottom-5 z-[60] md:hidden bg-[#05408A] hover:bg-[#04367a] text-white p-3.5 rounded-full shadow-2xl border border-blue-400/40 flex items-center justify-center transition-all animate-pulse"
+        title="Menu"
+      >
+        {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+      </button>
+
+      {/* Lớp nền mờ khi mở Menu trên di động */}
+      {!isCollapsed && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-45 md:hidden animate-in fade-in duration-200"
+          onClick={() => setIsCollapsed(true)}
+        ></div>
+      )}
+
+      {/* Khung giữ chỗ trong Flex layout (0px trên di động, w-20/w-64 trên PC) */}
+      <div className={`shrink-0 transition-all duration-300 h-full overflow-hidden md:overflow-visible ${isCollapsed ? 'w-0 md:w-20' : 'w-0 md:w-64'}`}>
+        <aside className={`fixed md:relative left-0 top-0 h-full bg-[#05408A] flex flex-col shadow-xl text-white transition-all duration-300 z-50 ${isCollapsed ? '-translate-x-full md:translate-x-0 w-64 md:w-20' : 'translate-x-0 w-64 md:w-64'}`}>
       
       {/* HEADER LOGO */}
       <div className={`p-5 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} border-b border-blue-800/50 transition-all`}>
@@ -239,17 +281,30 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         )}
       </nav>
 
-      {/* FOOTER ĐĂNG XUẤT */}
-      <div className={`p-4 border-t border-blue-800/50 ${isCollapsed ? 'flex justify-center' : ''}`}>
+      {/* FOOTER: CHẾ ĐỘ BAN ĐÊM & ĐĂNG XUẤT */}
+      <div className={`p-3 border-t border-blue-800/50 flex flex-col gap-2 ${isCollapsed ? 'items-center' : ''}`}>
+        <button
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          title={isDarkMode ? 'Chuyển sang Giao diện Sáng (Day Mode)' : 'Chuyển sang Giao diện Ban đêm (Dark Mode)'}
+          className={`flex items-center justify-center gap-3 py-2 rounded-lg font-bold transition-all ${
+            isDarkMode ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-blue-900/40 text-blue-200 hover:bg-blue-800/60'
+          } ${isCollapsed ? 'w-10 h-10 px-0' : 'w-full px-3'}`}
+        >
+          {isDarkMode ? <Sun size={18} className="text-amber-400 animate-spin-slow" /> : <Moon size={18} className="text-blue-300" />}
+          {!isCollapsed && <span className="text-xs">{isDarkMode ? 'Chế độ Sáng (Day)' : 'Giao diện Ban đêm'}</span>}
+        </button>
+
         <button 
           onClick={logout}
           title="Đăng xuất"
-          className={`flex items-center justify-center gap-3 py-2.5 rounded-lg font-bold text-red-300 hover:bg-red-500/20 hover:text-red-100 transition-colors ${isCollapsed ? 'w-10 h-10 px-0' : 'w-full px-3'}`}
+          className={`flex items-center justify-center gap-3 py-2 rounded-lg font-bold text-red-300 hover:bg-red-500/20 hover:text-red-100 transition-colors ${isCollapsed ? 'w-10 h-10 px-0' : 'w-full px-3'}`}
         >
           <LogOut size={18} />
-          {!isCollapsed && <span className="text-sm">Đăng xuất</span>}
+          {!isCollapsed && <span className="text-xs">Đăng xuất</span>}
         </button>
       </div>
-    </aside>
+        </aside>
+      </div>
+    </>
   );
 }

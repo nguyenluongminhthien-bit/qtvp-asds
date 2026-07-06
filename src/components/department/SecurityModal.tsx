@@ -129,11 +129,11 @@ export default function SecurityModal({ isOpen, currentData, selectedUnitId, onS
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
         
         {/* HEADER MODAL */}
-        <div className="flex justify-between items-center p-5 border-b border-indigo-100 bg-[#eef2ff] rounded-t-2xl text-indigo-900 shrink-0">
+        <div className="flex justify-between items-center p-4 sm:p-5 border-b border-indigo-100 bg-[#eef2ff] rounded-t-3xl sm:rounded-t-2xl text-indigo-900 shrink-0">
           <h3 className="text-xl font-bold flex items-center gap-2">
             <Shield size={24} className="text-[#05469B]"/> 
             <span className="text-[#05469B]">{currentData ? 'Cập nhật An ninh & Hệ thống Camera' : 'Khai báo Hồ sơ An ninh & Camera'}</span>

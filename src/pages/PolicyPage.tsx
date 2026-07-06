@@ -8,6 +8,7 @@ import { apiService } from '../services/api';
 import { VB_TB } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../utils/toast';
+import { toUnaccented } from '../utils/formatters';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 
 
@@ -104,12 +105,12 @@ export default function PolicyPage() {
     }
     
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
+      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
       result = result.filter(item => 
-        (item.so_hieu?.toLowerCase().includes(lower)) || 
-        (item.tieu_de?.toLowerCase().includes(lower)) ||
-        (item.nghiep_vu?.toLowerCase().includes(lower)) ||
-        (item.phan_loai?.toLowerCase().includes(lower))
+        toUnaccented(item.so_hieu || '').toLowerCase().includes(cleanSearch) || 
+        toUnaccented(item.tieu_de || '').toLowerCase().includes(cleanSearch) ||
+        toUnaccented(item.nghiep_vu || '').toLowerCase().includes(cleanSearch) ||
+        toUnaccented(item.phan_loai || '').toLowerCase().includes(cleanSearch)
       );
     }
     return result;
@@ -193,14 +194,14 @@ export default function PolicyPage() {
   
   if (loading) return <PageWithFilterSkeleton rows={8} />;
   return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (
         <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all">
           <Filter size={20} />
         </button>
       )}
 
-      <div className={`${isListCollapsed ? 'w-0 opacity-0' : 'w-72 opacity-100'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-sm z-10 shrink-0 overflow-hidden`}>
+      <div className={`${isListCollapsed ? 'lg:w-0 lg:opacity-0 lg:-ml-72' : 'w-72 opacity-100 absolute lg:relative inset-y-0 left-0'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm z-50 lg:z-10 shrink-0 overflow-hidden ${isListCollapsed ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-gray-100">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-lg font-bold text-[#05469B] flex items-center gap-2 whitespace-nowrap"><Bookmark size={20} /> Nhóm Nghiệp Vụ</h2>
@@ -237,7 +238,7 @@ export default function PolicyPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300">
         <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10' : ''}`}>
           <div>
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><BookOpen size={28} /> Quy định & Quy trình</h2>
@@ -349,14 +350,14 @@ export default function PolicyPage() {
       <datalist id="suggest-phanloai">{uniquePhanloai.map(v => <option key={v} value={v} />)}</datalist>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between p-5 border-b border-gray-100 bg-gray-50 rounded-t-2xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+            <div className="flex justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50 rounded-t-3xl sm:rounded-t-2xl">
               <h3 className="text-xl font-bold text-[#05469B] flex items-center gap-2"><BookOpen size={24}/> {modalMode === 'create' ? 'Ban hành Quy định / Quy trình mới' : 'Cập nhật Tài liệu'}</h3>
               <button onClick={() => setIsModalOpen(false)} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
             </div>
             
-            <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6">
+            <form onSubmit={handleSave} className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scrollbar">
               
               <div className="bg-blue-50/40 p-5 rounded-xl border border-blue-100">
                 <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-[#05469B] rounded-full"></div> Phân loại & Hệ thống</h4>
@@ -426,13 +427,13 @@ export default function PolicyPage() {
       )}
 
       {isViewModalOpen && viewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between p-5 border-b border-gray-100 bg-[#05469B] text-white rounded-t-2xl">
-              <h3 className="text-xl font-bold flex items-center gap-2"><BookOpen size={24}/> Chi tiết Tài liệu</h3>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[92vh] sm:max-h-[90vh] sm:max-w-3xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 overflow-hidden mt-auto sm:mt-0">
+            <div className="flex justify-between p-4 sm:p-5 border-b border-gray-100 bg-[#05469B] text-white rounded-t-3xl sm:rounded-t-2xl">
+              <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2"><BookOpen size={24}/> Chi tiết Tài liệu</h3>
               <button onClick={() => setIsViewModalOpen(false)} className="text-blue-200 hover:text-white rounded-full p-1 transition-colors"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 overflow-y-auto">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
               {viewData.isFromVB && (
                 <div className="mb-4 bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-2">
                   <Info size={16} className="text-orange-500 mt-0.5 shrink-0" />

@@ -12,12 +12,9 @@ import AtvsldModal from '../components/department/AtvsldModal';
 import { useAuth } from '../contexts/AuthContext';
 import { DonVi } from '../types';
 import { groupParentUnits, sortDonViByThuTu, getUnitEmoji } from '../utils/hierarchy';
-
-// Hàm bỏ dấu tiếng Việt để Search
-const toUnaccented = (str: string) => {
-  if (!str) return '';
-  return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
-};
+import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
+import Pagination from '../components/ui/Pagination';
+import { toUnaccented } from '../utils/formatters';
 
 // Hàm dò tìm Tên Vùng Miền (Dành cho chức năng Xuất Excel)
 const getRegionName = (unitId: string, allUnits: DonVi[]): string => {
@@ -33,6 +30,13 @@ const getRegionName = (unitId: string, allUnits: DonVi[]): string => {
   if (ancestors.some(id => isBac.includes(id))) return 'Phía Bắc';
   if (ancestors.some(id => isNam.includes(id))) return 'Phía Nam';
   return 'VPĐH / Khác';
+};
+
+const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
+  const subs = allUnits.filter(u => u.cap_quan_ly === unitId);
+  let ids = subs.map(u => u.id);
+  subs.forEach(s => { ids = [...ids, ...getAllSubordinateIds(s.id, allUnits)]; });
+  return ids;
 };
 
 export default function AtvsldPage() {
@@ -63,7 +67,7 @@ export default function AtvsldPage() {
   const [nhomFilter, setNhomFilter] = useState<string>('ALL');
   const [selectedSafetyIds, setSelectedSafetyIds] = useState<string[]>([]);
   const [currentSafetyPage, setCurrentSafetyPage] = useState(1);
-  const rowsPerSafetyPage = 50;
+  const [rowsPerSafetyPage, setRowsPerSafetyPage] = useState(50);
 
   // 🟢 KÉO CÙNG LÚC 3 BẢNG DỮ LIỆU
   const loadData = async () => {
@@ -104,54 +108,7 @@ export default function AtvsldPage() {
     return donViData.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
   }, [user, donViData]);
 
-  const filteredUnits = useMemo(() => {
-    let baseUnits = donViData.filter(dv => allowedDonViIds.includes(dv.id));
-    if (!unitSearchTerm) return baseUnits;
-    const lower = unitSearchTerm.toLowerCase();
-    const matchedIds = new Set<string>();
 
-    baseUnits.forEach(u => {
-      if (String(u.ten_don_vi || '').toLowerCase().includes(lower) || String(u.id || '').toLowerCase().includes(lower)) {
-        matchedIds.add(u.id);
-        let parentId = u.cap_quan_ly;
-        while (parentId && parentId !== 'HO') {
-          matchedIds.add(parentId);
-          const parentUnit = baseUnits.find(p => p.id === parentId);
-          parentId = parentUnit ? parentUnit.cap_quan_ly : null;
-        }
-      }
-    });
-
-    const addChildren = (parentId: string) => {
-      baseUnits.forEach(u => {
-        if (u.cap_quan_ly === parentId && !matchedIds.has(u.id)) {
-          matchedIds.add(u.id);
-          addChildren(u.id);
-        }
-      });
-    };
-    
-    Array.from(matchedIds).forEach(id => addChildren(id));
-    return baseUnits.filter(item => matchedIds.has(item.id));
-  }, [donViData, unitSearchTerm, allowedDonViIds]);
-
-  const parentUnits = useMemo(() => filteredUnits.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly), [filteredUnits]);
-  const getChildUnits = (parentId: string) => sortDonViByThuTu(filteredUnits.filter(item => item.cap_quan_ly === parentId));
-
-  const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => {
-    return groupParentUnits(parentUnits);
-  }, [parentUnits]);
-
-  const toggleParent = (parentId: string) => {
-    setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
-  };
-
-  const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
-    const subordinates = allUnits.filter(u => u.cap_quan_ly === unitId);
-    let ids = subordinates.map(u => u.id);
-    subordinates.forEach(sub => { ids = [...ids, ...getAllSubordinateIds(sub.id, allUnits)]; });
-    return ids;
-  };
 
   const selectedUnitSubordinates = useMemo(() => {
     if (!selectedUnitFilter) return [];
@@ -217,29 +174,7 @@ export default function AtvsldPage() {
     }
   };
 
-  const renderUnitTree = (parent: DonVi, level: number = 1) => {
-    const children = getChildUnits(parent.id);
-    const isExpanded = expandedParents.includes(parent.id) || !!unitSearchTerm;
-    const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
 
-    return (
-      <div key={parent.id} className={level === 1 ? "mb-1" : "mt-1"}>
-        <button 
-          onClick={() => { setSelectedUnitFilter(parent.id); if (children.length > 0) toggleParent(parent.id); }} 
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === parent.id ? 'bg-emerald-50 text-emerald-700' : 'text-gray-700 hover:bg-gray-50'} ${isParentDimmed ? 'opacity-50' : ''}`}
-        >
-          {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />) : <div className="w-4 shrink-0" />}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span>
-          <span className="truncate text-left">{parent.ten_don_vi}</span>
-        </button>
-        {isExpanded && children.length > 0 && (
-          <div className={`mt-1 border-l-2 border-gray-100 pl-2 space-y-1 ${level === 1 ? 'ml-6' : 'ml-4'}`}>
-            {children.map(child => renderUnitTree(child, level + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   // =======================================================================
   // 🟢 LOGIC TAB 2: HOẠCH ĐỊNH KẾ HOẠCH ĐÀO TẠO ATVSLĐ
@@ -444,7 +379,7 @@ export default function AtvsldPage() {
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>;
 
   return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       
       {/* NÚT MỞ SIDEBAR NẾU ĐANG ẨN */}
       {isListCollapsed && (
@@ -453,40 +388,24 @@ export default function AtvsldPage() {
         </button>
       )}
 
-      {/* 🟢 CỘT TRÁI: BỘ LỌC ĐƠN VỊ */}
-      <div className={`${isListCollapsed ? 'w-0 opacity-0 -ml-80 lg:ml-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm z-50 lg:z-10 shrink-0 overflow-hidden`}>
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-emerald-700 flex items-center gap-2 whitespace-nowrap"><MapPin size={20} /> Bộ lọc Đơn vị</h2>
-            <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"><PanelLeftClose size={18} /></button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input type="text" placeholder="Tìm tên showroom..." className="w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={unitSearchTerm} onChange={(e) => setUnitSearchTerm(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 min-w-[319px] custom-scrollbar">
-          <button onClick={() => { setSelectedUnitFilter(null); if(window.innerWidth < 1024) setIsListCollapsed(true); }} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${selectedUnitFilter === null ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'text-gray-700 hover:bg-gray-50'}`}>
-            <Building2 size={18} className={selectedUnitFilter === null ? 'text-emerald-700' : 'text-gray-400'} /> Tất cả Cơ sở Toàn quốc
-          </button>
-          <hr className="border-gray-100 mb-4 mx-2"/>
-
-          {parentUnits.length === 0 ? (
-            <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
-          ) : (
-            <>
-              {vpdhUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-2">VPĐH</p>{vpdhUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {ctttNamUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-2">CTTT Phía Nam</p>{ctttNamUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {ctttBacUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-2">CTTT Phía Bắc</p>{ctttBacUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {otherUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>{otherUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-            </>
-          )}
-        </div>
-      </div>
+      {/* CỘT TRÁI: BỘ LỌC ĐƠN VỊ ĐỒNG BỘ */}
+      <UnitFilterSidebar
+        donViList={donViData}
+        selectedUnitFilter={selectedUnitFilter}
+        setSelectedUnitFilter={setSelectedUnitFilter}
+        allowedDonViIds={allowedDonViIds}
+        unitSearchTerm={unitSearchTerm}
+        setUnitSearchTerm={setUnitSearchTerm}
+        expandedParents={expandedParents}
+        setExpandedParents={setExpandedParents}
+        isListCollapsed={isListCollapsed}
+        setIsListCollapsed={setIsListCollapsed}
+        themeColor="emerald"
+        allUnitsLabel="Tất cả Cơ sở Toàn quốc"
+      />
 
       {/* 🟢 CỘT PHẢI: NỘI DUNG CHÍNH */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 custom-scrollbar flex flex-col">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 custom-scrollbar flex flex-col">
         <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''} shrink-0`}>
           <div>
             <h2 className="text-2xl font-black text-emerald-700 flex items-center gap-2"><HardHat size={28} /> Quản lý Hồ sơ ATVSLĐ</h2>
@@ -870,17 +789,18 @@ export default function AtvsldPage() {
                 </table>
               </div>
 
-              {/* FOOTER THANH PHÂN TRANG */}
-              {filteredSafetyList.length > 0 && (
-                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 shrink-0">
-                  <div className="flex items-center gap-4 text-xs font-semibold text-gray-600">
-                    <button onClick={() => setCurrentSafetyPage(p => Math.max(1, p - 1))} disabled={currentSafetyPage === 1} className="p-1 bg-white border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100 transition-colors"><ChevronLeft size={16}/></button>
-                    <span>Trang {currentSafetyPage} / {totalSafetyPages}</span>
-                    <button onClick={() => setCurrentSafetyPage(p => Math.min(totalSafetyPages, p + 1))} disabled={currentSafetyPage === totalSafetyPages} className="p-1 bg-white border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100 transition-colors"><ChevronRight size={16}/></button>
-                  </div>
-                  <div className="text-xs text-gray-500">Hiển thị đợt lọc: <span className="font-bold text-emerald-700">{filteredSafetyList.length}</span> nhân sự hợp tiêu chuẩn</div>
-                </div>
-              )}
+              <Pagination
+                currentPage={currentSafetyPage}
+                totalPages={totalSafetyPages}
+                onPageChange={setCurrentSafetyPage}
+                rowsPerPage={rowsPerSafetyPage}
+                onRowsPerPageChange={(rows) => {
+                  setRowsPerSafetyPage(rows);
+                  setCurrentSafetyPage(1);
+                }}
+                totalRows={filteredSafetyList.length}
+                itemName="nhân sự"
+              />
             </div>
           </div>
         )}

@@ -12,6 +12,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy'; 
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
+import { formatPhoneNumber, toUnaccented } from '../utils/formatters';
+import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
+import Pagination from '../components/ui/Pagination';
+import CustomAutocomplete from '../components/ui/CustomAutocomplete';
 
 const normalizeDateToISO = (val: any) => {
   if (!val) return '';
@@ -25,14 +29,6 @@ const formatToVN = (isoStr: string) => {
   if (!isoStr) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(isoStr)) return `${isoStr.split('-')[2]}/${isoStr.split('-')[1]}/${isoStr.split('-')[0]}`;
   return isoStr; 
-};
-
-const formatPhoneNumber = (val: any) => {
-  if (!val) return '';
-  const cleaned = val.toString().replace(/\D/g, ''); 
-  if (cleaned.length <= 4) return cleaned;
-  if (cleaned.length <= 7) return `${cleaned.slice(0, 4)} ${cleaned.slice(4)}`;
-  return `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7, 11)}`;
 };
 
 const safeGet = (obj: any, key: string) => {
@@ -64,6 +60,13 @@ const EMERGENCY_CONTACTS = [
   { key: 'sdt_yte', label: 'Cơ quan Y tế', def: '', color: 'text-gray-800', bg: 'bg-white' },
 ];
 
+const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
+  const subs = allUnits.filter(u => u.cap_quan_ly === unitId);
+  let ids = subs.map(u => u.id);
+  subs.forEach(s => { ids = [...ids, ...getAllSubordinateIds(s.id, allUnits)]; });
+  return ids;
+};
+
 export default function FireSafetyPage() {
   const { user } = useAuth();
   const [donViList, setDonViList] = useState<DonVi[]>([]);
@@ -81,6 +84,15 @@ export default function FireSafetyPage() {
   const [selectedUnitFilter, setSelectedUnitFilter] = useState<string | null>(null);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
   
+  // 🟢 STATE PHÂN TRANG (PAGINATION)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
+
+  // 🟢 Reset về trang 1 khi đổi bộ lọc hoặc tìm kiếm
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedUnitFilter]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'update' | 'view'>('create');
   const [formData, setFormData] = useState<any>({});
@@ -141,55 +153,20 @@ export default function FireSafetyPage() {
     return donViList.filter(dv => [...level1, ...level2, ...level3].includes(dv.id)).map(dv => dv.id);
   }, [user, donViList]);
 
-  const filteredUnits = useMemo(() => {
-    let baseUnits = donViList.filter(item => allowedDonViIds.includes(item.id));
-    if (!unitSearchTerm) return baseUnits;
-    const lower = unitSearchTerm.toLowerCase();
-    const matchedIds = new Set<string>();
-    baseUnits.forEach(u => {
-      if (String(u.ten_don_vi || '').toLowerCase().includes(lower) || String(u.id || '').toLowerCase().includes(lower)) {
-        matchedIds.add(u.id);
-        let parentId = u.cap_quan_ly;
-        while (parentId && parentId !== 'HO') {
-          matchedIds.add(parentId);
-          const parentUnit = baseUnits.find(p => p.id === parentId);
-          parentId = parentUnit ? parentUnit.cap_quan_ly : null;
-        }
-      }
-    });
-    const addChildren = (parentId: string) => {
-      baseUnits.forEach(u => {
-        if (u.cap_quan_ly === parentId && !matchedIds.has(u.id)) {
-          matchedIds.add(u.id);
-          addChildren(u.id);
-        }
-      });
-    };
-    Array.from(matchedIds).forEach(id => addChildren(id));
-    return baseUnits.filter(item => matchedIds.has(item.id));
-  }, [donViList, unitSearchTerm, allowedDonViIds]);
 
-  const parentUnits = useMemo(() => filteredUnits.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly), [filteredUnits]);
-  const getChildUnits = (parentId: string) => sortDonViByThuTu(filteredUnits.filter(item => item.cap_quan_ly === parentId));
-
-  const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => {
-    return groupParentUnits(parentUnits);
-  }, [parentUnits]);
-
-  const toggleParent = (parentId: string) => setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
 
   const filteredPCCC = useMemo(() => {
     let result = pcccData.filter(item => allowedDonViIds.includes(item.id_don_vi));
     if (selectedUnitFilter) {
-      const childUnitIds = donViList.filter(item => item.cap_quan_ly === selectedUnitFilter).map(c => c.id);
-      result = result.filter(item => [selectedUnitFilter, ...childUnitIds].includes(item.id_don_vi));
+      const validIds = [selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViList)];
+      result = result.filter(item => validIds.includes(item.id_don_vi));
     }
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
+      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
       result = result.filter(item => 
-        String(safeGet(item, 'giay_phep_pccc')).toLowerCase().includes(lower) || 
-        String(safeGet(item, 'ho_ten_doi_truong')).toLowerCase().includes(lower) ||
-        String(donViMap[item.id_don_vi] || '').toLowerCase().includes(lower)
+        toUnaccented(safeGet(item, 'giay_phep_pccc')).toLowerCase().includes(cleanSearch) || 
+        toUnaccented(safeGet(item, 'ho_ten_doi_truong')).toLowerCase().includes(cleanSearch) ||
+        toUnaccented(donViMap[item.id_don_vi] || '').toLowerCase().includes(cleanSearch)
       );
     }
     return result;
@@ -249,6 +226,14 @@ export default function FireSafetyPage() {
     return warnings.sort((a, b) => a.diffDays - b.diffDays);
   }, [tsPcccData, pcccData, selectedUnitFilter, allowedDonViIds, donViList, donViMap]);
 
+  // 🟢 TÍNH TOÁN PHÂN TRANG CHO DANH SÁCH PCCC
+  const totalPages = Math.ceil((filteredPCCC?.length || 0) / rowsPerPage) || 1;
+  const currentTableData = useMemo(() => {
+    if (!filteredPCCC) return [];
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredPCCC.slice(start, start + rowsPerPage);
+  }, [filteredPCCC, currentPage, rowsPerPage]);
+
   const getStatusColor = (dateString: string, type: 'BH' | 'DT' | 'TB') => {
     if (!dateString) return { color: 'bg-gray-100 text-gray-500 border-gray-200', text: 'Chưa có', isDanger: false };
     const dateVN = formatToVN(dateString);
@@ -283,6 +268,13 @@ export default function FireSafetyPage() {
     });
     return Array.from(groups);
   };
+
+  const suggestDoiTruong = useMemo(() => {
+    if (!formData.id_don_vi) return [];
+    const validIds = [formData.id_don_vi, ...getAllSubordinateIds(formData.id_don_vi, donViList)];
+    const filteredNs = personnelData.filter(ns => validIds.includes(ns.id_don_vi));
+    return Array.from(new Set(filteredNs.map(item => item.ho_ten).filter(Boolean))) as string[];
+  }, [personnelData, formData.id_don_vi, donViList]);
 
   const openModal = (mode: 'create' | 'update' | 'view', item?: any) => {
     setModalMode(mode);
@@ -322,6 +314,25 @@ export default function FireSafetyPage() {
     const { name, value } = e.target;
     if (name.includes('sdt_doi_truong') || name.includes('sdt_doi_truong')) setFormData(prev => ({ ...prev, [name]: formatPhoneNumber(value) }));
     else setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleDoiTruongChange = (e: any) => {
+    const name = e.target.value;
+    const validIds = formData.id_don_vi ? [formData.id_don_vi, ...getAllSubordinateIds(formData.id_don_vi, donViList)] : [];
+    let foundNs = personnelData.find(ns => ns.ho_ten === name && validIds.includes(ns.id_don_vi));
+    if (!foundNs) {
+      foundNs = personnelData.find(ns => ns.ho_ten === name);
+    }
+    if (foundNs) {
+      setFormData(prev => ({
+        ...prev,
+        ho_ten_doi_truong: name,
+        sdt_doi_truong: formatPhoneNumber(foundNs.so_dien_thoai || foundNs.soDienThoai || ''),
+        chuc_vu: foundNs.chuc_vu || foundNs.chucVu || ''
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, ho_ten_doi_truong: name }));
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -421,60 +432,33 @@ export default function FireSafetyPage() {
     }
   };
 
-  const renderUnitTree = (parent: DonVi, level: number = 1, idx: number = 0) => {
-    const children = getChildUnits(parent.id);
-    const isExpanded = expandedParents.includes(parent.id) || !!unitSearchTerm;
-    return (
-      <div key={`${parent.id}-${level}-${idx}`} className={level === 1 ? "mb-1" : "mt-1"}>
-        <button onClick={() => { setSelectedUnitFilter(parent.id); if (children.length > 0) toggleParent(parent.id); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === parent.id ? 'bg-red-50 text-red-700' : 'text-gray-700 hover:bg-gray-50'}`}>
-          {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />) : <div className="w-4 shrink-0" />}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span>
-          <span className="truncate text-left">{parent.ten_don_vi}</span>
-        </button>
-        {isExpanded && children.length > 0 && (<div className={`ml-${level === 1 ? '6' : '4'} mt-1 border-l-2 border-gray-100 pl-2 space-y-1`}>{children.map((child, cIdx) => renderUnitTree(child, level + 1, cIdx))}</div>)}
-      </div>
-    );
-  };
+
 
   if (loading) return <PageWithFilterSkeleton rows={8} />;
   return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (
         <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-red-600 hover:bg-red-50 transition-all"><PanelLeftOpen size={20} /></button>
       )}
 
-      {/* CỘT TRÁI BỘ LỌC */}
-      <div className={`${isListCollapsed ? 'w-0 opacity-0 -ml-80 lg:ml-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm z-50 lg:z-10 shrink-0 overflow-hidden`}>
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-red-600 flex items-center gap-2 whitespace-nowrap"><MapPin size={20} /> Bộ lọc Đơn vị</h2>
-            <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"><PanelLeftClose size={18} /></button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input type="text" placeholder="Tìm tên đơn vị..." className="w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none" value={unitSearchTerm} onChange={(e) => setUnitSearchTerm(e.target.value)} />
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 min-w-[319px]">
-          <button onClick={() => setSelectedUnitFilter(null)} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${selectedUnitFilter === null ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-700 hover:bg-gray-50'}`}><Flame size={18} className={selectedUnitFilter === null ? 'text-red-600' : 'text-gray-400'} /> Tất cả Cụm / Chi nhánh</button>
-          <hr className="border-gray-100 mb-4 mx-2"/>
-          {loading ? (
-            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-red-600" /></div>
-          ) : parentUnits.length === 0 ? (
-            <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
-          ) : (
-            <>
-              {vpdhUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-red-600 uppercase tracking-wider mb-2">VPĐH</p>{vpdhUnits.map((dv, idx) => renderUnitTree(dv, 1, idx))}</div>)}
-              {ctttNamUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-red-600 uppercase tracking-wider mb-2">CTTT Phía Nam</p>{ctttNamUnits.map((dv, idx) => renderUnitTree(dv, 1, idx))}</div>)}
-              {ctttBacUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-red-600 uppercase tracking-wider mb-2">CTTT Phía Bắc</p>{ctttBacUnits.map((dv, idx) => renderUnitTree(dv, 1, idx))}</div>)}
-              {otherUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>{otherUnits.map((dv, idx) => renderUnitTree(dv, 1, idx))}</div>)}
-            </>
-          )}
-        </div>
-      </div>
+      {/* CỘT TRÁI BỘ LỌC ĐỒNG BỘ */}
+      <UnitFilterSidebar
+        donViList={donViList}
+        selectedUnitFilter={selectedUnitFilter}
+        setSelectedUnitFilter={setSelectedUnitFilter}
+        allowedDonViIds={allowedDonViIds}
+        unitSearchTerm={unitSearchTerm}
+        setUnitSearchTerm={setUnitSearchTerm}
+        expandedParents={expandedParents}
+        setExpandedParents={setExpandedParents}
+        isListCollapsed={isListCollapsed}
+        setIsListCollapsed={setIsListCollapsed}
+        themeColor="red"
+        allUnitsLabel="Tất cả Cụm / Chi nhánh"
+      />
 
       {/* CỘT PHẢI CHI TIẾT */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full">
         <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
           <div>
             <h2 className="text-2xl font-bold text-red-600 flex items-center gap-2"><Flame size={28} /> Quản lý Hồ sơ PCCC</h2>
@@ -568,9 +552,11 @@ export default function FireSafetyPage() {
         )}
         
         {/* BẢNG DỮ LIỆU HIỂN THỊ TRONG MÀN HÌNH CHÍNH */}
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
-          <div className="overflow-x-auto w-full custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[1300px]">
+        <div className={`flex flex-col flex-1 gap-4 transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+          
+          {/* BẢNG DỮ LIỆU PC */}
+          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full flex-1 overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
                   <th className="p-4 w-[20%]">Cơ sở / Đơn vị & Pháp lý</th>
@@ -586,7 +572,7 @@ export default function FireSafetyPage() {
                 ) : filteredPCCC.length === 0 ? (
                   <tr><td colSpan={5} className="p-16 text-center text-gray-500"><ShieldAlert size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-lg font-medium">Chưa có hồ sơ PCCC nào được khai báo.</p></td></tr>
                 ) : (
-                  filteredPCCC.map((item, index) => {
+                  currentTableData.map((item, index) => {
                     const bhStatus = getStatusColor(safeGet(item, 'ngay_het_han_bh'), 'BH');
                     const dtStatus = getStatusColor(safeGet(item, 'ngay_dien_tap'), 'DT');
                     const eqOfUnit = tsPcccData.filter(eq => getUnitIdSafe(eq) === item.id_don_vi);
@@ -704,14 +690,149 @@ export default function FireSafetyPage() {
               </tbody>
             </table>
           </div>
+
+          {/* 🟢 VIEW TRÊN MOBILE: THẺ CARD DỌC */}
+          <div className="block md:hidden space-y-4 custom-scrollbar">
+            {filteredPCCC.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center text-gray-400 italic">Chưa có hồ sơ PCCC nào được khai báo.</div>
+            ) : (
+              currentTableData.map((item, index) => {
+                const bhStatus = getStatusColor(safeGet(item, 'ngay_het_han_bh'), 'BH');
+                const dtStatus = getStatusColor(safeGet(item, 'ngay_dien_tap'), 'DT');
+                const eqOfUnit = tsPcccData.filter(eq => getUnitIdSafe(eq) === item.id_don_vi);
+                
+                let totalEq = 0;
+                let warningCount = 0;
+                
+                eqOfUnit.forEach(eq => {
+                  const sl = Number(safeGet(eq, 'so_luong')) || 1;
+                  totalEq += sl;
+                  if (getStatusColor(safeGet(eq, 'ngay_het_han'), 'TB').isDanger) { warningCount += sl; }
+                });
+
+                return (
+                  <div 
+                    key={`pccc-card-${getPcccIdSafe(item)}-${index}`}
+                    className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm relative flex flex-col gap-3.5 transition-all"
+                  >
+                    {/* Header: Cơ sở & Giấy phép */}
+                    <div className="pb-3 border-b border-gray-100">
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <span className="text-[10px] text-gray-400 font-mono">ID: {getPcccIdSafe(item)}</span>
+                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md uppercase ${safeGet(item, 'giay_phep_pccc') === 'Nghiệm thu' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : safeGet(item, 'giay_phep_pccc') === 'Đã phê duyệt' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>{safeGet(item, 'giay_phep_pccc') || '---'}</span>
+                      </div>
+                      <h4 className="font-extrabold text-red-600 text-sm leading-snug">{donViMap[item.id_don_vi] || item.id_don_vi}</h4>
+                    </div>
+
+                    {/* Body: 2 Columns */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 text-xs">
+                      {/* Cột 1: Bảo hiểm & Diễn tập */}
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Bảo hiểm</p>
+                          {safeGet(item, 'bao_hiem_chay_no') === 'Có' ? (
+                            <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded border ${bhStatus.color}`}>{bhStatus.text}</span>
+                          ) : (
+                            <span className="inline-block font-bold text-red-600 bg-red-50 px-1.5 py-0.5 border border-red-200 rounded text-[10px]">Không có BH</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Diễn tập PCCC</p>
+                          <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold rounded border ${dtStatus.color}`}>{dtStatus.text}</span>
+                        </div>
+                        {safeGet(item, 'link_phuong_an_pccc') && (
+                          <a href={safeGet(item, 'link_phuong_an_pccc')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#05469B] hover:text-blue-700 hover:underline font-bold text-[10px]"><LinkIcon size={10}/> File Phương án CC</a>
+                        )}
+                      </div>
+
+                      {/* Cột 2: Đội trưởng PCCC */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Đội trưởng PCCC</p>
+                        {safeGet(item, 'ho_ten_doi_truong') ? (
+                          <div className="bg-gray-50 border border-gray-100 rounded-lg p-2 flex flex-col gap-1">
+                            <span className="font-bold text-[#05469B] flex items-center gap-1"><ShieldCheck size={12} className="shrink-0 text-red-500"/> <span className="line-clamp-1">{safeGet(item, 'ho_ten_doi_truong')}</span></span>
+                            {safeGet(item, 'sdt_doi_truong') && (
+                              <a href={`tel:${safeGet(item, 'sdt_doi_truong').replace(/\s/g, '')}`} className="font-bold text-emerald-600 hover:underline flex items-center gap-1 text-[10px]"><Phone size={10} className="shrink-0" /> {safeGet(item, 'sdt_doi_truong')}</a>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Chưa báo cáo</span>
+                        )}
+                        <div className="flex justify-between items-center text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-100 rounded p-1">
+                          <span>M: {safeGet(item, 'tong_sl_thanh_vien') || 0}</span>
+                          <span>N: {safeGet(item, 'sl_huy_dong_ban_ngay') || 0}</span>
+                          <span>Đ: {safeGet(item, 'sl_huy_dong_ban_dem') || 0}</span>
+                        </div>
+                      </div>
+
+                      {/* Cột 1: Thiết bị & Bình */}
+                      <div className="col-span-2 grid grid-cols-2 gap-2 mt-1">
+                        <div className="bg-red-50/50 border border-red-100 rounded-lg p-2 flex justify-between items-center"><span className="text-[9px] font-bold text-red-700 uppercase">Tổng Thiết bị / Bình</span><span className="text-sm font-black text-red-600">{totalEq}</span></div>
+                        {warningCount > 0 ? (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-1.5"><AlertTriangle size={14} className="text-amber-500 shrink-0"/><span className="text-[9px] font-bold text-amber-700">Có {warningCount} thiết bị hết hạn!</span></div>
+                        ) : (
+                          <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 flex items-center justify-center text-emerald-600 gap-1.5"><CheckCircle2 size={14}/><span className="text-[9px] font-bold uppercase">Hoạt động tốt</span></div>
+                        )}
+                      </div>
+
+                      {/* Cột 2: Hệ thống PCCC */}
+                      <div className="col-span-2 border-t border-gray-100 pt-2.5">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Tổng quan Hệ thống PCCC</p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[10px]">
+                          {PCCC_SYSTEMS.map(sys => {
+                            let sysCount = 0;
+                            eqOfUnit.forEach(eq => {
+                              if (safeGet(eq, 'nhom_he_thong') === sys.label) sysCount += (Number(safeGet(eq, 'so_luong')) || 1);
+                            });
+                            const isChecked = safeGet(item, sys.key) === 'Có' || (sys.key === 'dung_cu_pccc' && !safeGet(item, 'dung_cu_pccc'));
+                            return (
+                              <div key={sys.key} className="flex items-center justify-between">
+                                <span className="text-gray-500 flex items-center gap-1"><sys.Icon size={11} className={sys.color}/> {sys.label}</span>
+                                {isChecked ? <span className="font-bold text-emerald-600">Có {sysCount > 0 ? `(${sysCount})` : ''}</span> : <span className="text-gray-400">Không</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer: Actions */}
+                    <div className="flex items-center justify-between gap-1.5 pt-3 border-t border-gray-100 mt-1">
+                      <button onClick={() => { setSelectedPcccForContact(item); setIsEmergencyContactOpen(true); }} className="p-2 text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 rounded-lg font-bold text-[11px] transition-colors flex items-center gap-1.5 shadow-2xs">
+                        <PhoneCall size={12} /> Danh bạ
+                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => openModal('view', item)} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xem chi tiết"><Eye size={14}/> Xem</button>
+                        <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit size={14}/> Sửa</button>
+                        <button onClick={() => { setItemToDelete(getPcccIdSafe(item)); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa"><Trash2 size={14}/> Xóa</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(rows) => {
+              setRowsPerPage(rows);
+              setCurrentPage(1);
+            }}
+            totalRows={filteredPCCC.length}
+            itemName="hồ sơ PCCC"
+          />
         </div>
       </div>
 
       {/* 🟢 MODAL NHẬP THÔNG TIN PCCC ALL-IN-ONE */}
       {isModalOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 ${!isListCollapsed ? 'lg:pl-80' : ''}`}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between p-5 border-b border-gray-100 bg-red-50 rounded-t-2xl shrink-0">
+        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300 ${!isListCollapsed ? 'lg:pl-80' : ''}`}>
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+            <div className="flex justify-between p-4 sm:p-5 border-b border-gray-100 bg-red-50 rounded-t-3xl sm:rounded-t-2xl shrink-0">
               <h3 className="text-xl font-bold text-red-700 flex items-center gap-2"><Flame size={24}/> {modalMode === 'create' ? 'Tạo Hồ sơ PCCC Mới' : modalMode === 'view' ? 'Chi tiết Hồ sơ PCCC' : 'Cập nhật Hồ sơ PCCC'}</h3>
               <button onClick={() => setIsModalOpen(false)} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
             </div>
@@ -736,7 +857,19 @@ export default function FireSafetyPage() {
                     <div className="bg-emerald-50/40 p-5 rounded-xl border border-emerald-100 shadow-sm h-full flex flex-col">
                       <h4 className="font-bold text-emerald-800 mb-4 flex items-center gap-2 border-b border-emerald-200 pb-2"><Users size={18}/> 2. Đội PCCC Cơ sở & Diễn tập</h4>
                       <div className="space-y-4 flex-1">
-                        <div className="grid grid-cols-1 gap-4"><div><label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Đội trưởng PCCC</label><input type="text" name="ho_ten_doi_truong" value={formData.ho_ten_doi_truong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-[#05469B]" placeholder="Họ và tên..." /></div></div>
+                        <div className="grid grid-cols-1 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Đội trưởng PCCC</label>
+                            <CustomAutocomplete
+                              name="ho_ten_doi_truong"
+                              value={formData.ho_ten_doi_truong || ''}
+                              onChange={handleDoiTruongChange}
+                              suggestions={suggestDoiTruong}
+                              placeholder="Họ và tên..."
+                              className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-[#05469B]"
+                            />
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div><label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Chức vụ</label><input type="text" name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500 text-sm" placeholder="VD: Trưởng phòng..." /></div>
                           <div><label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">SĐT Đội trưởng</label><input type="text" name="sdt_doi_truong" value={formData.sdt_doi_truong || ''} onChange={handleInputChange} className="w-full p-2 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500 text-sm" placeholder="xxxx xxx xxx" /></div>
@@ -769,7 +902,7 @@ export default function FireSafetyPage() {
                     <p className="text-xs italic text-gray-500 mb-3 px-1">Kê khai chi tiết các thiết bị thuộc các hệ thống trên (Tủ điều khiển, Bình chữa cháy, Đầu báo khói...)</p>
                     
                    <div className="w-full border border-gray-200 rounded-xl overflow-hidden overflow-x-auto custom-scrollbar">
-                      <table className="w-full text-left border-collapse table-fixed">
+                      <table className="w-full text-left border-collapse table-fixed min-w-[800px]">
                         <thead>
                           <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase leading-tight">
                             <th className="p-2 w-[18%]">Nhóm Hệ Thống</th>

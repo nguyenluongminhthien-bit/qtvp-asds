@@ -15,7 +15,7 @@ import {
 import { apiService } from '../services/api';
 import { DonVi, Personnel, AnNinh, PhapNhan, PhongHop, TS_Xe, ThietBi } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatPhoneNumber, toUnaccented } from '../utils/formatters';
 import PnModal from '../components/department/PnModal';
 import PhModal from '../components/department/PhModal';
 import PvhcModal from '../components/department/PvhcModal';
@@ -23,6 +23,7 @@ import AtvsldModal from '../components/department/AtvsldModal';
 import PcttModal from '../components/department/PcttModal';
 import SecurityModal from '../components/department/SecurityModal';
 import PcccModal from '../components/department/PcccModal';
+import PersonnelCard from '../components/department/PersonnelCard';
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy'; 
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
@@ -67,14 +68,6 @@ const formatToVN = (isoStr: string) => {
 const formatNumber = (val: string | number | undefined | null) => {
   if (!val) return '0';
   return val.toString().replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-};
-
-const formatPhoneNumber = (val: string | number | undefined | null) => {
-  if (!val) return '';
-  const cleaned = val.toString().replace(/\D/g, ''); 
-  if (cleaned.length <= 4) return cleaned;
-  if (cleaned.length <= 7) return `${cleaned.slice(0, 4)} ${cleaned.slice(4)}`;
-  return `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7, 11)}`;
 };
 
 const renderContractWarning = (ngayKy: any, soThang: any, giaHanThem: any) => {
@@ -554,12 +547,12 @@ export default function DepartmentPage() {
     return stats;
   }, [selectedUnitSubordinates, currentXeList, currentTbList, donViMap]);
 
-  const leader = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_giam_doc) || unitStaff.find(p => p.phan_loai === 'Lãnh đạo'), [unitStaff, selectedUnit]);
-  const kdXe = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_ptkd_xe) || unitStaff.find(p => String(p.chuc_vu || '').toLowerCase().includes('kinh doanh xe') || String(p.chuc_vu || '').toLowerCase().includes('kd xe')), [unitStaff, selectedUnit]);
-  const kdDvpt = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_ptkd_dvpt) || unitStaff.find(p => String(p.chuc_vu || '').toLowerCase().includes('dvpt') || String(p.chuc_vu || '').toLowerCase().includes('dịch vụ phụ tùng') || String(p.chuc_vu || '').toLowerCase().includes('phó tổng giám đốc')), [unitStaff, selectedUnit]);
-  const dvht1 = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_pt_dvht1) || unitStaff.find(p => String(p.chuc_vu || '').toLowerCase().includes('dvht 1') || String(p.chuc_vu || '').toLowerCase().includes('hỗ trợ 1') || String(p.chuc_vu || '').toLowerCase().includes('dvht kd 1')), [unitStaff, selectedUnit]);
-  const dvht2 = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_pt_dvht2) || unitStaff.find(p => String(p.chuc_vu || '').toLowerCase().includes('dvht 2') || String(p.chuc_vu || '').toLowerCase().includes('hỗ trợ 2') || String(p.chuc_vu || '').toLowerCase().includes('dvht kd 2')), [unitStaff, selectedUnit]);
-  const ptNhanSu = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_pt_nhan_su) || unitStaff.find(p => String(p.chuc_vu || '').toLowerCase().includes('nhân sự') || String(p.chuc_vu || '').toLowerCase().includes('hành chính')), [unitStaff, selectedUnit]);
+  const leader = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_giam_doc), [unitStaff, selectedUnit]);
+  const kdXe = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_ptkd_xe), [unitStaff, selectedUnit]);
+  const kdDvpt = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_ptkd_dvpt), [unitStaff, selectedUnit]);
+  const dvht1 = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_pt_dvht1), [unitStaff, selectedUnit]);
+  const dvht2 = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_pt_dvht2), [unitStaff, selectedUnit]);
+  const ptNhanSu = useMemo(() => unitStaff.find(p => p.id === selectedUnit?.id_pt_nhan_su), [unitStaff, selectedUnit]);
 
   const isSelectedUnitDimmed = selectedUnit?.trang_thai === 'Đại lý' || selectedUnit?.trang_thai === 'Đầu tư mới';
 
@@ -595,68 +588,6 @@ export default function DepartmentPage() {
       await apiService.save(updatedUnit, 'update', 'dm_don_vi');
       setData(prev => prev.map(item => item.id === updatedUnit.id ? updatedUnit : item));
     } catch (err) { toast.error("Lỗi cập nhật nhân sự."); }
-  };
-
-  const PersonnelCard = ({ title, person, roleDefault, fieldKey, isLarge = false }: any) => {
-    const [isEditing, setIsEditing] = useState(false);
-    const [isSavingLocal, setIsSavingLocal] = useState(false);
-
-    const onSelectChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const selectedId = e.target.value;
-      setIsSavingLocal(true);
-      await handleInlineAssign(fieldKey, selectedId);
-      setIsSavingLocal(false); setIsEditing(false);
-    };
-
-    const sdt = person ? (person.sdt_ca_nhan || person.sdt_cong_ty || '') : '';
-    const email = person?.email || '';
-    const hoTen = person?.ho_ten || '';
-    const maNV = person?.ma_so_nhan_vien || '';
-    const chucVu = person ? person.chuc_vu : title;
-
-    const currentUnitPersonnel = personnelData.filter(ns => ns.id_don_vi === selectedUnitId && ns.trang_thai !== 'Đã nghỉ việc');
-    
-    return (
-      <div className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md relative group ${isLarge ? 'md:col-span-2' : ''}`}>
-        {!isEditing && !isSavingLocal && person && (
-          <button onClick={() => setIsEditing(true)} className="absolute top-2 right-2 p-1.5 bg-white border border-blue-200 text-[#05469B] hover:bg-[#05469B] hover:text-white rounded shadow-sm opacity-0 group-hover:opacity-100 transition-all z-20" title="Chuyển người khác"><Edit size={14}/></button>
-        )}
-        <div className="bg-gray-50/80 px-4 py-3 border-b border-gray-100 min-h-[50px] flex items-center">
-          <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider leading-snug pr-6">{chucVu}</h4>
-        </div>
-        <div className="p-4 flex-1 flex flex-col relative h-full min-h-[110px]">
-          {isSavingLocal && <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 z-20"><Loader2 className="animate-spin text-[#05469B] mb-2" size={24}/><span className="text-xs font-bold text-gray-500">Đang lưu...</span></div>}
-          {isEditing ? (
-            <div className="flex flex-col h-full justify-center">
-              <label className="text-xs font-bold text-[#05469B] mb-2">Chọn nhân sự phụ trách:</label>
-              <select onChange={onSelectChange} defaultValue={person?.id || ''} className="w-full p-2 border border-blue-300 rounded-lg bg-blue-50 outline-none focus:ring-2 focus:ring-[#05469B] text-sm font-semibold text-gray-800">
-                <option value="">-- Trống (Xóa người này) --</option>
-                {currentUnitPersonnel.map(p => (<option key={p.id} value={p.id}>{p.ho_ten} ({p.ma_so_nhan_vien})</option>))}
-              </select>
-              <button onClick={() => setIsEditing(false)} className="mt-3 text-xs font-bold text-gray-400 hover:text-red-500 text-center">Hủy thao tác</button>
-            </div>
-          ) : person ? (
-            <>
-              <p className={`font-black text-[#05469B] mb-4 ${isLarge ? 'text-xl' : 'text-lg'}`}>{hoTen}</p>
-              <div className="space-y-2 mt-auto">
-                <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-md border border-gray-200 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50 group/phone">
-                  <Phone size={14} className="text-gray-400 shrink-0 group-hover/phone:text-[#05469B]"/>
-                  {sdt ? <a href={`tel:${sdt.replace(/\s/g, '')}`} className="text-sm font-semibold text-gray-700 group-hover/phone:text-[#05469B] w-full" title="Bấm để gọi">{formatPhoneNumber(sdt)}</a> : <span className="text-sm font-semibold text-gray-400">---</span>}
-                </div>
-                <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-md border border-gray-200 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50/50 group/mail">
-                  <MailIcon size={14} className="text-gray-400 shrink-0 group-hover/mail:text-[#05469B]"/>
-                  {email ? <a href={`mailto:${email}`} className="text-sm font-semibold text-gray-700 truncate group-hover/mail:text-[#05469B] w-full" title="Bấm để gửi mail">{email}</a> : <span className="text-sm font-semibold text-gray-400 truncate">---</span>}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div onClick={() => { if(currentUnitPersonnel.length > 0) setIsEditing(true); else toast.info('Chưa có nhân sự nào trong danh sách!'); }} className="flex-1 flex flex-col items-center justify-center py-6 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/50 hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-colors group/box">
-              <p className="text-sm text-gray-400 group-hover/box:text-[#05469B] font-medium italic transition-colors">Chưa có {roleDefault}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
   };
 
   const openModal = (mode: 'create' | 'update', item?: DonVi) => {
@@ -943,13 +874,13 @@ export default function DepartmentPage() {
 
   if (loading) return <PageWithFilterSkeleton rows={8} />;
   return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (
         <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all" title="Mở danh sách đơn vị"><PanelLeftOpen size={20} /></button>
       )}
 
       {/* CỘT TRÁI BỘ LỌC */}
-      <div className={`${isListCollapsed ? 'w-0 opacity-0 -ml-80 lg:ml-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm z-50 lg:z-10 shrink-0 overflow-hidden`}>
+      <div className={`${isListCollapsed ? 'lg:w-80 lg:-ml-80 lg:relative lg:opacity-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0 z-50 lg:z-10'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm shrink-0 overflow-hidden ${isListCollapsed ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-gray-100">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-[#05469B] flex items-center gap-2 whitespace-nowrap"><Building2 size={20} /> Công ty & Showroom</h2>
@@ -982,7 +913,7 @@ export default function DepartmentPage() {
       </div>
 
       {/* CỘT PHẢI CHI TIẾT */}
-      <div className="flex-1 overflow-y-auto p-6 relative transition-all duration-300 w-full">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-6 relative transition-all duration-300 w-full">
         <div className={`max-w-6xl mx-auto space-y-8 pb-12 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
           {error && <div className="mb-4 p-4 bg-red-50 text-red-700 flex gap-3 rounded-lg"><AlertCircle size={20} /> <p>{error}</p></div>}
           {!selectedUnit ? (
@@ -1033,9 +964,33 @@ export default function DepartmentPage() {
                 <section>
                   <h3 className="text-lg font-black text-[#05469B] mb-5 flex items-center gap-2 uppercase tracking-wider"><div className="w-1.5 h-6 bg-[#05469B] rounded-full"></div> A. THÔNG TIN LÃNH ĐẠO</h3>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    <PersonnelCard title="Giám đốc SR / Lãnh đạo" person={leader} roleDefault="Lãnh đạo" fieldKey="id_giam_doc" />
-                    <PersonnelCard title="Phụ trách Kinh doanh xe" person={kdXe} roleDefault="PT KD Xe" fieldKey="id_ptkd_xe" />
-                    <PersonnelCard title="Phụ trách Kinh doanh DVPT" person={kdDvpt} roleDefault="PT KD DVPT" fieldKey="id_ptkd_dvpt" />
+                    <PersonnelCard 
+                      title="Giám đốc SR / Lãnh đạo" 
+                      person={leader} 
+                      roleDefault="Lãnh đạo" 
+                      fieldKey="id_giam_doc" 
+                      personnelData={personnelData}
+                      selectedUnitId={selectedUnitId}
+                      handleInlineAssign={handleInlineAssign}
+                    />
+                    <PersonnelCard 
+                      title="Phụ trách Kinh doanh xe" 
+                      person={kdXe} 
+                      roleDefault="PT KD Xe" 
+                      fieldKey="id_ptkd_xe" 
+                      personnelData={personnelData}
+                      selectedUnitId={selectedUnitId}
+                      handleInlineAssign={handleInlineAssign}
+                    />
+                    <PersonnelCard 
+                      title="Phụ trách Kinh doanh DVPT" 
+                      person={kdDvpt} 
+                      roleDefault="PT KD DVPT" 
+                      fieldKey="id_ptkd_dvpt" 
+                      personnelData={personnelData}
+                      selectedUnitId={selectedUnitId}
+                      handleInlineAssign={handleInlineAssign}
+                    />
                   </div>
                 </section>
 
@@ -1043,9 +998,33 @@ export default function DepartmentPage() {
                 <section>
                   <h3 className="text-lg font-black text-[#05469B] mb-5 flex items-center gap-2 uppercase tracking-wider"><div className="w-1.5 h-6 bg-[#05469B] rounded-full"></div> B. PT QTVP & ASĐS và PT NHÂN SỰ</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <PersonnelCard title="Dịch vụ Hỗ trợ KD 1" person={dvht1} roleDefault="PT DVHT 1" fieldKey="id_pt_dvht1" />
-                    <PersonnelCard title="Dịch vụ Hỗ trợ KD 2" person={dvht2} roleDefault="PT DVHT 2" fieldKey="id_pt_dvht2" />
-                    <PersonnelCard title="Hành chính - Nhân sự" person={ptNhanSu} roleDefault="Hành chính NS" fieldKey="id_pt_nhan_su" />
+                    <PersonnelCard 
+                      title="Dịch vụ Hỗ trợ KD 1" 
+                      person={dvht1} 
+                      roleDefault="PT DVHT 1" 
+                      fieldKey="id_pt_dvht1" 
+                      personnelData={personnelData}
+                      selectedUnitId={selectedUnitId}
+                      handleInlineAssign={handleInlineAssign}
+                    />
+                    <PersonnelCard 
+                      title="Dịch vụ Hỗ trợ KD 2" 
+                      person={dvht2} 
+                      roleDefault="PT DVHT 2" 
+                      fieldKey="id_pt_dvht2" 
+                      personnelData={personnelData}
+                      selectedUnitId={selectedUnitId}
+                      handleInlineAssign={handleInlineAssign}
+                    />
+                    <PersonnelCard 
+                      title="Hành chính - Nhân sự" 
+                      person={ptNhanSu} 
+                      roleDefault="Hành chính NS" 
+                      fieldKey="id_pt_nhan_su" 
+                      personnelData={personnelData}
+                      selectedUnitId={selectedUnitId}
+                      handleInlineAssign={handleInlineAssign}
+                    />
                   </div>
                 </section>
                 

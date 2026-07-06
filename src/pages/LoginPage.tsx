@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, User, Loader2, AlertCircle } from 'lucide-react';
+import { Lock, User, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -9,15 +9,22 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('thaco_saved_username');
-    const savedPass = localStorage.getItem('thaco_saved_password');
+    const savedPassBase64 = localStorage.getItem('thaco_saved_password');
     const isRemembered = localStorage.getItem('thaco_remember_me') === 'true';
 
     if (isRemembered) {
       if (savedUser) setUsername(savedUser);
-      if (savedPass) setPassword(savedPass);
+      if (savedPassBase64) {
+        try {
+          setPassword(window.atob(savedPassBase64));
+        } catch (e) {
+          setPassword('');
+        }
+      }
       setRememberMe(true);
     }
   }, []);
@@ -27,10 +34,10 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
     try {
-      await login(username, password);
+      await login(username, password, rememberMe);
       if (rememberMe) {
         localStorage.setItem('thaco_saved_username', username);
-        localStorage.setItem('thaco_saved_password', password);
+        localStorage.setItem('thaco_saved_password', window.btoa(password));
         localStorage.setItem('thaco_remember_me', 'true');
       } else {
         localStorage.removeItem('thaco_saved_username');
@@ -65,7 +72,6 @@ export default function LoginPage() {
               <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Tên đăng nhập</label>
               <div className="relative">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                {/* Đã thêm bg-[#FFFFF0] vào đây */}
                 <input 
                   type="text" 
                   required 
@@ -81,15 +87,21 @@ export default function LoginPage() {
               <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Mật khẩu</label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                {/* Đã thêm bg-[#FFFFF0] vào đây */}
                 <input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   required 
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)} 
-                  className="w-full pl-11 pr-4 py-3 bg-[#FFFFF0] border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#05469B] outline-none transition-all font-medium text-gray-800" 
+                  className="w-full pl-11 pr-11 py-3 bg-[#FFFFF0] border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#05469B] outline-none transition-all font-medium text-gray-800" 
                   placeholder="••••••••" 
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
             </div>
           </div>

@@ -83,9 +83,9 @@ export default function PcttModal({ isOpen, currentData, selectedUnitId, onSaved
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-        <div className="flex justify-between p-5 border-b border-blue-100 bg-blue-50 rounded-t-2xl shrink-0">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+        <div className="flex justify-between p-4 sm:p-5 border-b border-blue-100 bg-blue-50 rounded-t-3xl sm:rounded-t-2xl shrink-0">
           <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2"><CloudLightning size={24}/> {formData.id && currentData ? 'Cập nhật Hồ sơ PCTT & Bảo hiểm' : 'Tạo Hồ sơ PCTT'}</h3>
           <button onClick={onClose} disabled={submitting} className="text-blue-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
         </div>

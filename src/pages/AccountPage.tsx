@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, UserCog, Shield, Key, Building2, Mail, CheckSquare, ListChecks } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, UserCog, Shield, Key, Building2, Mail, CheckSquare, ListChecks, Eye, EyeOff } from 'lucide-react';
 import { apiService } from '../services/api';
 import { User, DonVi } from '../types';
 import { buildHierarchicalOptions, getUnitEmoji } from '../utils/hierarchy';
@@ -44,6 +44,7 @@ export default function AccountPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'update'>('create');
+  const [showPassword, setShowPassword] = useState(false);
   
   // Mở rộng formData để chứa quyen_truy_cap và quyen_chi_tiet
   const [formData, setFormData] = useState<Partial<User & { quyen_truy_cap?: string; quyen_chi_tiet?: string }>>({});
@@ -85,6 +86,7 @@ export default function AccountPage() {
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
     setModalMode(mode);
+    setShowPassword(false);
     setFormData(item ? { ...item } : { 
       id: '', user_name: '', password: '', ho_ten: '', id_don_vi: '', 
       quyen: 'USER', quyen_truy_cap: '', quyen_chi_tiet: '' 
@@ -262,7 +264,24 @@ export default function AccountPage() {
 
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Mật khẩu *</label>
-                      <div className="relative"><Key className="absolute left-3 top-3 text-gray-400" size={18}/><input type="text" required name="password" value={formData.password || ''} onChange={e=>setFormData({...formData, password: e.target.value})} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-mono tracking-widest text-indigo-700 font-bold"/></div>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-3 text-gray-400" size={18}/>
+                        <input 
+                          type={showPassword ? "text" : "password"} 
+                          required 
+                          name="password" 
+                          value={formData.password || ''} 
+                          onChange={e=>setFormData({...formData, password: e.target.value})} 
+                          className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-mono tracking-widest text-indigo-700 font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>

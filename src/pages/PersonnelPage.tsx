@@ -5,7 +5,7 @@ import {
   Dumbbell, Car, Utensils, Coffee, Languages, Monitor, Copy, Eye, EyeOff, User as UserIcon, 
   Building2, Phone, Mail, Info, MapPin, ChevronDown, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, CheckCheck, Briefcase,
   LogOut, AlertTriangle, Image as ImageIcon, RotateCcw, Download, FileSpreadsheet, ClipboardPaste,
-  BarChart3, PieChart as PieChartIcon, TrendingUp, Cake
+  BarChart3, PieChart as PieChartIcon, TrendingUp, Cake, Filter, Layers, Tag, Sparkles, Wrench, Settings2, UserPlus
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Personnel, DonVi, ThietBi } from '../types';
@@ -13,23 +13,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy';
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
-
-const formatPhoneNumber = (val: string | number | undefined | null) => {
-  if (!val) return '';
-  const cleaned = val.toString().replace(/\D/g, ''); 
-  if (cleaned.length <= 4) return cleaned;
-  if (cleaned.length <= 7) return `${cleaned.slice(0, 4)} ${cleaned.slice(4)}`;
-  return `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7, 11)}`;
-};
-
-const getDirectImageLink = (url: string) => {
-  if (!url) return '';
-  const match = url.match(/[-\w]{25,}/);
-  if (match && match[0]) {
-    return `https://drive.google.com/thumbnail?id=${match[0]}&sz=w800`;
-  }
-  return url; 
-};
+import { formatPhoneNumber, getDirectImageLink, formatCurrencySpace as formatCurrency, toUnaccented } from '../utils/formatters';
+import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
+import Pagination from '../components/ui/Pagination';
+import PersonnelModal from '../components/personnel/PersonnelModal';
 
 const CERTIFICATES = [
   { id: 'cc_atvsld', label: 'ATVSLĐ', icon: ShieldCheck }, { id: 'cc_anbv', label: 'ANBV', icon: ShieldCheck },
@@ -39,16 +26,6 @@ const CERTIFICATES = [
   { id: 'cc_attp', label: 'ATTP', icon: Utensils }, { id: 'cc_pha_che', label: 'Pha chế', icon: Coffee },
   { id: 'cc_ngoai_ngu', label: 'Ngoại ngữ', icon: Languages }, { id: 'cc_tin_hoc', label: 'Tin học', icon: Monitor }
 ];
-
-const formatCurrency = (val: string | number | undefined | null) => {
-  if (!val) return '';
-  return val.toString().replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-};
-
-const toUnaccented = (str: any) => {
-  if (!str) return '';
-  return String(str).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]/g, ""); 
-};
 
 const extractStartDateFromMaNV = (maNV: string) => {
   if (!maNV || maNV.length < 4) return null;
@@ -69,6 +46,13 @@ export default function PersonnelPage() {
   const [error, setError] = useState<string | null>(null);
   
   const [personnelSearchTerm, setPersonnelSearchTerm] = useState('');
+  const [filterPhongBan, setFilterPhongBan] = useState<string>('');
+  const [filterKhoi, setFilterKhoi] = useState<string>('');
+  const [filterChucVu, setFilterChucVu] = useState<string>('');
+  const [filterPhanLoai, setFilterPhanLoai] = useState<string>('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
+  const [isAddNewExpanded, setIsAddNewExpanded] = useState(false);
   const [unitSearchTerm, setUnitSearchTerm] = useState('');
   const [isListCollapsed, setIsListCollapsed] = useState(false);
   const [selectedUnitFilter, setSelectedUnitFilter] = useState<string | null>(null);
@@ -98,6 +82,11 @@ export default function PersonnelPage() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportRegion, setExportRegion] = useState<'ALL' | 'NAM' | 'BAC' | 'SPECIFIC'>('ALL');
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
+  const [clickStaffListModal, setClickStaffListModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    list: any[];
+  }>({ isOpen: false, title: '', list: [] });
   const formData = modal.formData;
 
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
@@ -105,62 +94,7 @@ export default function PersonnelPage() {
   const [bulkImportData, setBulkImportData] = useState<any[]>([]);
   const [isAnalyzingBulk, setIsAnalyzingBulk] = useState(false);
 
-  // 🟢 TỰ ĐỘNG TÍNH NGÀY HẾT HẠN ATVSLĐ (Bơm IQ cho phần mềm)
-  useEffect(() => {
-    // Nếu đang mở form và người dùng đã nhập ngày kết thúc học (huan_luyen_den)
-    if (modal.isOpen && formData.huan_luyen_den) {
-      const endDate = new Date(formData.huan_luyen_den);
-      const nhom = String(formData.nhom_doi_tuong || '');
-      // Nhóm 4 -> 1 năm. Còn lại -> 2 năm
-      const yearsToAdd = nhom.includes('4') ? 1 : 2;
-      endDate.setFullYear(endDate.getFullYear() + yearsToAdd);
-      
-      const formattedDate = endDate.toISOString().split('T')[0];
-      
-      // Tự động điền vào ô Giá trị đến nếu nó chưa khớp
-      if (formData.gia_tri_den !== formattedDate) {
-        setModal(prev => ({ ...prev, formData: { ...prev.formData, gia_tri_den: formattedDate } }));
-      }
-    }
-  }, [formData.huan_luyen_den, formData.nhom_doi_tuong, modal.isOpen]);
-  
-  useEffect(() => {
-    if (modal.isOpen && formData.cc_atvsld) {
-      const nhom = String(formData.nhom_doi_tuong || '');
-      let certName = '';
-      if (nhom === '1' || nhom === '2') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
-      else if (nhom === '3') certName = 'Thẻ An toàn lao động';
-      else if (nhom === '4') certName = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
-      else if (nhom === '6') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
 
-      if (formData.chung_nhan !== certName) {
-        setModal(prev => ({ ...prev, formData: { ...prev.formData, chung_nhan: certName } }));
-      }
-    }
-  }, [formData.nhom_doi_tuong, formData.cc_atvsld, modal.isOpen]);
-
-  const gplxGroups = [
-    { title: 'Tùy chọn chung', options: [{ label: 'Không có', value: 'Không có' }] },
-    { title: 'Nhóm xe máy (Mô tô)', options: [{ label: 'Hạng A1 (Đến 125 cm³)', value: 'A1' }, { label: 'Hạng A (Trên 125 cm³)', value: 'A' }, { label: 'Hạng B1 (Ba bánh)', value: 'B1' }] },
-    { title: 'Nhóm xe ô tô chở người', options: [{ label: 'Hạng B (Đến 8 chỗ, < 3.5T)', value: 'B' }, { label: 'Hạng D1 (8 - 16 chỗ)', value: 'D1' }, { label: 'Hạng D2 (16 - 29 chỗ)', value: 'D2' }, { label: 'Hạng D (Trên 29 chỗ)', value: 'D' }] },
-    { title: 'Nhóm xe tải và chuyên dùng', options: [{ label: 'Hạng C1 (3.5T - 7.5T)', value: 'C1' }, { label: 'Hạng C (Trên 7.5T)', value: 'C' }] },
-    { title: 'Nhóm xe kéo rơ moóc (Bằng E)', options: [{ label: 'Hạng BE (B kéo > 750kg)', value: 'BE' }, { label: 'Hạng C1E (C1 kéo > 750kg)', value: 'C1E' }, { label: 'Hạng CE (Đầu kéo, container)', value: 'CE' }, { label: 'Hạng D1E (D1 kéo > 750kg)', value: 'D1E' }, { label: 'Hạng D2E (D2 kéo > 750kg)', value: 'D2E' }, { label: 'Hạng DE (D kéo > 750kg)', value: 'DE' }] }
-  ];
-
-  const handleGPLXChange = (value: string, isChecked: boolean) => {
-    let currentArr = formData.giay_phep_lai_xe ? formData.giay_phep_lai_xe.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
-    if (value === 'Không có') { currentArr = isChecked ? ['Không có'] : []; } 
-    else {
-      currentArr = currentArr.filter((item: string) => item !== 'Không có');
-      if (isChecked) { if (!currentArr.includes(value)) currentArr.push(value); } 
-      else { currentArr = currentArr.filter((item: string) => item !== value); }
-    }
-    setModal(prev => ({ ...prev, formData: { ...prev.formData, giay_phep_lai_xe: currentArr.join(', ') } }));
-  };
-
-  const currentGPLXList = useMemo(() => {
-    return formData.giay_phep_lai_xe ? formData.giay_phep_lai_xe.split(',').map((s: string) => s.trim()) : [];
-  }, [formData.giay_phep_lai_xe]);
 
   const loadData = async () => {
     setLoading(true); setError(null);
@@ -178,6 +112,20 @@ export default function PersonnelPage() {
     donViList.forEach(dv => { map[String(dv.id)] = dv.ten_don_vi; });
     return map;
   }, [donViList]);
+
+  const getFullUnitName = (unitId: string): string => {
+    const parts: string[] = [];
+    let currentId = unitId;
+    let iterations = 0;
+    while (currentId && iterations < 10) {
+      const dv = donViList.find(item => String(item.id) === String(currentId));
+      if (!dv) break;
+      parts.push(dv.ten_don_vi);
+      currentId = dv.cap_quan_ly;
+      iterations++;
+    }
+    return parts.reverse().join(' ➜ ');
+  };
 
   const allowedDonViIds = useMemo(() => {
     if (!user) return [];
@@ -244,10 +192,6 @@ export default function PersonnelPage() {
     return groupParentUnits(parentUnits);
   }, [parentUnits]);
 
-  const toggleParent = (parentId: string) => {
-    setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
-  };
-
   const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
     const subordinates = allUnits.filter(u => u.cap_quan_ly === unitId);
     let ids = subordinates.map(u => u.id);
@@ -260,6 +204,53 @@ export default function PersonnelPage() {
     const subIds = getAllSubordinateIds(selectedUnitFilter, donViList);
     return [selectedUnitFilter, ...subIds];
   }, [selectedUnitFilter, donViList]);
+
+  // 🟢 TÍNH TOÁN DANH SÁCH TÙY CHỌN BỘ LỌC NÂNG CAO
+  const availableFilterOptions = useMemo(() => {
+    let base = data.filter(item => allowedDonViIds.includes(item.id_don_vi));
+    if (selectedUnitFilter) {
+      base = base.filter(item => selectedUnitSubordinates.includes(item.id_don_vi));
+    }
+    
+    const getUnique = (key: string, currentList: any[]) => {
+      const set = new Set<string>();
+      currentList.forEach(item => {
+        const val = String(item[key] || '').trim();
+        if (val && val !== '-' && val !== 'Chưa có' && val !== 'Chưa phân bộ phận' && val !== 'null' && val !== 'undefined') {
+          set.add(val);
+        }
+      });
+      return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
+    };
+
+    const listForPhongBan = base.filter(item => 
+      (!filterKhoi || String(item.khoi || '').trim() === filterKhoi) &&
+      (!filterChucVu || String(item.chuc_vu || '').trim() === filterChucVu) &&
+      (!filterPhanLoai || String(item.phan_loai || '').trim() === filterPhanLoai)
+    );
+    const listForKhoi = base.filter(item => 
+      (!filterPhongBan || String(item.phong_ban || '').trim() === filterPhongBan) &&
+      (!filterChucVu || String(item.chuc_vu || '').trim() === filterChucVu) &&
+      (!filterPhanLoai || String(item.phan_loai || '').trim() === filterPhanLoai)
+    );
+    const listForChucVu = base.filter(item => 
+      (!filterPhongBan || String(item.phong_ban || '').trim() === filterPhongBan) &&
+      (!filterKhoi || String(item.khoi || '').trim() === filterKhoi) &&
+      (!filterPhanLoai || String(item.phan_loai || '').trim() === filterPhanLoai)
+    );
+    const listForPhanLoai = base.filter(item => 
+      (!filterPhongBan || String(item.phong_ban || '').trim() === filterPhongBan) &&
+      (!filterKhoi || String(item.khoi || '').trim() === filterKhoi) &&
+      (!filterChucVu || String(item.chuc_vu || '').trim() === filterChucVu)
+    );
+
+    return {
+      phongBanList: getUnique('phong_ban', listForPhongBan),
+      khoiList: getUnique('khoi', listForKhoi),
+      chucVuList: getUnique('chuc_vu', listForChucVu),
+      phanLoaiList: getUnique('phan_loai', listForPhanLoai),
+    };
+  }, [data, allowedDonViIds, selectedUnitFilter, selectedUnitSubordinates, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
 
   // LỌC DANH SÁCH NHÂN SỰ CHUNG
   const filteredPersonnel = useMemo(() => {
@@ -275,6 +266,19 @@ export default function PersonnelPage() {
         String(item.chuc_vu || '').toLowerCase().includes(lower) ||
         String(item.phong_ban || '').toLowerCase().includes(lower) 
       );
+    }
+
+    if (filterPhongBan) {
+      result = result.filter(item => String(item.phong_ban || '').trim() === filterPhongBan);
+    }
+    if (filterKhoi) {
+      result = result.filter(item => String(item.khoi || '').trim() === filterKhoi);
+    }
+    if (filterChucVu) {
+      result = result.filter(item => String(item.chuc_vu || '').trim() === filterChucVu);
+    }
+    if (filterPhanLoai) {
+      result = result.filter(item => String(item.phan_loai || '').trim() === filterPhanLoai);
     }
 
     const phanLoaiOrder: Record<string, number> = {
@@ -295,7 +299,7 @@ export default function PersonnelPage() {
       const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
       return timeA - timeB; 
     });
-  }, [data, personnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, selectedUnitSubordinates]);
+  }, [data, personnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, selectedUnitSubordinates, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
 
   const selectedUnitName = useMemo(() => {
     if (!selectedUnitFilter) return 'Tất cả Đơn vị';
@@ -369,38 +373,7 @@ export default function PersonnelPage() {
   // =================================================================================
   // 🟢 LOGIC TÍNH TOÁN BẢNG CHÉO BẢO VỆ / PVHC (Dùng List đã khử trùng)
   // =================================================================================
-  // 🟢 COMPONENT CON: POPUP HOVER CHUYÊN DỤNG CHO BẢNG MA TRẬN (Sửa hiển thị dưới con trỏ & Ghim tiêu đề)
-  const HoverTablePopover = ({ list, title }: { list: any[], title: string }) => {
-    if (!list || list.length === 0) return null;
-    return (
-      // 1. Đổi 'bottom-full pb-2' thành 'top-full pt-2' để thả XUỐNG ngay dưới con trỏ
-      // 2. Nâng z-index lên [999] để đảm bảo luôn nổi lên trên cùng
-      <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-64 z-[999] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 cursor-default">
-        
-        {/* 3. Dùng flex-col và max-h để tạo bộ khung: Tiêu đề đứng im, Danh sách cuộn mượt */}
-        <div className="bg-white border border-gray-300 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] text-left pointer-events-auto flex flex-col max-h-[250px]">
-          
-          {/* PHẦN TIÊU ĐỀ (Ghim cứng nhờ shrink-0) */}
-          <div className="p-2 font-black text-[10px] uppercase border-b border-gray-200 bg-[#e8f0fe] text-[#05469B] rounded-t-xl shrink-0">
-            {title} ({list.length})
-          </div>
 
-          {/* PHẦN DANH SÁCH (Được phép cuộn nhờ flex-1 và overflow-y-auto) */}
-          <div className="overflow-y-auto custom-scrollbar p-1 flex-1">
-            <ul className="divide-y divide-gray-50">
-              {list.map((p, idx) => (
-                <li key={idx} className="p-2 flex flex-col gap-0.5 hover:bg-blue-50 transition-colors">
-                  <span className="text-[11px] font-bold text-[#05469B]">{p.ho_ten}</span>
-                  <span className="text-[9px] text-gray-500 font-medium leading-tight">{p.chuc_vu}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-        </div>
-      </div>
-    );
-  };
 
   // =================================================================================
   // 🟢 1. LOGIC BẢNG CHÉO BẢO VỆ / PVHC (Đã tích hợp Danh sách Hover)
@@ -570,7 +543,7 @@ export default function PersonnelPage() {
   const actualRowsPerPage = typeof rowsPerPage === 'number' && rowsPerPage > 0 ? rowsPerPage : 100;
   const totalPages = Math.ceil(filteredPersonnel.length / actualRowsPerPage) || 1;
 
-  useEffect(() => { setCurrentPage(1); }, [selectedUnitFilter, personnelSearchTerm]);
+  useEffect(() => { setCurrentPage(1); }, [selectedUnitFilter, personnelSearchTerm, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
 
   const paginatedPersonnel = useMemo(() => {
     const startIndex = (currentPage - 1) * actualRowsPerPage;
@@ -764,7 +737,7 @@ export default function PersonnelPage() {
       const phia = getRegion(dv.id); const tenDV = dv.ten_don_vi;
       const validIds = [dv.id, ...getAllSubordinateIds(dv.id, donViList)];
       const unitStaff = data.filter(p => validIds.includes(p.id_don_vi) && p.trang_thai !== 'Đã nghỉ việc');
-      const dvht = unitStaff.find(p => p.phan_loai === 'PT DVHT KD' || String(p.chuc_vu).toLowerCase().includes('dvht')) || {};
+      const dvht = unitStaff.find(p => p.phan_loai === 'PT QTVP & ASĐS' || p.phan_loai === 'PT QTVT & ASĐS' || p.phan_loai === 'PT DVHT KD' || String(p.chuc_vu).toLowerCase().includes('dvht') || String(p.chuc_vu).toLowerCase().includes('qtvp')) || {};
       const tgd = unitStaff.find(p => p.phan_loai === 'Lãnh đạo' || String(p.chuc_vu).toLowerCase().includes('tổng giám đốc') || String(p.chuc_vu).toLowerCase().includes('giám đốc')) || {};
       if (!dvht.ho_ten && !tgd.ho_ten && unitStaff.length === 0) return; 
       rowsHTML += `<tr><td class="center">${stt++}</td><td>${phia}</td><td class="bold">${tenDV}</td><td>${dvht.ho_ten || ''}</td><td>${dvht.email || ''}</td><td class="center">${dvht.sdt_cong_ty || dvht.sdt_ca_nhan ? formatPhoneNumber(dvht.sdt_cong_ty || dvht.sdt_ca_nhan) : ''}</td><td>${tgd.ho_ten || ''}</td><td>${tgd.email || ''}</td><td class="center">${tgd.sdt_cong_ty || tgd.sdt_ca_nhan ? formatPhoneNumber(tgd.sdt_cong_ty || tgd.sdt_ca_nhan) : ''}</td></tr>`;
@@ -891,21 +864,6 @@ export default function PersonnelPage() {
     setModal(prev => ({ ...prev, formData: { ...prev.formData, [name]: value } }));
   };
 
-  const renderUnitTree = (parent: DonVi, level: number = 1) => {
-    const children = getChildUnits(parent.id);
-    const isExpanded = expandedParents.includes(parent.id) || !!unitSearchTerm;
-    const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
-    return (
-      <div key={parent.id} className={level === 1 ? "mb-1" : "mt-1"}>
-        <button onClick={() => { setSelectedUnitFilter(parent.id); if (children.length > 0) toggleParent(parent.id); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === parent.id ? 'bg-blue-50 text-[#05469B]' : 'text-gray-700 hover:bg-gray-50'} ${isParentDimmed ? 'opacity-50' : ''}`}>
-          {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />) : <div className="w-4 shrink-0" />}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span><span className="truncate text-left">{parent.ten_don_vi}</span>
-        </button>
-        {isExpanded && children.length > 0 && (<div className={`mt-1 border-l-2 border-gray-100 pl-2 space-y-1 ${level === 1 ? 'ml-6' : 'ml-4'}`}>{children.map(child => renderUnitTree(child, level + 1))}</div>)}
-      </div>
-    );
-  };
-
   //🟢 PHẦN 3: GIAO DIỆN BỘ LỌC VÀ TAB DANH SÁCH (info)
 
   // =================================================================================
@@ -933,12 +891,15 @@ export default function PersonnelPage() {
     let targetPersonnel: any[] = [];
     
     if (type === 'lanh_dao') {
-      const lanhDaoRoles = ['Lãnh đạo', 'Chủ tịch', 'Tổng Giám đốc', 'Phó Tổng Giám đốc', 'Giám đốc', 'Phó Giám đốc', 'Trưởng phòng', 'Trưởng bộ phận', 'Phó phòng'];
-      targetPersonnel = activeStaff.filter(p => lanhDaoRoles.includes(p.phan_loai || ''));
+      targetPersonnel = activeStaff.filter(p => p.phan_loai === 'Lãnh đạo' && String(p.chuc_vu).trim() === 'Tổng Giám đốc');
     } else if (type === 'pt_qtvp') {
-      targetPersonnel = activeStaff.filter(p => p.phan_loai === 'PT DVHT KD');
+      targetPersonnel = activeStaff.filter(p => 
+        p.phan_loai === 'PT QTVP & ASĐS' || 
+        p.phan_loai === 'PT QTVT & ASĐS' || 
+        p.phan_loai === 'PT DVHT KD'
+      );
     } else if (type === 'pt_ns') {
-      targetPersonnel = activeStaff.filter(p => p.phan_loai === 'PT NS');
+      targetPersonnel = activeStaff.filter(p => p.phan_loai === 'PT Nhân sự' || p.phan_loai === 'PT NS');
     }
 
     const emails = targetPersonnel.map(p => p.email?.trim()).filter(Boolean);
@@ -993,43 +954,26 @@ export default function PersonnelPage() {
   const maxAge = Math.max(0, ...(Object.values(stats.ageGroups) as number[]));
 
   return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (<button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all" title="Mở bộ lọc đơn vị"><PanelLeftOpen size={20} /></button>)}
 
-      {/* CỘT TRÁI (BỘ LỌC) */}
-      <div className={`${isListCollapsed ? 'w-0 opacity-0 -ml-80 lg:ml-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm z-50 lg:z-10 shrink-0 overflow-hidden`}>
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-[#05469B] flex items-center gap-2 whitespace-nowrap"><MapPin size={20} /> Bộ lọc Đơn vị</h2>
-            <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-[#05469B] hover:bg-blue-50 rounded-md transition-colors"><PanelLeftClose size={18} /></button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input type="text" placeholder="Tìm tên showroom..." className="w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#05469B] outline-none" value={unitSearchTerm} onChange={(e) => setUnitSearchTerm(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 min-w-[319px]">
-          <button onClick={() => { setSelectedUnitFilter(null); if(window.innerWidth < 1024) setIsListCollapsed(true); }} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${selectedUnitFilter === null ? 'bg-blue-50 text-[#05469B] border border-blue-100' : 'text-gray-700 hover:bg-gray-50'}`}>
-            <Users size={18} className={selectedUnitFilter === null ? 'text-[#05469B]' : 'text-gray-400'} /> Tất cả Nhân sự Toàn quốc
-          </button>
-          <hr className="border-gray-100 mb-4 mx-2"/>
-
-          {parentUnits.length === 0 ? (
-            <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
-          ) : (
-            <>
-              {vpdhUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">VPĐH</p>{vpdhUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {ctttNamUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Nam</p>{ctttNamUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {ctttBacUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Bắc</p>{ctttBacUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {otherUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>{otherUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-            </>
-          )}
-        </div>
-      </div>
+      <UnitFilterSidebar
+        donViList={donViList}
+        selectedUnitFilter={selectedUnitFilter}
+        setSelectedUnitFilter={setSelectedUnitFilter}
+        allowedDonViIds={allowedDonViIds}
+        unitSearchTerm={unitSearchTerm}
+        setUnitSearchTerm={setUnitSearchTerm}
+        expandedParents={expandedParents}
+        setExpandedParents={setExpandedParents}
+        isListCollapsed={isListCollapsed}
+        setIsListCollapsed={setIsListCollapsed}
+        themeColor="blue"
+        allUnitsLabel="Tất cả Nhân sự Toàn quốc"
+      />
 
       {/* 🟢 NỘI DUNG CHÍNH (CỘT PHẢI) */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col">
         <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
           <div>
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
@@ -1038,121 +982,293 @@ export default function PersonnelPage() {
           
           <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
             {/* HÀNG 1: TÌM KIẾM & THAO TÁC */}
-            <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+            {/* HÀNG 1: TÌM KIẾM & NÚT TÍNH NĂNG */}
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-50">
+              {/* Ô Tìm kiếm */}
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                <input type="text" placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium" value={personnelSearchTerm} onChange={(e) => setPersonnelSearchTerm(e.target.value)} />
+                <input 
+                  type="text" 
+                  placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." 
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium" 
+                  value={personnelSearchTerm} 
+                  onChange={(e) => setPersonnelSearchTerm(e.target.value)} 
+                />
               </div>
-              
-              {user?.quyen === 'ADMIN' && (
-                <>
-                  <button onClick={() => { if (!selectedUnitFilter) { toast.warning("Vui lòng chọn 1 Đơn vị!"); return; } setIsBulkImportOpen(true); }} className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-[11px] font-bold shadow-sm transition-all whitespace-nowrap"><ClipboardPaste size={14} /> Thêm Hàng loạt</button>
-                  <button onClick={() => openModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-[#05469B] hover:bg-[#04367a] text-white px-3 py-1.5 rounded text-[11px] font-bold shadow-sm transition-all whitespace-nowrap"><Plus size={14} /> Thêm Mới</button>
-                </>
-              )}
-              <button onClick={() => setIsExportModalOpen(true)} className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-[11px] font-bold shadow-sm transition-all whitespace-nowrap"><FileSpreadsheet size={14} /> Xuất Danh bạ</button>
-            </div>
-            
-            {/* 🟢 HÀNG 2: COPY MAIL (NÚT DROPDOWN GỘP LỆNH COPY CHUNG) */}
-            <div className="flex flex-wrap justify-end gap-2 w-full sm:w-auto relative z-50">
-              <button 
-                onClick={() => setIsCopyEmailDropdownOpen(!isCopyEmailDropdownOpen)} 
-                className="px-4 py-2 bg-blue-50 text-[#05469B] hover:bg-blue-100 rounded-xl font-bold flex items-center gap-2 border border-blue-200 transition-colors shadow-sm whitespace-nowrap"
-              >
-                <Copy size={16}/> Copy Email <ChevronDown size={14} className={`transition-transform duration-200 ${isCopyEmailDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
 
-              {isCopyEmailDropdownOpen && (
-                <>
-                  {/* Lớp phủ */}
-                  <div className="fixed inset-0 z-[40]" onClick={() => { setIsCopyEmailDropdownOpen(false); setSelectedNgach([]); setSelectedDiaDiem([]); }}></div>
-                  
-                  {/* Khung Dropdown Chính */}
-                  <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 bg-white shadow-2xl rounded-xl border border-gray-200 z-[50] w-[280px] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2">
+              {/* Nút Xóa bộ lọc nhanh nếu có lọc */}
+              {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
+                <button
+                  onClick={() => {
+                    setFilterPhongBan('');
+                    setFilterKhoi('');
+                    setFilterChucVu('');
+                    setFilterPhanLoai('');
+                  }}
+                  title="Xóa nhanh bộ lọc nâng cao"
+                  className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded border border-red-200 transition-all flex items-center gap-1 text-[11px] font-bold shadow-sm"
+                >
+                  <RotateCcw size={13} /> <span className="hidden sm:inline">Xóa bộ lọc</span>
+                  <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
+                    {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
+                  </span>
+                </button>
+              )}
+
+              {/* 🟢 NÚT "TÍNH NĂNG" DROPDOWN GỘP TẤT CẢ */}
+              <div className="relative">
+                <button 
+                  onClick={() => {
+                    setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen);
+                    setIsAddNewExpanded(false);
+                  }}
+                  className={`px-4 py-1.5 rounded text-[11px] font-bold flex items-center gap-2 border transition-all shadow-sm whitespace-nowrap ${
+                    isFeaturesDropdownOpen || showAdvancedFilters
+                      ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-md'
+                      : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <Sparkles size={15} className={isFeaturesDropdownOpen || showAdvancedFilters ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
+                  <span>Tính năng</span>
+                  {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && !showAdvancedFilters && (
+                    <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                      {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
+                    </span>
+                  )}
+                  <ChevronDown size={13} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* MENU DROPDOWN TÍNH NĂNG */}
+                {isFeaturesDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[40]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
                     
-                    {/* BỘ KHUNG CUỘN CHỨA CÁC LỰA CHỌN */}
-                    <div className="max-h-[55vh] overflow-y-auto custom-scrollbar flex flex-col">
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-[50] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
                       
-                      {/* --- PHẦN 1: COPY CHỨC DANH --- */}
-                      <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-100 shrink-0 sticky top-0 z-20">Theo chức danh (Copy ngay)</div>
-                      <ul className="flex flex-col shrink-0">
-                        <li><button onClick={() => handleCopyTargetEmails('lanh_dao')} className="w-full text-left px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors border-b border-gray-50"><Briefcase size={14} className="inline mr-2 text-orange-500" /> Cấp Lãnh đạo</button></li>
-                        <li><button onClick={() => handleCopyTargetEmails('pt_qtvp')} className="w-full text-left px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors border-b border-gray-50"><ShieldCheck size={14} className="inline mr-2 text-emerald-500" /> Phụ trách QTVP & ASĐS</button></li>
-                        <li><button onClick={() => handleCopyTargetEmails('pt_ns')} className="w-full text-left px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-[#05469B] transition-colors"><Users size={14} className="inline mr-2 text-purple-500" /> Phụ trách Nhân sự</button></li>
-                      </ul>
-                      
-                      {/* --- PHẦN 2: CHỌN THEO NGẠCH LƯƠNG --- */}
-                      {availableNgachLuong.length > 0 && (
-                        <>
-                          <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-y border-gray-200 shrink-0 flex justify-between items-center sticky top-0 z-20 mt-1">
-                            <span>Lọc theo Ngạch Lương</span>
-                            <button onClick={() => selectedNgach.length === availableNgachLuong.length ? setSelectedNgach([]) : setSelectedNgach([...availableNgachLuong])} className="text-[#05469B] hover:text-blue-700 underline text-[9px] font-black">
-                              {selectedNgach.length === availableNgachLuong.length ? 'Bỏ chọn' : 'Chọn tất cả'}
-                            </button>
+                      {/* 1. Lọc nâng cao */}
+                      <button 
+                        onClick={() => {
+                          setShowAdvancedFilters(!showAdvancedFilters);
+                          setIsFeaturesDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between transition-all ${
+                          showAdvancedFilters ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'hover:bg-gray-50 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`p-1.5 rounded-lg ${showAdvancedFilters ? 'bg-amber-500 text-white' : 'bg-blue-50 text-[#05469B]'}`}>
+                            <Filter size={14} />
                           </div>
-                          <ul className="flex flex-col shrink-0">
-                            {availableNgachLuong.map((nl, idx) => (
-                              <li key={idx}>
-                                <label className="flex items-center px-4 py-2 cursor-pointer hover:bg-blue-50 transition-colors group/cb">
-                                  <input type="checkbox" checked={selectedNgach.includes(nl)} onChange={() => toggleNgach(nl)} className="w-4 h-4 rounded border-gray-300 text-[#05469B] focus:ring-[#05469B] mr-3 cursor-pointer" />
-                                  <span className="text-sm font-semibold text-gray-600 group-hover/cb:text-[#05469B]">Ngạch: <span className="text-[#05469B] font-black">{nl}</span></span>
-                                </label>
-                              </li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
-
-                      {/* --- PHẦN 3: CHỌN THEO ĐỊA ĐIỂM --- */}
-                      {availableDiaDiem.length > 0 && (
-                        <>
-                          <div className="p-2 font-bold text-[10px] text-gray-500 uppercase bg-gray-50 border-y border-gray-200 shrink-0 flex justify-between items-center sticky top-0 z-20 mt-1">
-                            <span>Lọc theo Địa điểm làm việc</span>
-                            <button onClick={() => selectedDiaDiem.length === availableDiaDiem.length ? setSelectedDiaDiem([]) : setSelectedDiaDiem([...availableDiaDiem])} className="text-emerald-700 hover:text-emerald-800 underline text-[9px] font-black">
-                              {selectedDiaDiem.length === availableDiaDiem.length ? 'Bỏ chọn' : 'Chọn tất cả'}
-                            </button>
-                          </div>
-                          <ul className="flex flex-col shrink-0 pb-2">
-                            {availableDiaDiem.map((loc, idx) => (
-                              <li key={idx}>
-                                <label className="flex items-center px-4 py-2 cursor-pointer hover:bg-emerald-50 transition-colors group/cb">
-                                  <input type="checkbox" checked={selectedDiaDiem.includes(loc)} onChange={() => toggleDiaDiem(loc)} className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-600 mr-3 cursor-pointer" />
-                                  <span className="text-sm font-semibold text-gray-600 group-hover/cb:text-emerald-700"><span className="text-emerald-700 font-bold">{loc}</span></span>
-                                </label>
-                              </li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
-                    </div>
-
-                    {/* --- PHẦN 4: NÚT COPY TỔNG LUÔN GHIM Ở ĐÁY --- */}
-                    {(availableNgachLuong.length > 0 || availableDiaDiem.length > 0) && (
-                      <div className="p-3 bg-white border-t border-gray-200 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-30 shrink-0">
-                        <button 
-                          onClick={handleCopyMultiCriteria} 
-                          disabled={selectedNgach.length === 0 && selectedDiaDiem.length === 0} 
-                          className="w-full py-2.5 bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:from-gray-400 disabled:to-gray-500 shadow-md"
-                        >
-                          <Copy size={16}/> Lọc & Copy Danh sách
-                        </button>
-                        
-                        {(selectedNgach.length > 0 || selectedDiaDiem.length > 0) && (
-                          <p className="text-center text-[10px] text-gray-500 font-semibold mt-2 leading-tight">
-                            Đang chọn: {selectedNgach.length > 0 ? `${selectedNgach.length} ngạch` : ''} 
-                            {selectedNgach.length > 0 && selectedDiaDiem.length > 0 ? ' & ' : ''}
-                            {selectedDiaDiem.length > 0 ? `${selectedDiaDiem.length} địa điểm` : ''}
-                          </p>
+                          <span>Lọc nâng cao</span>
+                        </div>
+                        {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) ? (
+                          <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                            {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-gray-400">{showAdvancedFilters ? 'Đang bật' : 'Đang ẩn'}</span>
                         )}
-                      </div>
-                    )}
+                      </button>
 
-                  </div>
-                </>
-              )}
+                      {/* 2. Thêm mới (Chỉ ADMIN) */}
+                      {user?.quyen === 'ADMIN' && (
+                        <div className="border-t border-gray-100 pt-1 mt-1">
+                          <button 
+                            onClick={() => setIsAddNewExpanded(!isAddNewExpanded)}
+                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center justify-between transition-all"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                                <Plus size={14} />
+                              </div>
+                              <span>Thêm mới nhân sự</span>
+                            </div>
+                            <ChevronRight size={14} className={`text-gray-400 transition-transform duration-200 ${isAddNewExpanded ? 'rotate-90' : ''}`} />
+                          </button>
+
+                          {/* Submenu Lựa chọn Thêm mới */}
+                          {isAddNewExpanded && (
+                            <div className="ml-3 pl-3 border-l-2 border-indigo-100 flex flex-col gap-1 mt-1 py-1 animate-in slide-in-from-top-1 duration-150">
+                              <button 
+                                onClick={() => {
+                                  openModal('create');
+                                  setIsFeaturesDropdownOpen(false);
+                                }}
+                                className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
+                              >
+                                <UserPlus size={13} /> Thêm từng đối tượng
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  if (!selectedUnitFilter) {
+                                    toast.warning("Vui lòng chọn 1 Đơn vị trước khi nhập hàng loạt!");
+                                    return;
+                                  }
+                                  setIsBulkImportOpen(true);
+                                  setIsFeaturesDropdownOpen(false);
+                                }}
+                                className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
+                              >
+                                <ClipboardPaste size={13} /> Thêm hàng loạt (Excel)
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 3. Xuất danh bạ */}
+                      <div className="border-t border-gray-100 pt-1 mt-1">
+                        <button 
+                          onClick={() => {
+                            setIsExportModalOpen(true);
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center gap-2.5 transition-all"
+                        >
+                          <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                            <FileSpreadsheet size={14} />
+                          </div>
+                          <span>Xuất danh bạ (Excel)</span>
+                        </button>
+                      </div>
+
+                      {/* 4. Copy email theo điều kiện */}
+                      <div className="border-t border-gray-100 pt-1 mt-1">
+                        <button 
+                          onClick={() => {
+                            setIsCopyEmailDropdownOpen(true);
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center justify-between transition-all"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
+                              <Copy size={14} />
+                            </div>
+                            <span>Copy email theo điều kiện</span>
+                          </div>
+                          <ChevronRight size={14} className="text-gray-400" />
+                        </button>
+                      </div>
+
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* 🟢 BỘ LỌC NÂNG CAO (BO PHAN, KHOI, CHUC VU, PHAN LOAI) */}
+        {showAdvancedFilters && (
+          <div className={`bg-white p-4 rounded-2xl border border-gray-200 shadow-sm mb-4 transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
+                  <Filter size={16} className="shrink-0" />
+                </div>
+                <span className="text-xs font-black uppercase tracking-wider text-[#05469B]">Bộ lọc nâng cao</span>
+                {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
+                  <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full animate-in fade-in duration-200">
+                    Đang lọc ({[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length} tiêu chí)
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
+                  <button
+                    onClick={() => {
+                      setFilterPhongBan('');
+                      setFilterKhoi('');
+                      setFilterChucVu('');
+                      setFilterPhanLoai('');
+                    }}
+                    className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-all"
+                  >
+                    <RotateCcw size={13} /> Xóa bộ lọc
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                  title="Ẩn khung bộ lọc"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Lọc theo Bộ phận */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                  <Building2 size={13} className="text-blue-500" /> Bộ phận ({availableFilterOptions.phongBanList.length})
+                </label>
+                <select
+                  value={filterPhongBan}
+                  onChange={(e) => setFilterPhongBan(e.target.value)}
+                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                >
+                  <option value="">-- Tất cả Bộ phận --</option>
+                  {availableFilterOptions.phongBanList.map((item, idx) => (
+                    <option key={idx} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lọc theo Khối */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                  <Layers size={13} className="text-purple-500" /> Khối ({availableFilterOptions.khoiList.length})
+                </label>
+                <select
+                  value={filterKhoi}
+                  onChange={(e) => setFilterKhoi(e.target.value)}
+                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                >
+                  <option value="">-- Tất cả Khối --</option>
+                  {availableFilterOptions.khoiList.map((item, idx) => (
+                    <option key={idx} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lọc theo Chức vụ */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                  <Briefcase size={13} className="text-orange-500" /> Chức vụ ({availableFilterOptions.chucVuList.length})
+                </label>
+                <select
+                  value={filterChucVu}
+                  onChange={(e) => setFilterChucVu(e.target.value)}
+                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                >
+                  <option value="">-- Tất cả Chức vụ --</option>
+                  {availableFilterOptions.chucVuList.map((item, idx) => (
+                    <option key={idx} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lọc theo Phân loại */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                  <Tag size={13} className="text-emerald-500" /> Phân loại ({availableFilterOptions.phanLoaiList.length})
+                </label>
+                <select
+                  value={filterPhanLoai}
+                  onChange={(e) => setFilterPhanLoai(e.target.value)}
+                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                >
+                  <option value="">-- Tất cả Phân loại --</option>
+                  {availableFilterOptions.phanLoaiList.map((item, idx) => (
+                    <option key={idx} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 🟢 KHU VỰC CHUYỂN TAB */}
         <div className={`border-b border-gray-200 mb-4 flex gap-6 px-1 transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''} shrink-0`}>
@@ -1168,59 +1284,81 @@ export default function PersonnelPage() {
 
         {/* 🟢 TAB THÔNG TIN */}
         {activeTab === 'info' && (
-          <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 flex flex-col flex-1 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
-            <div className="overflow-x-auto w-full custom-scrollbar flex-1">
-              <table className="w-full text-left border-collapse min-w-[1100px]">
-                <thead className="sticky top-0 bg-[#f8fafc] z-10">
-                  <tr className="border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    <th className="p-4 w-24 whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
-                    <th className="p-4 whitespace-nowrap bg-[#f8fafc]">Họ Tên / Trạng thái</th>
-                    <th className="p-4 whitespace-nowrap bg-[#f8fafc]">Đơn Vị</th>
-                    <th className="p-4 whitespace-nowrap bg-[#f8fafc]">Chức vụ</th>
-                    <th className="p-4 w-36 whitespace-nowrap bg-[#f8fafc]">Điện thoại</th>
-                    <th className="p-4 w-32 whitespace-nowrap bg-[#f8fafc]">Thâm niên</th>
-                    <th className="p-4 text-center w-48 whitespace-nowrap bg-[#f8fafc]">Thao tác</th>
+          <div className={`flex flex-col flex-1 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+            
+            {/* VIEW TRÊN PC: BẢNG DỮ LIỆU CHÍNH */}
+            <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full flex-1 overflow-x-auto custom-scrollbar">
+              <table className="w-full min-w-[900px] table-fixed text-left border-collapse text-[11.5px]">
+                <thead className="sticky top-0 bg-[#f8fafc] z-10 text-[11.5px]">
+                  <tr className="border-b border-gray-200 font-bold text-gray-600 uppercase tracking-wider">
+                    <th className="py-2.5 px-3 w-[9%] whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
+                    <th className="py-2.5 px-3 w-[18%] whitespace-nowrap bg-[#f8fafc]">Họ Tên / Trạng thái</th>
+                    <th className="py-2.5 px-3 w-[24%] bg-[#f8fafc]">Chức vụ &amp; Bộ phận</th>
+                    <th className="py-2.5 px-3 w-[13%] bg-[#f8fafc]">Đơn Vị</th>
+                    <th className="py-2.5 px-3 w-[14%] whitespace-nowrap bg-[#f8fafc]">Điện thoại</th>
+                    <th className="py-2.5 px-3 w-[10%] whitespace-nowrap bg-[#f8fafc]">Thâm niên</th>
+                    <th className="py-2.5 px-3 text-center w-[12%] whitespace-nowrap bg-[#f8fafc]">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {paginatedPersonnel.map((item: any) => (
                     <tr key={item.id} className={`hover:bg-blue-50/50 transition-colors group ${item.trang_thai === 'Đã nghỉ việc' ? 'opacity-60 bg-gray-50' : ''}`}>
-                      <td className="p-4 font-semibold text-gray-800 whitespace-nowrap">{item.ma_so_nhan_vien}</td>
-                      <td className="p-4 whitespace-nowrap flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
-                          {item.hinh_anh ? <img src={getDirectImageLink(item.hinh_anh)} alt="" className="w-full h-full object-cover" /> : <UserIcon size={14} className="text-gray-400" />}
-                        </div>
-                        <div>
-                          <p className="font-bold text-[#05469B]">{item.ho_ten}</p>
-                          {item.trang_thai === 'Đã nghỉ việc' && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase mt-0.5 inline-block">Đã nghỉ việc</span>}
-                        </div>
-                      </td>
-                      <td className="p-4 text-sm font-medium text-gray-700 whitespace-nowrap">{donViMap[String(item.id_don_vi)] || item.id_don_vi || '-'}</td>
-                      <td className="p-4 text-sm text-gray-600 whitespace-nowrap">{item.chuc_vu}</td>
-                      <td className="p-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1.5">
-                          {item.sdt_cong_ty && <a href={`tel:${String(item.sdt_cong_ty).replace(/\D/g, '')}`} className="text-sm font-bold text-[#05469B] hover:underline flex items-center gap-1.5 w-fit"><Phone size={13} className="text-blue-400" /> {formatPhoneNumber(item.sdt_cong_ty)}</a>}
-                          {item.sdt_ca_nhan && <a href={`tel:${String(item.sdt_ca_nhan).replace(/\D/g, '')}`} className="text-sm font-bold text-emerald-500 hover:underline flex items-center gap-1.5 w-fit"><Phone size={13} className="text-emerald-400" /> {formatPhoneNumber(item.sdt_ca_nhan)}</a>}
-                          {!item.sdt_cong_ty && !item.sdt_ca_nhan && <span className="text-sm text-gray-400 font-medium">---</span>}
+                      <td className="py-2.5 px-3 font-semibold text-gray-800 whitespace-nowrap text-[11px] align-middle text-left">{item.ma_so_nhan_vien}</td>
+                      <td className="py-2.5 px-3 align-middle text-left">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
+                            {item.hinh_anh ? <img src={getDirectImageLink(item.hinh_anh)} alt="" className="w-full h-full object-cover" /> : <UserIcon size={14} className="text-gray-400" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-[#05469B] leading-snug text-[13px] truncate" title={item.ho_ten}>{item.ho_ten}</p>
+                            {item.trang_thai === 'Đã nghỉ việc' && <span className="text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded uppercase mt-0.5 inline-block">Đã nghỉ việc</span>}
+                          </div>
                         </div>
                       </td>
-                      <td className="p-4 text-sm font-medium text-emerald-600 whitespace-nowrap">
-                        <span className={`rounded-md inline-block px-2 py-1 border ${item.trang_thai === 'Đã nghỉ việc' ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-emerald-50/50 border-emerald-100'}`}>{calculateSeniority(item.ngay_nhan_vien, item.trang_thai || 'Đang làm việc', item.ngay_nghi_viec || '')}</span>
+                      <td className="py-2.5 px-3 align-middle text-left">
+                        <div className="flex flex-col justify-center">
+                          <p className="font-bold text-gray-800 text-[12px] leading-snug truncate" title={item.chuc_vu}>{item.chuc_vu || '---'}</p>
+                          {((item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có') || (item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có')) && (
+                            <div className="flex items-center gap-1 mt-0.5 overflow-hidden whitespace-nowrap">
+                              {item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs truncate max-w-[140px]" title={`Bộ phận: ${item.phong_ban}`}>
+                                  BP: {item.phong_ban}
+                                </span>
+                              )}
+                              {item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-2xs truncate max-w-[140px]" title={`Khối: ${item.khoi}`}>
+                                  Khối: {item.khoi}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
-                      <td className="p-4">
-                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => handleView(item)} className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors" title="Xem chi tiết"><Eye className="w-4 h-4" /></button>
+                      <td className="py-2.5 px-3 text-[11.5px] font-medium text-gray-700 leading-normal align-middle text-left">{donViMap[String(item.id_don_vi)] || item.id_don_vi || '-'}</td>
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle text-left">
+                        <div className="flex flex-col gap-1 text-[11px]">
+                          {item.sdt_cong_ty && <a href={`tel:${String(item.sdt_cong_ty).replace(/\D/g, '')}`} className="font-bold text-[#05469B] hover:underline flex items-center gap-1 w-fit"><Phone size={11} className="text-blue-400" /> {formatPhoneNumber(item.sdt_cong_ty)}</a>}
+                          {item.sdt_ca_nhan && <a href={`tel:${String(item.sdt_ca_nhan).replace(/\D/g, '')}`} className="font-bold text-emerald-500 hover:underline flex items-center gap-1 w-fit"><Phone size={11} className="text-emerald-400" /> {formatPhoneNumber(item.sdt_ca_nhan)}</a>}
+                          {!item.sdt_cong_ty && !item.sdt_ca_nhan && <span className="text-gray-400 font-medium">---</span>}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-[11.5px] font-medium text-emerald-600 whitespace-nowrap align-middle text-left">
+                        <span className={`rounded-md inline-block px-1.5 py-0.5 border ${item.trang_thai === 'Đã nghỉ việc' ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-emerald-50/50 border-emerald-100'}`}>{calculateSeniority(item.ngay_nhan_vien, item.trang_thai || 'Đang làm việc', item.ngay_nghi_viec || '')}</span>
+                      </td>
+                      <td className="py-2.5 px-3 align-middle text-center">
+                        <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleView(item)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors" title="Xem chi tiết"><Eye className="w-3.5 h-3.5" /></button>
                           {item.trang_thai !== 'Đã nghỉ việc' && (
                             <>
-                              <button onClick={() => handleDuplicate(item)} className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors" title="Nhân bản (Tạo hồ sơ kiêm nhiệm)"><Copy className="w-4 h-4" /></button>
-                              <button onClick={() => openModal('update', item)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Sửa"><Edit className="w-4 h-4" /></button>
-                              <button onClick={() => handleOffboardClick(item)} className="p-2 text-orange-600 hover:bg-orange-100 rounded-md transition-colors border border-transparent hover:border-orange-200" title="Chốt nghỉ việc (Thu hồi tài sản)"><LogOut className="w-4 h-4" /></button>
+                              <button onClick={() => handleDuplicate(item)} className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors" title="Nhân bản (Tạo hồ sơ kiêm nhiệm)"><Copy className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Sửa"><Edit className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => handleOffboardClick(item)} className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-md transition-colors border border-transparent hover:border-orange-200" title="Chốt nghỉ việc (Thu hồi tài sản)"><LogOut className="w-3.5 h-3.5" /></button>
                             </>
                           )}
                           {item.trang_thai === 'Đã nghỉ việc' && (
                             <>
-                              <button onClick={() => { setPersonnelToRehire(item); setIsRehireModalOpen(true); }} className="p-2 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors" title="Vào làm lại"><RotateCcw className="w-4 h-4" /></button>
-                              <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors" title="Xóa vĩnh viễn"><Trash2 className="w-4 h-4" /></button>
+                              <button onClick={() => { setPersonnelToRehire(item); setIsRehireModalOpen(true); }} className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors" title="Vào làm lại"><RotateCcw className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 hover:bg-red-100 rounded-md transition-colors" title="Xóa vĩnh viễn"><Trash2 className="w-3.5 h-3.5" /></button>
                             </>
                           )}
                         </div>
@@ -1231,17 +1369,106 @@ export default function PersonnelPage() {
               </table>
             </div>
 
-            {filteredPersonnel.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 gap-4 shrink-0">
-                <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 transition-colors"><ChevronLeft size={16} /></button>
-                  <span className="flex items-center gap-2">Trang <input type="number" min={1} max={totalPages} value={currentPage} onChange={(e) => { let val = parseInt(e.target.value); if (!isNaN(val)) { if (val > totalPages) val = totalPages; if (val < 1) val = 1; setCurrentPage(val); } }} className="w-12 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B]" /> / {totalPages}</span>
-                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 transition-colors"><ChevronRight size={16} /></button>
-                  <div className="flex items-center gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-300"><input type="number" min={1} value={rowsPerPage} onChange={(e) => { const val = e.target.value; setRowsPerPage(val === '' ? '' : parseInt(val)); setCurrentPage(1); }} className="w-16 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] text-[#05469B] font-bold" /><span>dòng</span></div>
-                </div>
-                <div className="text-sm text-gray-500 hidden md:block">Hiển thị {(currentPage - 1) * actualRowsPerPage + 1} - {Math.min(currentPage * actualRowsPerPage, filteredPersonnel.length)} trong tổng số <span className="font-bold text-gray-800">{filteredPersonnel.length}</span> nhân sự</div>
-              </div>
-            )}
+            {/* 🟢 VIEW TRÊN MOBILE: THẺ CARD DỌC */}
+            <div className="block md:hidden flex-1 overflow-y-auto pb-4 space-y-4 custom-scrollbar">
+              {paginatedPersonnel.length === 0 ? (
+                <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center text-gray-400 italic">Không tìm thấy nhân sự.</div>
+              ) : (
+                paginatedPersonnel.map((item: any) => {
+                  const seniorityStr = calculateSeniority(item.ngay_nhan_vien, item.trang_thai || 'Đang làm việc', item.ngay_nghi_viec || '');
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`p-4 bg-white rounded-2xl border border-gray-100 shadow-sm relative flex flex-col gap-3 transition-all ${item.trang_thai === 'Đã nghỉ việc' ? 'opacity-70 bg-gray-50' : ''}`}
+                    >
+                      {/* Header Card: Avatar + Name + ID + Status */}
+                      <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100">
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
+                          {item.hinh_anh ? <img src={getDirectImageLink(item.hinh_anh)} alt="" className="w-full h-full object-cover" /> : <UserIcon size={16} className="text-gray-400" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-semibold text-gray-500 text-[10px]">ID: {item.ma_so_nhan_vien}</span>
+                            {item.trang_thai === 'Đã nghỉ việc' ? (
+                              <span className="text-[9px] font-black text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded uppercase">Đã nghỉ việc</span>
+                            ) : (
+                              <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded uppercase">Đang làm việc</span>
+                            )}
+                          </div>
+                          <h4 className="font-extrabold text-[#05469B] text-sm leading-snug truncate mt-0.5">{item.ho_ten}</h4>
+                        </div>
+                      </div>
+
+                      {/* Body Card: Details */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                        <div className="col-span-2">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Chức vụ &amp; Bộ phận</p>
+                          <p className="font-bold text-gray-800 leading-normal truncate">{item.chuc_vu || '---'}</p>
+                          {((item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có') || (item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có')) && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              {item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                  BP: {item.phong_ban}
+                                </span>
+                              )}
+                              {item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                  Khối: {item.khoi}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Đơn vị quản lý</p>
+                          <p className="font-medium text-gray-700 leading-normal truncate">{donViMap[String(item.id_don_vi)] || item.id_don_vi || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Điện thoại</p>
+                          <div className="flex flex-col gap-1 mt-1">
+                            {item.sdt_cong_ty && <a href={`tel:${String(item.sdt_cong_ty).replace(/\D/g, '')}`} className="font-bold text-[#05469B] hover:underline flex items-center gap-1 text-[11px]"><Phone size={11} className="text-blue-400 shrink-0" /> {formatPhoneNumber(item.sdt_cong_ty)}</a>}
+                            {item.sdt_ca_nhan && <a href={`tel:${String(item.sdt_ca_nhan).replace(/\D/g, '')}`} className="font-bold text-emerald-600 hover:underline flex items-center gap-1 text-[11px]"><Phone size={11} className="text-emerald-400 shrink-0" /> {formatPhoneNumber(item.sdt_ca_nhan)}</a>}
+                            {!item.sdt_cong_ty && !item.sdt_ca_nhan && <span className="text-gray-400 font-medium">---</span>}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Thâm niên</p>
+                          <span className="mt-1 inline-block text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">{seniorityStr}</span>
+                        </div>
+                      </div>
+
+                      {/* Footer Card: Actions */}
+                      <div className="flex items-center justify-end gap-1.5 pt-3 border-t border-gray-100 mt-1">
+                        <button onClick={() => handleView(item)} className="p-1.5 text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xem chi tiết"><Eye className="w-3.5 h-3.5" /> Xem</button>
+                        {item.trang_thai !== 'Đã nghỉ việc' && (
+                          <>
+                            <button onClick={() => handleDuplicate(item)} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Kiêm nhiệm"><Copy className="w-3.5 h-3.5" /> Kiêm nhiệm</button>
+                            <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit className="w-3.5 h-3.5" /> Sửa</button>
+                            <button onClick={() => handleOffboardClick(item)} className="p-1.5 text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Nghỉ việc"><LogOut className="w-3.5 h-3.5" /> Nghỉ việc</button>
+                          </>
+                        )}
+                        {item.trang_thai === 'Đã nghỉ việc' && (
+                          <>
+                            <button onClick={() => { setPersonnelToRehire(item); setIsRehireModalOpen(true); }} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Vào làm lại"><RotateCcw className="w-3.5 h-3.5" /> Làm lại</button>
+                            <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa vĩnh viễn"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              rowsPerPage={rowsPerPage}
+              totalRows={filteredPersonnel.length}
+              onPageChange={setCurrentPage}
+              onRowsPerPageChange={(rows) => { setRowsPerPage(rows); setCurrentPage(1); }}
+              itemName="nhân sự"
+            />
           </div>
         )}
 
@@ -1288,22 +1515,22 @@ export default function PersonnelPage() {
                 </div>
                 {/* 🟢 Cuộn dọc với max-h và đóng băng thead */}
                 <div className="overflow-y-auto overflow-x-hidden max-h-[350px] custom-scrollbar relative">
-                  <table className="w-full table-fixed text-center text-[10px] border-collapse">
+                  <table className="w-full table-fixed text-center text-[12px] border-collapse">
                     <thead className="sticky top-0 z-30 bg-white shadow-sm">
                       <tr className="bg-[#fff2cc] font-black text-[#002060]">
                         {/* Chia tỷ lệ cột: Cột đầu 24%, 2 khối giữa mỗi khối 30%, Tổng 16% */}
-                        <th className="p-1 border border-gray-300 w-[24%]" rowSpan={2}>BỘ PHẬN / PHÂN LOẠI</th>
-                        <th className="p-1 border border-gray-300 w-[30%]" colSpan={3}>BV / ĐÓN TIẾP KH</th>
-                        <th className="p-1 border border-gray-300 w-[30%]" colSpan={3}>PV HÀNH CHÍNH</th>
-                        <th className="p-1 border border-gray-300 w-[16%]" rowSpan={2}>TỔNG<br/>CỘNG</th>
+                        <th className="py-2.5 px-2 border border-gray-300 w-[24%] text-[12px]" rowSpan={2}>BỘ PHẬN / PHÂN LOẠI</th>
+                        <th className="py-2.5 px-2 border border-gray-300 w-[30%] text-[12px]" colSpan={3}>BV / ĐÓN TIẾP KH</th>
+                        <th className="py-2.5 px-2 border border-gray-300 w-[30%] text-[12px]" colSpan={3}>PV HÀNH CHÍNH</th>
+                        <th className="py-2.5 px-2 border border-gray-300 w-[16%] text-[12px]" rowSpan={2}>TỔNG<br/>CỘNG</th>
                       </tr>
-                      <tr className="bg-[#fff2cc] font-black text-[#002060] leading-none text-[9px]">
-                        <th className="p-0.5 border border-gray-300 break-words">NV</th>
-                        <th className="p-0.5 border border-gray-300 break-words">T.Trưởng<br/>T.Phó</th>
-                        <th className="p-0.5 border border-gray-300 text-emerald-700 break-words">Cộng<br/>BV</th>
-                        <th className="p-0.5 border border-gray-300 break-words">NV</th>
-                        <th className="p-0.5 border border-gray-300 break-words">T.Trưởng<br/>T.Phó</th>
-                        <th className="p-0.5 border border-gray-300 text-blue-700 break-words">Cộng<br/>HC</th>
+                      <tr className="bg-[#fff2cc] font-black text-[#002060] leading-tight text-[11px]">
+                        <th className="py-2 px-1 border border-gray-300 break-words">NV</th>
+                        <th className="py-2 px-1 border border-gray-300 break-words">T.Trưởng<br/>T.Phó</th>
+                        <th className="py-2 px-1 border border-gray-300 text-emerald-700 break-words">Cộng<br/>BV</th>
+                        <th className="py-2 px-1 border border-gray-300 break-words">NV</th>
+                        <th className="py-2 px-1 border border-gray-300 break-words">T.Trưởng<br/>T.Phó</th>
+                        <th className="py-2 px-1 border border-gray-300 text-blue-700 break-words">Cộng<br/>HC</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1315,14 +1542,56 @@ export default function PersonnelPage() {
                           const nameClass = isRegion ? "text-left font-black" : isParent ? "text-left pl-2 font-bold" : "text-left pl-4 text-gray-600";
                           return (
                             <tr key={idx} className={rowClass}>
-                              <td className={`p-1 border border-gray-300 ${nameClass} leading-tight text-[9px]`}>{row.name}</td>
-                              <td className="p-0.5 border border-gray-300">{row.stats.bv_nv > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{row.stats.bv_nv}<HoverTablePopover list={row.stats.lists.bv_nv} title="Bảo vệ - Nhân viên" /></div>) : (isRegion ? 0 : '')}</td>
-                              <td className="p-0.5 border border-gray-300">{row.stats.bv_tt_tp > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{row.stats.bv_tt_tp}<HoverTablePopover list={row.stats.lists.bv_tt_tp} title="Bảo vệ - Tổ trưởng/Phó" /></div>) : (isRegion ? 0 : '')}</td>
-                              <td className={`p-0.5 border border-gray-300 ${isRegion ? 'text-emerald-700 bg-emerald-50/50' : 'text-emerald-600 font-semibold'}`}>{row.stats.totalBV > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{row.stats.totalBV}<HoverTablePopover list={row.stats.lists.totalBV} title="Tổng Bảo vệ" /></div>) : 0}</td>
-                              <td className="p-0.5 border border-gray-300">{row.stats.pvhc_nv > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{row.stats.pvhc_nv}<HoverTablePopover list={row.stats.lists.pvhc_nv} title="PVHC - Nhân viên" /></div>) : (isRegion ? 0 : '')}</td>
-                              <td className="p-0.5 border border-gray-300">{row.stats.pvhc_tt_tp > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{row.stats.pvhc_tt_tp}<HoverTablePopover list={row.stats.lists.pvhc_tt_tp} title="PVHC - Tổ trưởng/Phó" /></div>) : (isRegion ? 0 : '')}</td>
-                              <td className={`p-0.5 border border-gray-300 ${isRegion ? 'text-blue-700 bg-blue-50/50' : 'text-blue-600 font-semibold'}`}>{row.stats.totalPVHC > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{row.stats.totalPVHC}<HoverTablePopover list={row.stats.lists.totalPVHC} title="Tổng PVHC" /></div>) : 0}</td>
-                              <td className={`p-0.5 border border-gray-300 ${isRegion ? 'font-black' : 'font-bold text-gray-700'}`}>{row.stats.totalRow > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{row.stats.totalRow}<HoverTablePopover list={row.stats.lists.totalRow} title="Tổng cộng Hàng" /></div>) : 0}</td>
+                              <td className={`py-2 px-3 border border-gray-300 ${nameClass} leading-tight text-[12px]`}>{row.name}</td>
+                              <td className="p-0.5 border border-gray-300">
+                                {row.stats.bv_nv > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `Bảo vệ - Nhân viên (${row.name})`, list: row.stats.lists.bv_nv })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                    {row.stats.bv_nv}
+                                  </button>
+                                ) : (isRegion ? 0 : '')}
+                              </td>
+                              <td className="p-0.5 border border-gray-300">
+                                {row.stats.bv_tt_tp > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `Bảo vệ - Tổ trưởng/Phó (${row.name})`, list: row.stats.lists.bv_tt_tp })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                    {row.stats.bv_tt_tp}
+                                  </button>
+                                ) : (isRegion ? 0 : '')}
+                              </td>
+                              <td className={`p-0.5 border border-gray-300 ${isRegion ? 'text-emerald-700 bg-emerald-50/50' : 'text-emerald-600 font-semibold'}`}>
+                                {row.stats.totalBV > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `Tổng Bảo vệ (${row.name})`, list: row.stats.lists.totalBV })} className="w-full h-full py-1 hover:bg-emerald-100 text-emerald-800 font-bold transition-colors text-center cursor-pointer">
+                                    {row.stats.totalBV}
+                                  </button>
+                                ) : 0}
+                              </td>
+                              <td className="p-0.5 border border-gray-300">
+                                {row.stats.pvhc_nv > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `PVHC - Nhân viên (${row.name})`, list: row.stats.lists.pvhc_nv })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                    {row.stats.pvhc_nv}
+                                  </button>
+                                ) : (isRegion ? 0 : '')}
+                              </td>
+                              <td className="p-0.5 border border-gray-300">
+                                {row.stats.pvhc_tt_tp > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `PVHC - Tổ trưởng/Phó (${row.name})`, list: row.stats.lists.pvhc_tt_tp })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                    {row.stats.pvhc_tt_tp}
+                                  </button>
+                                ) : (isRegion ? 0 : '')}
+                              </td>
+                              <td className={`p-0.5 border border-gray-300 ${isRegion ? 'text-blue-700 bg-blue-50/50' : 'text-blue-600 font-semibold'}`}>
+                                {row.stats.totalPVHC > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `Tổng PVHC (${row.name})`, list: row.stats.lists.totalPVHC })} className="w-full h-full py-1 hover:bg-blue-100 text-blue-800 font-bold transition-colors text-center cursor-pointer">
+                                    {row.stats.totalPVHC}
+                                  </button>
+                                ) : 0}
+                              </td>
+                              <td className={`p-0.5 border border-gray-300 ${isRegion ? 'font-black' : 'font-bold text-gray-700'}`}>
+                                {row.stats.totalRow > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `Tổng cộng (${row.name})`, list: row.stats.lists.totalRow })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                    {row.stats.totalRow}
+                                  </button>
+                                ) : 0}
+                              </td>
                             </tr>
                           );
                         })
@@ -1332,13 +1601,55 @@ export default function PersonnelPage() {
                       {crossTabStats.grandTotal && (
                         <tr className="bg-[#fff2cc] font-black text-[#002060]">
                           <td className="p-1 border border-gray-300 text-center text-[9px]">TỔNG CỘNG</td>
-                          <td className="p-0.5 border border-gray-300">{crossTabStats.grandTotal.bv_nv > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{crossTabStats.grandTotal.bv_nv}<HoverTablePopover list={crossTabStats.grandTotal.lists.bv_nv} title="Tổng BV - NV" /></div>) : 0}</td>
-                          <td className="p-0.5 border border-gray-300">{crossTabStats.grandTotal.bv_tt_tp > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{crossTabStats.grandTotal.bv_tt_tp}<HoverTablePopover list={crossTabStats.grandTotal.lists.bv_tt_tp} title="Tổng BV - TT/TP" /></div>) : 0}</td>
-                          <td className="p-0.5 border border-gray-300 text-emerald-700">{crossTabStats.grandTotal.totalBV > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{crossTabStats.grandTotal.totalBV}<HoverTablePopover list={crossTabStats.grandTotal.lists.totalBV} title="TỔNG BẢO VỆ" /></div>) : 0}</td>
-                          <td className="p-0.5 border border-gray-300">{crossTabStats.grandTotal.pvhc_nv > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{crossTabStats.grandTotal.pvhc_nv}<HoverTablePopover list={crossTabStats.grandTotal.lists.pvhc_nv} title="Tổng PVHC - NV" /></div>) : 0}</td>
-                          <td className="p-0.5 border border-gray-300">{crossTabStats.grandTotal.pvhc_tt_tp > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{crossTabStats.grandTotal.pvhc_tt_tp}<HoverTablePopover list={crossTabStats.grandTotal.lists.pvhc_tt_tp} title="Tổng PVHC - TT/TP" /></div>) : 0}</td>
-                          <td className="p-0.5 border border-gray-300 text-blue-700">{crossTabStats.grandTotal.totalPVHC > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{crossTabStats.grandTotal.totalPVHC}<HoverTablePopover list={crossTabStats.grandTotal.lists.totalPVHC} title="TỔNG PVHC" /></div>) : 0}</td>
-                          <td className="p-0.5 border border-gray-300 text-red-600 text-[10px]">{crossTabStats.grandTotal.totalRow > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{crossTabStats.grandTotal.totalRow}<HoverTablePopover list={crossTabStats.grandTotal.lists.totalRow} title="TỔNG CỘNG HỆ THỐNG" /></div>) : 0}</td>
+                          <td className="p-0.5 border border-gray-300">
+                            {crossTabStats.grandTotal.bv_nv > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'Tổng BV - NV', list: crossTabStats.grandTotal.lists.bv_nv })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                {crossTabStats.grandTotal.bv_nv}
+                              </button>
+                            ) : 0}
+                          </td>
+                          <td className="p-0.5 border border-gray-300">
+                            {crossTabStats.grandTotal.bv_tt_tp > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'Tổng BV - TT/TP', list: crossTabStats.grandTotal.lists.bv_tt_tp })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                {crossTabStats.grandTotal.bv_tt_tp}
+                              </button>
+                            ) : 0}
+                          </td>
+                          <td className="p-0.5 border border-gray-300 text-emerald-700">
+                            {crossTabStats.grandTotal.totalBV > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'TỔNG BẢO VỆ', list: crossTabStats.grandTotal.lists.totalBV })} className="w-full h-full py-1 hover:bg-emerald-100 text-emerald-800 font-bold transition-colors text-center cursor-pointer">
+                                {crossTabStats.grandTotal.totalBV}
+                              </button>
+                            ) : 0}
+                          </td>
+                          <td className="p-0.5 border border-gray-300">
+                            {crossTabStats.grandTotal.pvhc_nv > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'Tổng PVHC - NV', list: crossTabStats.grandTotal.lists.pvhc_nv })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                {crossTabStats.grandTotal.pvhc_nv}
+                              </button>
+                            ) : 0}
+                          </td>
+                          <td className="p-0.5 border border-gray-300">
+                            {crossTabStats.grandTotal.pvhc_tt_tp > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'Tổng PVHC - TT/TP', list: crossTabStats.grandTotal.lists.pvhc_tt_tp })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                {crossTabStats.grandTotal.pvhc_tt_tp}
+                              </button>
+                            ) : 0}
+                          </td>
+                          <td className="p-0.5 border border-gray-300 text-blue-700">
+                            {crossTabStats.grandTotal.totalPVHC > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'TỔNG PVHC', list: crossTabStats.grandTotal.lists.totalPVHC })} className="w-full h-full py-1 hover:bg-blue-100 text-blue-800 font-bold transition-colors text-center cursor-pointer">
+                                {crossTabStats.grandTotal.totalPVHC}
+                              </button>
+                            ) : 0}
+                          </td>
+                          <td className="p-0.5 border border-gray-300 text-red-600 text-[10px]">
+                            {crossTabStats.grandTotal.totalRow > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'TỔNG CỘNG HỆ THỐNG', list: crossTabStats.grandTotal.lists.totalRow })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                {crossTabStats.grandTotal.totalRow}
+                              </button>
+                            ) : 0}
+                          </td>
                         </tr>
                       )}
                     </tbody>
@@ -1356,24 +1667,24 @@ export default function PersonnelPage() {
                 </div>
                 {/* 🟢 Cuộn dọc với max-h và đóng băng thead */}
                 <div className="overflow-y-auto overflow-x-hidden max-h-[500px] custom-scrollbar relative">
-                  <table className="w-full table-fixed text-center text-[10px] border-collapse">
+                  <table className="w-full table-fixed text-center text-[12px] border-collapse">
                     <thead className="sticky top-0 z-30 bg-white shadow-sm">
                       <tr>
                         {/* Ép cứng cột Bộ phận chiếm 22% và Nâng z-index lên 40 để đè lên các hàng cuộn */}
-                        <th className="p-1 border border-gray-200 bg-[#f8fafc] text-left align-bottom font-black text-[#05469B] uppercase sticky left-0 top-0 z-[40] w-[22%]" rowSpan={2}>BỘ PHẬN</th>
+                        <th className="py-2.5 px-2 border border-gray-200 bg-[#f8fafc] text-left align-bottom font-black text-[#05469B] uppercase sticky left-0 top-0 z-[40] w-[22%] text-[12px]" rowSpan={2}>BỘ PHẬN</th>
                         {deptTabStats.groupedColumns.map((group, idx) => (
-                          <th key={idx} colSpan={group.activeRoles.length} className={`p-1 border font-black uppercase tracking-tighter text-[9px] leading-tight ${group.headerColor}`}>
+                          <th key={idx} colSpan={group.activeRoles.length} className={`py-2 px-1 border font-black uppercase tracking-normal text-[11px] leading-tight ${group.headerColor}`}>
                             {group.label}
                           </th>
                         ))}
                         {/* Ép cứng cột Tổng cộng chiếm 6% */}
-                        <th className="p-1 border border-red-200 bg-red-50 text-red-700 align-bottom font-black text-[9px] w-[6%]" rowSpan={2}>TỔNG</th>
+                        <th className="py-2.5 px-1 border border-red-200 bg-red-50 text-red-700 align-bottom font-black text-[11px] w-[6%]" rowSpan={2}>TỔNG</th>
                       </tr>
                       <tr>
                         {deptTabStats.groupedColumns.map((group) => (
                           group.activeRoles.map(col => (
-                            // Dùng break-words và text-[8px] để bẻ dòng các chức danh dài, ko cho giãn cột
-                            <th key={col} className={`p-0.5 border border-gray-200 font-bold text-gray-700 leading-none text-[8px] break-words ${group.color}`}>
+                            // Dùng break-words và text-[10px] để bẻ dòng các chức danh dài, ko cho giãn cột
+                            <th key={col} className={`py-2 px-1 border border-gray-200 font-bold text-gray-700 leading-tight text-[10px] break-words ${group.color}`}>
                               {col}
                             </th>
                           ))
@@ -1384,7 +1695,7 @@ export default function PersonnelPage() {
                       {deptTabStats.rows.length > 0 ? (
                         deptTabStats.rows.map((row: string, idx: number) => (
                           <tr key={idx} className="hover:bg-gray-50 transition-colors border-b border-gray-100">
-                            <td className="p-1 border-r border-gray-200 text-left font-bold text-gray-700 bg-white sticky left-0 z-10 leading-tight text-[9px]">
+                            <td className="py-2 px-2.5 border-r border-gray-200 text-left font-bold text-gray-700 bg-white sticky left-0 z-10 leading-tight text-[12px]">
                               {row}
                             </td>
                             
@@ -1393,15 +1704,23 @@ export default function PersonnelPage() {
                                 const val = deptTabStats.deptMap[row][col];
                                 const list = deptTabStats.deptListMap[row][col];
                                 return (
-                                  <td key={col} className={`p-0.5 border-r border-gray-200 text-gray-700 ${group.color} ${val > 0 ? 'font-semibold' : 'text-gray-300'}`}>
-                                    {val > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{val}<HoverTablePopover list={list} title={`${col} - ${row}`} /></div>) : '-'}
+                                  <td key={col} className={`p-1 border-r border-gray-200 text-gray-700 ${group.color} ${val > 0 ? 'font-semibold' : 'text-gray-300'}`}>
+                                    {val > 0 ? (
+                                      <button onClick={() => setClickStaffListModal({ isOpen: true, title: `${col} - ${row}`, list: list })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                        {val}
+                                      </button>
+                                    ) : '-'}
                                   </td>
                                 );
                               })
                             ))}
 
-                            <td className="p-1 border-l border-red-200 font-black text-red-600 bg-red-50/30">
-                              {deptTabStats.deptMap[row].total > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{deptTabStats.deptMap[row].total}<HoverTablePopover list={deptTabStats.deptListMap[row].total} title={`Tổng NV: ${row}`} /></div>) : 0}
+                            <td className="p-1.5 border-l border-red-200 font-black text-red-600 bg-red-50/30">
+                              {deptTabStats.deptMap[row].total > 0 ? (
+                                <button onClick={() => setClickStaffListModal({ isOpen: true, title: `Tổng NV: ${row}`, list: deptTabStats.deptListMap[row].total })} className="w-full h-full py-1 hover:bg-red-100 font-black text-red-600 transition-colors text-center cursor-pointer">
+                                  {deptTabStats.deptMap[row].total}
+                                </button>
+                              ) : 0}
                             </td>
                           </tr>
                         ))
@@ -1410,16 +1729,24 @@ export default function PersonnelPage() {
                       {/* DÒNG TỔNG CỘNG CHỐT BẢNG 2 */}
                       {deptTabStats.rows.length > 0 && (
                         <tr className="border-t-2 border-gray-300 bg-gray-100">
-                          <td className="p-1.5 border-r border-gray-200 text-center font-black text-[#05469B] uppercase sticky left-0 z-20 bg-gray-100 text-[9px]">TỔNG</td>
+                          <td className="p-1.5 border-r border-gray-200 text-center font-black text-[#05469B] uppercase sticky left-0 z-20 bg-gray-100 text-[12px]">TỔNG</td>
                           {deptTabStats.groupedColumns.map((group) => (
                             group.activeRoles.map(col => (
-                              <td key={col} className={`p-0.5 border-r border-gray-200 font-black text-gray-800 ${group.color}`}>
-                                {deptTabStats.colTotals[col] > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{deptTabStats.colTotals[col]}<HoverTablePopover list={deptTabStats.colLists[col]} title={`Tổng ${col} toàn bộ`} /></div>) : 0}
+                              <td key={col} className={`p-1 border-r border-gray-200 font-black text-gray-800 ${group.color}`}>
+                                {deptTabStats.colTotals[col] > 0 ? (
+                                  <button onClick={() => setClickStaffListModal({ isOpen: true, title: `Tổng ${col} toàn bộ`, list: deptTabStats.colLists[col] })} className="w-full h-full py-1 hover:bg-blue-100 text-gray-800 font-bold transition-colors text-center cursor-pointer">
+                                    {deptTabStats.colTotals[col]}
+                                  </button>
+                                ) : 0}
                               </td>
                             ))
                           ))}
-                          <td className="p-1 border-l border-red-200 text-[10px] font-black text-white bg-red-500 shadow-inner">
-                            {deptTabStats.grandTotal > 0 ? (<div className="relative group cursor-help w-full h-full flex items-center justify-center">{deptTabStats.grandTotal}<HoverTablePopover list={deptTabStats.grandTotalList} title="TỔNG NHÂN SỰ TOÀN HỆ THỐNG" /></div>) : 0}
+                           <td className="p-1.5 border-l border-red-200 text-[12px] font-black text-white bg-red-500 shadow-inner">
+                            {deptTabStats.grandTotal > 0 ? (
+                              <button onClick={() => setClickStaffListModal({ isOpen: true, title: 'TỔNG NHÂN SỰ TOÀN HỆ THỐNG', list: deptTabStats.grandTotalList })} className="w-full h-full py-1 hover:bg-red-600 text-white font-bold transition-colors text-center cursor-pointer">
+                                {deptTabStats.grandTotal}
+                              </button>
+                            ) : 0}
                           </td>
                         </tr>
                       )}
@@ -1514,6 +1841,105 @@ export default function PersonnelPage() {
 
       {/* 🟢 TẤT CẢ CÁC MODALS BÊN DƯỚI */}
       
+      {/* 🟢 MODAL COPY EMAIL THEO ĐIỀU KIỆN */}
+      {isCopyEmailDropdownOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md flex flex-col overflow-hidden max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="p-4 bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 font-bold text-base">
+                <Copy size={18} /> Copy Email Theo Điều Kiện
+              </div>
+              <button 
+                onClick={() => { setIsCopyEmailDropdownOpen(false); setSelectedNgach([]); setSelectedDiaDiem([]); }}
+                className="p-1.5 hover:bg-white/20 rounded-lg transition-colors text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Nội dung Modal */}
+            <div className="p-4 overflow-y-auto custom-scrollbar flex flex-col flex-1 gap-4">
+              {/* PHẦN 1: COPY CHỨC DANH */}
+              <div>
+                <div className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-2">1. Theo chức danh (Copy nhanh)</div>
+                <div className="grid grid-cols-1 gap-2">
+                  <button onClick={() => handleCopyTargetEmails('lanh_dao')} className="w-full text-left px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-blue-50 text-[#05469B] font-bold text-xs border border-gray-200 hover:border-blue-300 transition-all flex items-center gap-2">
+                    <Briefcase size={15} className="text-orange-500" /> Cấp Lãnh đạo
+                  </button>
+                  <button onClick={() => handleCopyTargetEmails('pt_qtvp')} className="w-full text-left px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-blue-50 text-[#05469B] font-bold text-xs border border-gray-200 hover:border-blue-300 transition-all flex items-center gap-2">
+                    <ShieldCheck size={15} className="text-emerald-500" /> Phụ trách QTVP & ASĐS
+                  </button>
+                  <button onClick={() => handleCopyTargetEmails('pt_ns')} className="w-full text-left px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-blue-50 text-[#05469B] font-bold text-xs border border-gray-200 hover:border-blue-300 transition-all flex items-center gap-2">
+                    <Users size={15} className="text-purple-500" /> Phụ trách Nhân sự
+                  </button>
+                </div>
+              </div>
+
+              {/* PHẦN 2: LỌC THEO NGẠCH LƯƠNG */}
+              {availableNgachLuong.length > 0 && (
+                <div className="border-t border-gray-100 pt-3">
+                  <div className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-2 flex justify-between items-center">
+                    <span>2. Lọc theo Ngạch Lương</span>
+                    <button onClick={() => selectedNgach.length === availableNgachLuong.length ? setSelectedNgach([]) : setSelectedNgach([...availableNgachLuong])} className="text-[#05469B] hover:underline text-[11px] font-black">
+                      {selectedNgach.length === availableNgachLuong.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 max-h-[160px] overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
+                    {availableNgachLuong.map((ngach, idx) => (
+                      <label key={idx} className="flex items-center gap-2 p-1.5 hover:bg-white rounded-lg cursor-pointer text-xs font-semibold text-gray-700 transition-colors">
+                        <input type="checkbox" checked={selectedNgach.includes(ngach)} onChange={() => toggleNgach(ngach)} className="rounded text-[#05469B] focus:ring-0 w-3.5 h-3.5 cursor-pointer" />
+                        <span className="truncate">{ngach}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* PHẦN 3: LỌC THEO ĐỊA ĐIỂM */}
+              {availableDiaDiem.length > 0 && (
+                <div className="border-t border-gray-100 pt-3">
+                  <div className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-2 flex justify-between items-center">
+                    <span>3. Lọc theo Địa điểm làm việc</span>
+                    <button onClick={() => selectedDiaDiem.length === availableDiaDiem.length ? setSelectedDiaDiem([]) : setSelectedDiaDiem([...availableDiaDiem])} className="text-[#05469B] hover:underline text-[11px] font-black">
+                      {selectedDiaDiem.length === availableDiaDiem.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 max-h-[160px] overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-100">
+                    {availableDiaDiem.map((loc, idx) => (
+                      <label key={idx} className="flex items-center gap-2 p-1.5 hover:bg-white rounded-lg cursor-pointer text-xs font-semibold text-gray-700 transition-colors">
+                        <input type="checkbox" checked={selectedDiaDiem.includes(loc)} onChange={() => toggleDiaDiem(loc)} className="rounded text-[#05469B] focus:ring-0 w-3.5 h-3.5 cursor-pointer" />
+                        <span className="truncate">{loc}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            {(availableNgachLuong.length > 0 || availableDiaDiem.length > 0) && (
+              <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-col gap-2 shrink-0">
+                <button 
+                  onClick={handleCopyMultiCriteria} 
+                  disabled={selectedNgach.length === 0 && selectedDiaDiem.length === 0} 
+                  className="w-full py-2.5 bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-95 transition-all disabled:opacity-50 disabled:from-gray-400 disabled:to-gray-500 shadow-md"
+                >
+                  <Copy size={16}/> Lọc & Copy Danh sách Email
+                </button>
+                {(selectedNgach.length > 0 || selectedDiaDiem.length > 0) && (
+                  <p className="text-center text-[11px] text-gray-500 font-semibold leading-tight">
+                    Đang chọn: {selectedNgach.length > 0 ? `${selectedNgach.length} ngạch` : ''} 
+                    {selectedNgach.length > 0 && selectedDiaDiem.length > 0 ? ' & ' : ''}
+                    {selectedDiaDiem.length > 0 ? `${selectedDiaDiem.length} địa điểm` : ''}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       {isExportModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in duration-200">
@@ -1597,9 +2023,9 @@ export default function PersonnelPage() {
 
       {/* 🟢 VIEW MODAL (ĐÃ MỞ RỘNG VÀ BỔ SUNG KHỐI, ĐỊA ĐIỂM LV) */}
       {isViewModalOpen && viewData && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 bg-[#05469B] rounded-t-2xl text-white shrink-0">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[92vh] sm:max-h-[90vh] sm:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 overflow-hidden mt-auto sm:mt-0">
+            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 bg-[#05469B] rounded-t-3xl sm:rounded-t-2xl text-white shrink-0">
               <h3 className="text-lg font-bold flex items-center gap-2"><UserIcon size={20} /> Chi tiết Hồ sơ Nhân sự</h3>
               <button onClick={() => setIsViewModalOpen(false)} className="text-white hover:text-red-300 hover:bg-white/10 rounded-full p-1.5 transition-colors"><X className="w-6 h-6" /></button>
             </div>
@@ -1704,143 +2130,24 @@ export default function PersonnelPage() {
               )}
 
             </div>
-            <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end shrink-0">
+            <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 rounded-b-3xl sm:rounded-b-2xl flex justify-end shrink-0">
               <button onClick={() => setIsViewModalOpen(false)} className="w-full sm:w-auto px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition-colors">Đóng</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 🟢 MODAL THÊM MỚI / CHỈNH SỬA */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 bg-gray-50 rounded-t-2xl shrink-0">
-              <h3 className="text-xl font-bold text-[#05469B]">{modal.mode === 'create' ? 'Thêm Hồ sơ' : 'Cập nhật Hồ sơ'}</h3>
-              <button onClick={() => setModal(prev => ({ ...prev, isOpen: false }))} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
-            </div>
-            <form onSubmit={handleSave} className="p-4 sm:p-6 overflow-y-auto space-y-6 custom-scrollbar">
-              <div className="bg-blue-50/40 p-4 sm:p-5 rounded-xl border border-blue-100">
-                <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-[#05469B] rounded-full"></div> Thông tin cá nhân</h4>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Mã NV *</label><input type="text" required name="ma_so_nhan_vien" value={formData.ma_so_nhan_vien || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                  <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Họ và Tên *</label><input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Giới tính</label><select name="gioi_tinh" value={formData.gioi_tinh || 'Nam'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Năm sinh</label><input type="date" name="nam_sinh" value={formData.nam_sinh ? formData.nam_sinh.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                  <div><label className="block text-xs font-bold text-[#05469B] mb-1">SĐT Công ty (Sim cấp)</label><input type="tel" name="sdt_cong_ty" value={formData.sdt_cong_ty || ''} onChange={(e) => setModal(prev => ({ ...prev, formData: {...prev.formData, sdt_cong_ty: formatPhoneNumber(e.target.value)} }))} maxLength={13} className="w-full p-2.5 border border-blue-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide text-[#05469B]" placeholder="09xx xxx xxx" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">SĐT Cá nhân</label><input type="tel" name="sdt_ca_nhan" value={formData.sdt_ca_nhan || ''} onChange={(e) => setModal(prev => ({ ...prev, formData: {...prev.formData, sdt_ca_nhan: formatPhoneNumber(e.target.value)} }))} maxLength={13} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide" placeholder="09xx xxx xxx" /></div>
-                  <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Email</label><input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                  <div className="md:col-span-4"><label className="block text-xs font-bold text-gray-700 mb-1">Link Ảnh Đại Diện (Google Drive)</label><div className="relative"><input type="text" name="hinh_anh" value={formData.hinh_anh || ''} onChange={handleInputChange} className="w-full p-2.5 pl-10 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Dán link chia sẻ ảnh từ Google Drive vào đây..." /><ImageIcon className="absolute left-3 top-2.5 text-gray-400" size={18} /></div></div>
-                </div>
-              </div>
-              <div className="bg-gray-50 p-4 sm:p-5 rounded-xl border border-gray-200">
-                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-gray-400 rounded-full"></div> Công việc</h4>
-                <div className="flex flex-col gap-4">
-                  
-                  {/* 🟢 ROW 1: Đơn vị - Bộ phận - Khối - Chức vụ - Phân loại */}
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị công tác *</label><select required name="id_don_vi" value={formData.id_don_vi || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] text-sm" style={{ fontFamily: 'monospace, sans-serif' }}><option value="">-- Chọn đơn vị --</option>{buildHierarchicalOptions(donViList.filter(dv => allowedDonViIds.includes(dv.id))).map(({ unit, prefix }) => (<option key={unit.id} value={unit.id} className="font-normal text-gray-700">{prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}</option>))}</select></div>
-                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận</label><input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="VD: Phòng Kinh Doanh" /></div>
-                    <div><label className="block text-xs font-bold text-[#364153] mb-1">Khối</label><input type="text" name="khoi" value={formData.khoi || ''} onChange={handleInputChange} className="w-full p-2.5 border border-indigo-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-indigo-500" placeholder="VD: Khối Kỹ Thuật" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại</label>
-                      <select name="phan_loai" value={formData.phan_loai || 'Chuyên viên'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
-                        <option value="Lãnh đạo">Lãnh đạo</option>
-                        <option value="Chủ tịch">Chủ tịch</option>
-                        <option value="Tổng Giám đốc">Tổng Giám đốc</option>
-                        <option value="Phó Tổng Giám đốc">Phó Tổng Giám đốc</option>
-                        <option value="Giám đốc">Giám đốc</option>
-                        <option value="Phó Giám đốc">Phó Giám đốc</option>
-                        <option value="Trưởng phòng">Trưởng phòng</option>
-                        <option value="Trưởng bộ phận">Trưởng bộ phận</option>
-                        <option value="Phó phòng">Phó phòng</option>
-                        <option value="Trợ lý">Trợ lý</option>
-                        <option value="Trưởng nhóm">Trưởng nhóm</option>
-                        <option value="Tổ trưởng">Tổ trưởng</option>
-                        <option value="Tổ phó">Tổ phó</option>
-                        <option value="Chuyên viên">Chuyên viên</option>
-                        <option value="PT DVHT KD">PT DVHT KD</option>
-                        <option value="PT DVHC">PT DVHC</option>
-                        <option value="PT NS">PT NS</option>
-                        <option value="BV, ĐTKH">BV, ĐTKH</option>
-                        <option value="Nhân viên">Nhân viên</option>
-                        <option value="Chưa phân loại">Chưa phân loại</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* 🟢 ROW 2: Ngày nhận việc - Trình độ - Ngạch - Thu nhập - Trạng thái */}
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc</label><input type="date" name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label><select name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="">-- Chọn trình độ --</option><option value="Tiểu học">Tiểu học</option><option value="Trung học cơ sở">Trung học cơ sở</option><option value="Trung học phổ thông">Trung học phổ thông</option><option value="Sơ cấp: Chứng chỉ nghề 3 tháng">Sơ cấp: Chứng chỉ nghề 3 tháng</option><option value="Sơ cấp: Chứng chỉ nghề 6 tháng">Sơ cấp: Chứng chỉ nghề 6 tháng</option><option value="Trung cấp nghề">Trung cấp nghề</option><option value="Trung cấp chuyên nghiệp">Trung cấp chuyên nghiệp</option><option value="Cao đẳng">Cao đẳng</option><option value="Đại học">Đại học</option><option value="Thạc sĩ/Tiến sĩ">Thạc sĩ/Tiến sĩ</option></select></div>
-                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label><input type="text" name="ngach_luong" value={formData.ngach_luong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="VD: Bậc 1" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Mức thu nhập (VNĐ)</label><input type="text" name="thu_nhap" value={formatCurrency(formData.thu_nhap)} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái làm việc</label><select name="trang_thai" value={formData.trang_thai || 'Đang làm việc'} onChange={handleInputChange} className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold ${formData.trang_thai === 'Đã nghỉ việc' ? 'text-red-600' : 'text-emerald-600'}`}><option value="Đang làm việc">Đang làm việc</option><option value="Đã nghỉ việc">Đã nghỉ việc</option></select></div>
-                    
-                    {formData.trang_thai === 'Đã nghỉ việc' && (<div><label className="block text-xs font-bold text-red-600 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-red-200 rounded-lg bg-red-50 outline-none focus:ring-2 focus:ring-red-500 font-bold" /></div>)}
-                  </div>
-                  
-                  {/* 🟢 ROW 3: Bổ sung ô nhập Địa điểm làm việc cạnh Nhóm ATVSLĐ */}
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-[#364153] mb-1">Địa điểm làm việc</label><input type="text" name="dia_diem_lam_viec" value={formData.dia_diem_lam_viec || ''} onChange={handleInputChange} className="w-full p-2.5 border border-indigo-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-indigo-500" placeholder="VD: Hồ Chí Minh" /></div>
-                    <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Nhóm (ATVSLĐ)</label><select name="nhom_doi_tuong" value={formData.nhom_doi_tuong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="">-- Chọn nhóm --</option><option value="1">Nhóm 1</option><option value="2">Nhóm 2</option><option value="3">Nhóm 3</option><option value="4">Nhóm 4</option><option value="6">Nhóm 6</option></select></div>
-                  </div>
-                </div>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-gray-700 mb-2">Giấy phép lái xe (Tick chọn nhiều)</label>
-                <div className="bg-[#FFFFF0] border border-gray-200 rounded-xl p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {gplxGroups.map((group, groupIdx) => (
-                      <div key={groupIdx} className="space-y-2">
-                        <h5 className="text-[11px] font-black text-[#05469B] uppercase border-b border-blue-100 pb-1 mb-2">{group.title}</h5>
-                        <div className="flex flex-col gap-2">
-                          {group.options.map((opt, optIdx) => {
-                            const isChecked = currentGPLXList.includes(opt.value);
-                            return (<label key={optIdx} className="flex items-start gap-2 cursor-pointer group/cb"><input type="checkbox" checked={isChecked} onChange={(e) => handleGPLXChange(opt.value, e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#05469B] focus:ring-[#05469B] cursor-pointer" /><span className={`text-sm transition-colors ${isChecked ? 'font-bold text-[#05469B]' : 'font-medium text-gray-600 group-hover/cb:text-[#05469B]'}`}>{opt.label}</span></label>);
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="bg-emerald-50/40 p-4 sm:p-5 rounded-xl border border-emerald-100">
-                <h4 className="font-bold text-emerald-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-emerald-500 rounded-full"></div> Chứng chỉ phụ trợ</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {CERTIFICATES.map(cert => {
-                    const Icon = cert.icon;
-                    return (<label key={cert.id} className="flex items-center p-2.5 border border-emerald-200 rounded-lg bg-[#FFFFF0] cursor-pointer hover:border-emerald-500 transition-colors shadow-sm"><input type="checkbox" name={cert.id} checked={formData[cert.id] === true || String(formData[cert.id]).toLowerCase() === 'true'} onChange={handleInputChange} className="w-4 h-4 text-emerald-600 rounded border-gray-300 mr-2 focus:ring-emerald-500" /><Icon size={16} className="text-gray-500 mr-1.5 shrink-0" /><span className="text-[11px] sm:text-xs font-bold text-gray-700 leading-tight">{cert.label}</span></label>);
-                  })}
-                </div>
-                {formData.cc_atvsld && (
-                  <div className="mt-5 p-4 sm:p-5 bg-emerald-50 rounded-xl border border-emerald-200 animate-in fade-in slide-in-from-top-2">
-                    <h5 className="font-bold text-emerald-800 text-sm mb-3 flex items-center gap-2"><ShieldCheck size={16}/> Thông tin chứng nhận ATVSLĐ</h5>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 mb-1">Loại chứng nhận (Tự động theo Nhóm)</label><input type="text" readOnly value={formData.chung_nhan || 'Vui lòng chọn Nhóm đối tượng ở phần Công việc'} className="w-full p-2.5 border border-emerald-200 rounded-lg bg-emerald-100/50 text-emerald-800 font-bold outline-none cursor-not-allowed" /></div>
-                      <div><label className="block text-xs font-bold text-gray-700 mb-1">Huấn luyện từ ngày</label><input type="date" name="huan_luyen_tu" value={formData.huan_luyen_tu ? formData.huan_luyen_tu.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" /></div>
-                      <div><label className="block text-xs font-bold text-gray-700 mb-1">Đến ngày</label><input type="date" name="huan_luyen_den" value={formData.huan_luyen_den ? formData.huan_luyen_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" /></div>
-                      <div><label className="block text-xs font-bold text-gray-700 mb-1">Có giá trị đến ngày</label><input type="date" name="gia_tri_den" value={formData.gia_tri_den ? formData.gia_tri_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700" /></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="bg-orange-50/40 p-4 sm:p-5 rounded-xl border border-orange-100">
-                <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-orange-500 rounded-full"></div> Thông tin Bổ sung</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Mô tả ngoại hình</label><textarea name="mo_to_ngoai_hinh" value={formData.mo_to_ngoai_hinh || ''} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none"></textarea></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Ghi chú khác</label><textarea name="ghi_chu" value={formData.ghi_chu || ''} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none"></textarea></div>
-                </div>
-              </div>
-              <div className="pt-4 sm:pt-5 border-t border-gray-100 flex justify-end gap-3 mt-6 sm:mt-8">
-                <button type="button" onClick={() => setModal(prev => ({ ...prev, isOpen: false }))} className="w-full sm:w-auto px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors">Hủy</button>
-                <button type="submit" disabled={submitting} className="w-full sm:w-auto px-8 py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Dữ Liệu</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 🟢 MODAL THÊM MỚI / CHỈNH SỬA (Đã tách component) */}
+      <PersonnelModal 
+        isOpen={modal.isOpen}
+        mode={modal.mode}
+        formData={formData}
+        submitting={submitting}
+        donViList={donViList}
+        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        onSave={handleSave}
+        setFormData={(updater) => setModal(prev => ({ ...prev, formData: updater(prev.formData) }))}
+      />
 
       {/* CÁC MODAL CÒN LẠI (REHIRE, DELETE, BULK IMPORT) GIỮ NGUYÊN */}
       {isRehireModalOpen && personnelToRehire && (
@@ -1925,6 +2232,57 @@ export default function PersonnelPage() {
             <div className="p-5 border-t bg-gray-50 flex justify-end gap-3">
               <button onClick={() => { setIsBulkImportOpen(false); setBulkImportData([]); setBulkImportText(''); }} className="px-6 py-2.5 bg-gray-200 rounded-xl font-bold">Hủy</button>
               <button onClick={confirmBulkSave} disabled={submitting || bulkImportData.length === 0} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold flex items-center gap-2">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCheck size={20} />} Xác nhận Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clickStaffListModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] animate-in zoom-in duration-200">
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-[#e8f0fe] rounded-t-2xl">
+              <h3 className="text-sm font-black text-[#05469B] flex items-center gap-2">
+                <Users size={18} /> {clickStaffListModal.title} ({clickStaffListModal.list.length})
+              </h3>
+              <button
+                onClick={() => setClickStaffListModal({ isOpen: false, title: '', list: [] })}
+                className="text-gray-400 hover:text-red-500 rounded-full p-1 bg-white shadow-sm border border-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {/* Body */}
+            <div className="p-4 overflow-y-auto custom-scrollbar flex-1 bg-white">
+              <div className="space-y-2">
+                {clickStaffListModal.list.map((p, idx) => (
+                  <div key={idx} className="p-3 bg-gray-50 hover:bg-blue-50/50 border border-gray-100 rounded-xl flex flex-col gap-1 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-gray-900">{p.ho_ten}</span>
+                      <span className="text-[10px] text-gray-500 bg-gray-200/60 px-2 py-0.5 rounded font-mono font-bold">
+                        {p.ma_so_nhan_vien || '---'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-700">
+                      <span className="font-semibold text-gray-400 mr-1">Chức vụ:</span>
+                      <span className="font-medium text-gray-800">{p.chuc_vu || 'Chưa rõ'}</span>
+                    </div>
+                    <div className="text-xs text-gray-700 leading-normal">
+                      <span className="font-semibold text-gray-400 mr-1">Đơn vị:</span>
+                      <span className="font-medium text-gray-800">{getFullUnitName(p.id_don_vi)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end">
+              <button
+                onClick={() => setClickStaffListModal({ isOpen: false, title: '', list: [] })}
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg text-xs transition-colors"
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

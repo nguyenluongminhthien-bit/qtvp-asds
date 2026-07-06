@@ -9,11 +9,14 @@ import { apiService } from '../services/api';
 import { DonVi, ThietBi, NhatKyThietBi, Personnel } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, toUnaccented } from '../utils/formatters';
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 import ExpiryBadge from '../components/ExpiryBadge';
 import ExpiryAlert from '../components/ExpiryAlert';
+import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
+import Pagination from '../components/ui/Pagination';
+import CustomAutocomplete from '../components/ui/CustomAutocomplete';
 
 
 // --- DANH SÁCH NHÓM TÀI SẢN CHUẨN ---
@@ -39,6 +42,13 @@ const isFurniture = (nhom: string) => {
   if (!nhom) return false;
   const lower = nhom.toLowerCase();
   return ['bàn', 'ghế', 'tủ', 'kệ', 'nội thất', 'sofa', 'giường', 'quầy', 'bảng', 'màn chiếu'].some(kw => lower.includes(kw));
+};
+
+const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
+  const subs = allUnits.filter(u => u.cap_quan_ly === unitId);
+  let ids = subs.map(u => u.id);
+  subs.forEach(s => { ids = [...ids, ...getAllSubordinateIds(s.id, allUnits)]; });
+  return ids;
 };
 
 export default function EquipmentPage() {
@@ -126,18 +136,17 @@ export default function EquipmentPage() {
   const filteredTBs = useMemo(() => {
     let result = tbData.filter(item => allowedDonViIds.includes(item.id_don_vi));
     if (selectedUnitFilter) {
-      const childIds = donViList.filter(item => item.cap_quan_ly === selectedUnitFilter).map(c => c.id);
-      const validIds = [selectedUnitFilter, ...childIds];
+      const validIds = [selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViList)];
       result = result.filter(item => validIds.includes(item.id_don_vi));
     }
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
+      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
       result = result.filter(item => 
-        (String(item.ma_tai_san || '').toLowerCase().includes(lower)) || 
-        (String(item.ten_thiet_bi || '').toLowerCase().includes(lower)) ||
-        (String(item.nhom_thiet_bi || '').toLowerCase().includes(lower)) ||
-        (String(item.vi_tri_bo_tri || '').toLowerCase().includes(lower)) ||
-        (String(item.tai_san_thuoc || '').toLowerCase().includes(lower))
+        toUnaccented(item.ma_tai_san || '').toLowerCase().includes(cleanSearch) || 
+        toUnaccented(item.ten_thiet_bi || '').toLowerCase().includes(cleanSearch) ||
+        toUnaccented(item.nhom_thiet_bi || '').toLowerCase().includes(cleanSearch) ||
+        toUnaccented(item.vi_tri_bo_tri || '').toLowerCase().includes(cleanSearch) ||
+        toUnaccented(item.tai_san_thuoc || '').toLowerCase().includes(cleanSearch)
       );
     }
     return result;
@@ -149,44 +158,6 @@ export default function EquipmentPage() {
     return unit ? unit.ten_don_vi : 'Đơn vị không xác định';
   }, [selectedUnitFilter, donViList]);
 
-  const filteredUnits = useMemo(() => {
-    let baseUnits = donViList.filter(dv => allowedDonViIds.includes(dv.id));
-    if (!unitSearchTerm) return baseUnits;
-
-    const lower = unitSearchTerm.toLowerCase();
-    const matchedIds = new Set<string>();
-
-    baseUnits.forEach(u => {
-      if (String(u.ten_don_vi || '').toLowerCase().includes(lower) || String(u.id || '').toLowerCase().includes(lower)) {
-        matchedIds.add(u.id);
-        let parentId = u.cap_quan_ly;
-        while (parentId && parentId !== 'HO') {
-          matchedIds.add(parentId);
-          const parentUnit = baseUnits.find(p => p.id === parentId);
-          parentId = parentUnit ? parentUnit.cap_quan_ly : null;
-        }
-      }
-    });
-
-    const addChildren = (parentId: string) => {
-      baseUnits.forEach(u => {
-        if (u.cap_quan_ly === parentId && !matchedIds.has(u.id)) {
-          matchedIds.add(u.id);
-          addChildren(u.id);
-        }
-      });
-    };
-    
-    Array.from(matchedIds).forEach(id => addChildren(id));
-    return baseUnits.filter(item => matchedIds.has(item.id));
-  }, [donViList, unitSearchTerm, allowedDonViIds]);
-  
-  const parentUnits = useMemo(() => filteredUnits.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly), [filteredUnits]);
-  const getChildUnits = (parentId: string) => sortDonViByThuTu(filteredUnits.filter(item => item.cap_quan_ly === parentId));
-
-  const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => {
-    return groupParentUnits(parentUnits);
-  }, [parentUnits]);
   // 🟢 LỌC THIẾT BỊ SẮP HẾT HẠN BẢO HÀNH (Cảnh báo trước 30 ngày)
   const expiringEquipments = useMemo(() => {
     const warnings: any[] = [];
@@ -213,38 +184,7 @@ export default function EquipmentPage() {
     return warnings.sort((a, b) => a.diffDays - b.diffDays);
   }, [filteredTBs]);
 
-  const toggleParent = (parentId: string) => setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
 
-  const renderUnitTree = (parent: DonVi, level: number = 1) => {
-    const children = getChildUnits(parent.id);
-    const isExpanded = expandedParents.includes(parent.id) || !!unitSearchTerm;
-    const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
-
-    return (
-      <div key={parent.id} className={level === 1 ? "mb-1" : "mt-1"}>
-        <button 
-          onClick={() => { setSelectedUnitFilter(parent.id); if (children.length > 0) toggleParent(parent.id); }} 
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === parent.id ? 'bg-blue-50 text-[#05469B]' : 'text-gray-700 hover:bg-gray-100'} ${isParentDimmed ? 'opacity-50' : ''}`}
-        >
-          {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="shrink-0 text-gray-400" /> : <ChevronRight size={16} className="shrink-0 text-gray-400" />) : <div className="w-4 shrink-0" />}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span>
-          <span className="truncate text-left">{parent.ten_don_vi}</span>
-        </button>
-        {isExpanded && children.length > 0 && (
-          <div className={`ml-${level === 1 ? '6' : '4'} mt-1 border-l-2 border-gray-100 pl-2 space-y-1`}>
-            {children.map(child => renderUnitTree(child, level + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const getAllSubIds = (unitId: string, allUnits: DonVi[]): string[] => {
-    const subs = allUnits.filter(u => u.cap_quan_ly === unitId);
-    let ids = subs.map(u => u.id);
-    subs.forEach(s => { ids = [...ids, ...getAllSubIds(s.id, allUnits)]; });
-    return ids;
-  };
 
   const { suggestRAM, suggestSSD, suggestHDD, suggestViTri, suggestPhapNhan } = useMemo(() => {
     const getUnique = (arr: any[], field: string) => Array.from(new Set(arr.map(item => item[field]).filter(Boolean))) as string[];
@@ -261,7 +201,7 @@ export default function EquipmentPage() {
   const suggestHoTen = useMemo(() => {
     if (!selectedTbForNk) return [];
     const unitId = selectedTbForNk.id_don_vi;
-    const validIds = [unitId, ...getAllSubIds(unitId, donViList)];
+    const validIds = [unitId, ...getAllSubordinateIds(unitId, donViList)];
     
     const filteredNs = nhansuData.filter(ns => validIds.includes(ns.id_don_vi));
     return Array.from(new Set(filteredNs.map(item => item.ho_ten).filter(Boolean))) as string[];
@@ -419,7 +359,7 @@ export default function EquipmentPage() {
   const handleNkHoTenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
     
-    const validIds = selectedTbForNk ? [selectedTbForNk.id_don_vi, ...getAllSubIds(selectedTbForNk.id_don_vi, donViList)] : [];
+    const validIds = selectedTbForNk ? [selectedTbForNk.id_don_vi, ...getAllSubordinateIds(selectedTbForNk.id_don_vi, donViList)] : [];
     
     let foundNs = nhansuData.find(ns => ns.ho_ten === name && validIds.includes(ns.id_don_vi));
     
@@ -481,39 +421,27 @@ export default function EquipmentPage() {
 
   if (loading) return <PageWithFilterSkeleton rows={8} />;
   return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (<button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all"><PanelLeftOpen size={20} /></button>)}
 
-      {/* CỘT TRÁI (BỘ LỌC) */}
-      <div className={`${isListCollapsed ? 'w-0 opacity-0 -ml-80 lg:ml-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm z-50 lg:z-10 shrink-0 overflow-hidden`}>
-        <div className="p-4 border-b border-gray-100 bg-blue-50/50">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-black text-[#05469B] flex items-center gap-2"><MapPin size={20} /> Bộ lọc Đơn vị</h2>
-            <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-[#05469B] hover:bg-blue-100 rounded-md transition-colors"><PanelLeftClose size={18} /></button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#05469B]/50" size={16} />
-            <input type="text" placeholder="Tìm tên đơn vị..." className="w-full pl-9 pr-4 py-2 bg-white border border-blue-100 rounded-lg text-sm focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm" value={unitSearchTerm} onChange={(e) => setUnitSearchTerm(e.target.value)} />
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 min-w-[319px] custom-scrollbar">
-          <button onClick={() => setSelectedUnitFilter(null)} className={`w-full flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-black mb-4 transition-all ${selectedUnitFilter === null ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white shadow-md' : 'text-gray-600 hover:bg-blue-50'}`}>
-            <Package size={18} className={selectedUnitFilter === null ? 'text-blue-100' : 'text-[#05469B]'} /> Tất cả Tài sản / Thiết bị
-          </button>
-          <hr className="border-gray-100 mb-4 mx-2"/>
-          {loading ? (<div className="flex justify-center p-8"><Loader2 className="animate-spin text-[#05469B]" /></div>) : (
-            <div className="space-y-6">
-              {vpdhUnits.length > 0 && (<div><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2 flex items-center gap-1">VPĐH / TCT</p>{vpdhUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {ctttNamUnits.length > 0 && (<div><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2 flex items-center gap-1">CTTT Phía Nam</p>{ctttNamUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {ctttBacUnits.length > 0 && (<div><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2 flex items-center gap-1">CTTT Phía Bắc</p>{ctttBacUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {otherUnits.length > 0 && (<div><p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1">Đơn vị khác</p>{otherUnits.map(dv => renderUnitTree(dv))}</div>)}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* CỘT TRÁI (BỘ LỌC ĐỒNG BỘ) */}
+      <UnitFilterSidebar
+        donViList={donViList}
+        selectedUnitFilter={selectedUnitFilter}
+        setSelectedUnitFilter={setSelectedUnitFilter}
+        allowedDonViIds={allowedDonViIds}
+        unitSearchTerm={unitSearchTerm}
+        setUnitSearchTerm={setUnitSearchTerm}
+        expandedParents={expandedParents}
+        setExpandedParents={setExpandedParents}
+        isListCollapsed={isListCollapsed}
+        setIsListCollapsed={setIsListCollapsed}
+        themeColor="blue"
+        allUnitsLabel="Tất cả Tài sản / Thiết bị"
+      />
 
       {/* NỘI DUNG CHÍNH */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300">
         <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 ${isListCollapsed ? 'pl-10' : ''}`}>
           <div>
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Layers size={28} /> Quản lý Tài sản & Thiết bị</h2>
@@ -612,13 +540,13 @@ export default function EquipmentPage() {
           </div>
         )}
 
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[1300px]">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
                   <th className="p-4 w-32">Mã / Nhóm</th>
                   <th className="p-4 w-56">Tên Tài sản / Thiết bị</th>
-                  <th className="p-4 w-32">Vị trí & SL</th>
+                  <th className="p-4 w-32">Vị trí &amp; SL</th>
                   <th className="p-4 w-40">Đơn Vị / Pháp Nhân</th>
                   <th className="p-4">Thông số / Mô tả</th>
                   <th className="p-4 w-32">Tình trạng</th>
@@ -675,63 +603,81 @@ export default function EquipmentPage() {
             </table>
           </div>
 
-          {/* 🟢 DÁN TOÀN BỘ CODE PHÂN TRANG VÀO KHOẢNG TRỐNG NÀY 🟢 */}
-                  {filteredTBs.length > 0 && (
-                    <div className="p-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-                          disabled={currentPage === 1}
-                          className="p-1.5 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <ChevronRight size={16} className="rotate-180" />
-                        </button>
-                        <span className="font-medium flex items-center gap-1">
-                          Trang 
-                          <input 
-                            type="number" 
-                            min="1" 
-                            max={totalPages}
-                            value={currentPage}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              if (val >= 1 && val <= totalPages) setCurrentPage(val);
-                            }}
-                            className="w-12 text-center border border-gray-300 rounded py-0.5 outline-none focus:border-[#05469B] font-bold text-[#05469B]"
-                          /> 
-                          / {totalPages}
-                        </span>
-                        <button 
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
-                          disabled={currentPage === totalPages}
-                          className="p-1.5 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-
-                        <div className="w-px h-5 bg-gray-300 mx-2"></div>
-
-                        <select 
-                          value={rowsPerPage} 
-                          onChange={(e) => {
-                            setRowsPerPage(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] font-bold text-[#05469B] cursor-pointer"
-                        >
-                          <option value={50}>50</option>
-                          <option value={100}>100</option>
-                          <option value={200}>200</option>
-                          <option value={500}>500</option>
-                        </select>
-                        <span className="font-medium hidden sm:inline">dòng</span>
-                      </div>
-                      
-                      <div className="font-medium text-xs sm:text-sm text-gray-500">
-                        Hiển thị <b className="text-gray-800">{(currentPage - 1) * rowsPerPage + 1}</b> - <b className="text-gray-800">{Math.min(currentPage * rowsPerPage, filteredTBs.length)}</b> trong tổng số <b className="text-[#05469B]">{filteredTBs.length}</b> tài sản
-                      </div>
+          {/* 🟢 VIEW TRÊN MOBILE: THẺ CARD DỌC */}
+          <div className="block md:hidden space-y-4 custom-scrollbar">
+            {filteredTBs.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center text-gray-400 italic">Không có tài sản nào hiển thị.</div>
+            ) : (
+              currentTableData.map((item) => (
+                <div 
+                  key={item.id}
+                  className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm relative flex flex-col gap-3 transition-all"
+                >
+                  {/* Header: Mã & Nhóm & Tên */}
+                  <div className="pb-2.5 border-b border-gray-100">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[10px] text-gray-400 font-mono">🏷️ {item.ma_tai_san || 'Chưa cấp mã'}</span>
+                      <span className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[9px] font-bold border border-indigo-100">{item.nhom_thiet_bi || 'Khác'}</span>
                     </div>
-                  )}
+                    <h4 className="font-extrabold text-[#05469B] text-sm leading-snug">{item.ten_thiet_bi}</h4>
+                  </div>
+
+                  {/* Body: Details */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Vị trí &amp; SL</p>
+                      <p className="font-bold text-gray-700 flex items-center gap-1 mt-0.5"><MapPin size={11} className="text-orange-500"/> {item.vi_tri_bo_tri || 'Chưa rõ'}</p>
+                      <p className="text-[10px] font-medium text-gray-500 mt-0.5">SL: <b className="text-[#05469B]">{item.so_luong || 1}</b> {item.don_vi_tinh || 'Cái'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Tình trạng</p>
+                      <span className={`mt-1 inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border 
+                        ${item.tinh_trang === 'Đang sử dụng' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 
+                          item.tinh_trang === 'Lưu kho - Chờ sử dụng' ? 'bg-blue-50 text-blue-600 border-blue-200' : 
+                          item.tinh_trang === 'Lưu kho - Chờ thanh lý' ? 'bg-gray-100 text-gray-600 border-gray-300' : 
+                          item.tinh_trang === 'Đang sửa chữa' ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                        {item.tinh_trang || 'Đang sử dụng'}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Đơn vị quản lý</p>
+                      <p className="font-bold text-gray-700 mt-0.5 text-xs">{donViMap[item.id_don_vi] || '-'}</p>
+                      {item.tai_san_thuoc && <p className="text-[9px] text-gray-400 font-medium uppercase mt-0.5">{item.tai_san_thuoc}</p>}
+                    </div>
+                    {getEquipmentDescription(item) && (
+                      <div className="col-span-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Thông số / Mô tả</p>
+                        <p className="text-[11px] text-gray-600 font-medium leading-relaxed line-clamp-3">{getEquipmentDescription(item)}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer: Actions */}
+                  <div className="flex items-center justify-between gap-1.5 pt-2.5 border-t border-gray-100 mt-1">
+                    <button onClick={() => openNkModal(item)} className="py-1.5 px-2 bg-white border border-purple-200 text-purple-600 hover:bg-purple-50 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 shadow-2xs" title="Xem nhật ký lịch sử thiết bị"><History size={13} /> Lịch sử</button>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xem chi tiết"><Eye size={13} /> Xem</button>
+                      <button onClick={() => openTbModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit size={13} /> Sửa</button>
+                      <button onClick={() => { setItemToDelete({id: item.id, type: 'tb'}); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa"><Trash2 size={13} /> Xóa</button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(rows) => {
+              setRowsPerPage(rows);
+              setCurrentPage(1);
+            }}
+            totalRows={filteredTBs.length}
+            itemName="tài sản"
+          />
 
         </div>
       </div>
@@ -742,14 +688,13 @@ export default function EquipmentPage() {
       <datalist id="suggest-hdd">{suggestHDD.map(v => <option key={v} value={v} />)}</datalist>
       <datalist id="suggest-vitri">{suggestViTri.map(v => <option key={v} value={v} />)}</datalist>
       <datalist id="suggest-phapnhan">{suggestPhapNhan.map(v => <option key={v} value={v} />)}</datalist>
-      <datalist id="suggest-hoten">{suggestHoTen.map(v => <option key={v} value={v} />)}</datalist>
 
       {/* --- MODAL THÊM/SỬA TÀI SẢN --- */}
       {isTbModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between p-5 border-b border-gray-100 bg-gray-50 rounded-t-2xl shrink-0"><h3 className="text-xl font-bold text-[#05469B] flex items-center gap-2"><Package size={24}/> {tbModalMode === 'create' ? 'Thêm Mới Tài Sản / Thiết Bị' : 'Cập nhật Dữ liệu Tài sản'}</h3><button onClick={() => setIsTbModalOpen(false)} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white"><X className="w-6 h-6" /></button></div>
-            <form onSubmit={handleTbSave} className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+            <div className="flex justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50 rounded-t-3xl sm:rounded-t-2xl shrink-0"><h3 className="text-xl font-bold text-[#05469B] flex items-center gap-2"><Package size={24}/> {tbModalMode === 'create' ? 'Thêm Mới Tài Sản / Thiết Bị' : 'Cập nhật Dữ liệu Tài sản'}</h3><button onClick={() => setIsTbModalOpen(false)} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white"><X className="w-6 h-6" /></button></div>
+            <form onSubmit={handleTbSave} className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scrollbar">
               
               {/* KHỐI 1: THÔNG TIN CƠ BẢN (FLEX ROW LAYOUT NÂNG CAO) */}
               <div className="bg-blue-50/40 p-5 rounded-xl border border-blue-100">
@@ -956,7 +901,14 @@ export default function EquipmentPage() {
                   
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-gray-600 mb-1">Người nhận / Trách nhiệm (Gõ để tự điền MSNV)</label>
-                    <input list="suggest-hoten" type="text" name="ho_ten_nguoi_dung" value={nkFormData.ho_ten_nguoi_dung || ''} onChange={handleNkHoTenChange} placeholder="Nhập tên nhân sự..." className="w-full p-2 border border-purple-200 rounded-lg bg-[#FFFFF0]" />
+                    <CustomAutocomplete
+                      name="ho_ten_nguoi_dung"
+                      value={nkFormData.ho_ten_nguoi_dung || ''}
+                      onChange={handleNkHoTenChange}
+                      suggestions={suggestHoTen}
+                      placeholder="Nhập tên nhân sự..."
+                      className="w-full p-2 border border-purple-200 rounded-lg bg-[#FFFFF0]"
+                    />
                   </div>
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">Mã số NV</label><input type="text" name="msnv_nguoi_dung" value={nkFormData.msnv_nguoi_dung || ''} onChange={(e)=>setNkFormData((prev: any)=>({...prev, msnv_nguoi_dung: e.target.value}))} className="w-full p-2 border rounded-lg bg-gray-50" /></div>
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">Bộ phận công tác</label><input type="text" name="bp_quan_ly_su_dung" value={nkFormData.bp_quan_ly_su_dung || ''} onChange={(e)=>setNkFormData((prev: any)=>({...prev, bp_quan_ly_su_dung: e.target.value}))} className="w-full p-2 border rounded-lg bg-gray-50" /></div>
@@ -1021,20 +973,20 @@ export default function EquipmentPage() {
 
       {/* --- MODAL XEM CHI TIẾT --- */}
       {isViewModalOpen && viewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between p-5 border-b border-gray-100 bg-[#05469B] text-white rounded-t-2xl shrink-0"><h3 className="text-xl font-bold flex items-center gap-2"><Layers size={24}/> Chi tiết Tài sản / Thiết bị</h3><button onClick={() => setIsViewModalOpen(false)} className="text-blue-200 hover:text-white p-1 rounded-full"><X size={24}/></button></div>
-            <div className="p-6 overflow-y-auto custom-scrollbar">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[92vh] sm:max-h-[90vh] sm:max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 overflow-hidden mt-auto sm:mt-0">
+            <div className="flex justify-between p-4 sm:p-5 border-b border-gray-100 bg-[#05469B] text-white rounded-t-3xl sm:rounded-t-2xl shrink-0"><h3 className="text-lg sm:text-xl font-bold flex items-center gap-2"><Layers size={24}/> Chi tiết Tài sản / Thiết bị</h3><button onClick={() => setIsViewModalOpen(false)} className="text-blue-200 hover:text-white p-1 rounded-full"><X size={24}/></button></div>
+            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0">
               
               {/* HEADER */}
-              <div className="flex items-start gap-5 border-b border-gray-100 pb-6 mb-6">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-5 border-b border-gray-100 pb-6 mb-6">
                 <div className="w-20 h-20 bg-blue-50 text-[#05469B] rounded-2xl flex items-center justify-center border border-blue-100 shadow-inner shrink-0">
                   {isITEquipment(viewData.nhom_thiet_bi||'') ? <MonitorSmartphone size={40}/> : isFurniture(viewData.nhom_thiet_bi||'') ? <Sofa size={40}/> : <Package size={40}/>}
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-3xl font-black text-gray-800 tracking-tight">{viewData.ma_tai_san || 'Không mã'}</h2>
-                  <p className="text-lg font-bold text-[#05469B] mt-1">{viewData.ten_thiet_bi}</p>
-                  <div className="flex flex-wrap gap-2 mt-2">
+                  <h2 className="text-2xl sm:text-3xl font-black text-gray-800 tracking-tight">{viewData.ma_tai_san || 'Không mã'}</h2>
+                  <p className="text-base sm:text-lg font-bold text-[#05469B] mt-1">{viewData.ten_thiet_bi}</p>
+                  <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-2">
                     <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-bold">{viewData.nhom_thiet_bi}</span>
                     <span className={`px-2 py-1 rounded text-xs font-bold ${viewData.tinh_trang === 'Đang sử dụng' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{viewData.tinh_trang}</span>
                     <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded text-xs font-bold">SL: {viewData.so_luong||1} {viewData.don_vi_tinh||'Cái'}</span>
@@ -1125,7 +1077,7 @@ export default function EquipmentPage() {
                 )}
               </div>
             </div>
-            <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end shrink-0"><button onClick={() => setIsViewModalOpen(false)} className="w-full sm:w-auto px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition-colors">Đóng</button></div>
+            <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 rounded-b-3xl sm:rounded-b-2xl flex justify-end shrink-0"><button onClick={() => setIsViewModalOpen(false)} className="w-full sm:w-auto px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition-colors">Đóng</button></div>
           </div>
         </div>
       )}

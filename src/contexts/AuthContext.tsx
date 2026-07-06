@@ -14,7 +14,7 @@ interface AppUser {
 
 interface AuthContextType {
   user: AppUser | null;
-  login: (username: string, pass: string) => Promise<void>;
+  login: (username: string, pass: string, remember?: boolean) => Promise<void>;
   logout: () => void;
 }
 
@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AppUser | null>(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('authUser');
+    const storedUser = localStorage.getItem('authUser') || sessionStorage.getItem('authUser');
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
       setUser(parsedUser);
@@ -36,12 +36,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         ho_ten: parsedUser.ho_ten,
         id_don_vi: parsedUser.id_don_vi,
         quyen: parsedUser.quyen,
-        quyen_truy_cap: parsedUser.quyen_truy_cap // 🟢 Bổ sung nạp quyền truy cập từ Cache
+        quyen_truy_cap: parsedUser.quyen_truy_cap
       } as User);
     }
   }, []);
 
-  const login = async (username: string, pass: string) => {
+  const login = async (username: string, pass: string, remember: boolean = false) => {
     try {
       const responseData = await apiService.login(username, pass);
       
@@ -80,9 +80,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         quyen_chi_tiet: String(userData.quyen_chi_tiet || '')
       };
 
-      // Lưu User vào state và LocalStorage
+      // Lưu User vào state và LocalStorage/SessionStorage tùy chọn
       setUser(mappedUser);
-      localStorage.setItem('authUser', JSON.stringify(mappedUser));
+      if (remember) {
+        localStorage.setItem('authUser', JSON.stringify(mappedUser));
+        sessionStorage.removeItem('authUser');
+      } else {
+        sessionStorage.setItem('authUser', JSON.stringify(mappedUser));
+        localStorage.removeItem('authUser');
+      }
       
       apiService.setCurrentUser(mappedUser as unknown as User);
       apiService.writeLog('ĐĂNG NHẬP', 'Truy cập hệ thống');
@@ -107,6 +113,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setTimeout(() => {
       setUser(null);
       localStorage.removeItem('authUser');
+      sessionStorage.removeItem('authUser');
       apiService.setCurrentUser(null);
       window.location.reload();
     }, 500);

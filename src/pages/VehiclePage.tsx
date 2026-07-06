@@ -10,15 +10,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy';
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
+import { formatCurrencySpace as formatCurrency, toUnaccented } from '../utils/formatters';
+import { safeEvalMath } from '../utils/mathEvaluator';
+import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
+import Pagination from '../components/ui/Pagination';
 
 // --- HÀM TỰ ĐỘNG DÒ TÌM ID TỪ SUPABASE ---
 const getCostId = (cp: any) => cp.id || cp.id_chi_phi_xe || '';
 const getCostCarId = (cp: any) => cp.id_ts_xe || cp.id_phuong_tien || '';
-
-const formatCurrency = (val: string | number | undefined | null) => {
-  if (!val) return '';
-  return val.toString().replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-};
 
 const formatMonthYear = (dateStr: string) => {
   if (!dateStr) return '-';
@@ -31,21 +30,47 @@ const formatMonthYear = (dateStr: string) => {
   }
 };
 
-// --- HÀM HỖ TRỢ TÍNH TOÁN INLINE (INLINE MATH) ---
-const safeEvalMath = (val: any) => {
-  if (!val) return '';
-  try {
-    let expr = String(val).replace(/[^\d+\-*/.()]/g, '');
-    if (/[+\-*/]/.test(expr)) {
-      // eslint-disable-next-line no-new-func
-      const result = new Function(`return ${expr}`)();
-      if (!isNaN(result) && isFinite(result)) return Math.round(result).toString();
-    }
-    return String(val).replace(/\D/g, '');
-  } catch {
-    return String(val).replace(/\D/g, '');
-  }
+// --- HÀM TẠO MÀU SẮC CHO NHÃN HÃNG XE ---
+const getBrandBadgeStyle = (brandStr: string = '') => {
+  const b = brandStr.trim().toLowerCase();
+  if (!b) return 'bg-gray-100 text-gray-700 border border-gray-200';
+  if (b.includes('bmw')) return 'bg-sky-50 text-sky-700 border border-sky-200';
+  if (b.includes('peugeot')) return 'bg-violet-50 text-violet-700 border border-violet-200';
+  if (b.includes('mazda')) return 'bg-rose-50 text-rose-700 border border-rose-200';
+  if (b.includes('kia')) return 'bg-amber-50 text-amber-700 border border-amber-200';
+  if (b.includes('toyota')) return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+  if (b.includes('ford')) return 'bg-blue-50 text-blue-700 border border-blue-200';
+  if (b.includes('fuso')) return 'bg-teal-50 text-teal-700 border border-teal-200';
+  if (b.includes('mercedes') || b.includes('merc')) return 'bg-slate-100 text-slate-800 border border-slate-300';
+  if (b.includes('hyundai')) return 'bg-cyan-50 text-cyan-700 border border-cyan-200';
+  if (b.includes('honda')) return 'bg-red-50 text-red-700 border border-red-200';
+  if (b.includes('lexus')) return 'bg-purple-50 text-purple-700 border border-purple-200';
+  if (b.includes('mitsubishi')) return 'bg-pink-50 text-pink-700 border border-pink-200';
+  if (b.includes('thaco') || b.includes('truck')) return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+  if (b.includes('vinfast')) return 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200';
+  if (b.includes('nissan')) return 'bg-orange-50 text-orange-700 border border-orange-200';
+  if (b.includes('isuzu')) return 'bg-lime-50 text-lime-700 border border-lime-200';
+  if (b.includes('hino')) return 'bg-yellow-50 text-yellow-800 border border-yellow-300';
+  if (b.includes('suzuki')) return 'bg-blue-100 text-blue-800 border border-blue-300';
+  if (b.includes('audi')) return 'bg-zinc-100 text-zinc-800 border border-zinc-300';
+  if (b.includes('porsche')) return 'bg-amber-100 text-amber-900 border border-amber-300';
+  if (b.includes('chevrolet')) return 'bg-stone-100 text-stone-800 border border-stone-300';
+  
+  // Hash fallback cho các hãng xe khác
+  const palettes = [
+    'bg-teal-100 text-teal-800 border border-teal-300',
+    'bg-indigo-100 text-indigo-800 border border-indigo-300',
+    'bg-rose-100 text-rose-800 border border-rose-300',
+    'bg-cyan-100 text-cyan-800 border border-cyan-300',
+    'bg-purple-100 text-purple-800 border border-purple-300',
+    'bg-orange-100 text-orange-800 border border-orange-300'
+  ];
+  let hash = 0;
+  for (let i = 0; i < b.length; i++) hash = b.charCodeAt(i) + ((hash << 5) - hash);
+  return palettes[Math.abs(hash) % palettes.length];
 };
+
+
 
 const formatMathInput = (val: string | number | undefined | null) => {
   if (!val) return '';
@@ -172,8 +197,6 @@ export default function VehiclePage() {
     return groupParentUnits(parentUnits);
   }, [parentUnits]);
 
-  const toggleParent = (parentId: string) => setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
-
   const filteredCars = useMemo(() => {
     let result = xeData.filter(item => allowedDonViIds.includes(item.id_don_vi));
     if (selectedUnitFilter) {
@@ -182,11 +205,11 @@ export default function VehiclePage() {
       result = result.filter(item => validIds.includes(item.id_don_vi));
     }
     if (carSearchTerm) {
-      const lower = carSearchTerm.toLowerCase();
+      const cleanSearch = toUnaccented(carSearchTerm).toLowerCase();
       result = result.filter(item => 
-        String(item.bien_so || '').toLowerCase().includes(lower) || 
-        String(item.hieu_xe || '').toLowerCase().includes(lower) || 
-        String(item.loai_xe || '').toLowerCase().includes(lower)
+        toUnaccented(item.bien_so || '').toLowerCase().includes(cleanSearch) || 
+        toUnaccented(item.hieu_xe || '').toLowerCase().includes(cleanSearch) || 
+        toUnaccented(item.loai_xe || '').toLowerCase().includes(cleanSearch)
       );
     }
     return result;
@@ -458,80 +481,51 @@ export default function VehiclePage() {
   const getUnitFullName = (id: string) => {
     const unit = donViList.find(u => u.id === id);
     if (!unit) return '-';
-    if (unit.cap_quan_ly && unit.cap_quan_ly !== 'HO') {
-      const parent = donViList.find(u => u.id === unit.cap_quan_ly);
-      if (parent) return `${parent.ten_don_vi} - ${unit.ten_don_vi}`;
+    
+    const ancestors: string[] = [];
+    let currParentId = unit.cap_quan_ly;
+    let depth = 0;
+    while (currParentId && currParentId !== 'HO' && depth < 5) {
+      const p = donViList.find(u => u.id === currParentId);
+      if (p) {
+        ancestors.push(p.ten_don_vi);
+        currParentId = p.cap_quan_ly;
+      } else {
+        break;
+      }
+      depth++;
+    }
+
+    if (ancestors.length > 0) {
+      return `${unit.ten_don_vi} (Trực thuộc: ${ancestors.join(' - ')})`;
     }
     return unit.ten_don_vi;
   };
 
-  const renderUnitTree = (parent: DonVi, level: number = 1) => {
-    const children = getChildUnits(parent.id);
-    const isExpanded = expandedParents.includes(parent.id) || !!unitSearchTerm;
-    const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
-
-    return (
-      <div key={parent.id} className={level === 1 ? "mb-1" : "mt-1"}>
-        <button 
-          onClick={() => { setSelectedUnitFilter(parent.id); if (children.length > 0) toggleParent(parent.id); }} 
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === parent.id ? 'bg-blue-50 text-[#05469B]' : 'text-gray-700 hover:bg-gray-50'} ${isParentDimmed ? 'opacity-50' : ''}`}
-        >
-          {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />) : <div className="w-4 shrink-0" />}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span>
-          <span className="truncate text-left">{parent.ten_don_vi}</span>
-        </button>
-        {isExpanded && children.length > 0 && (
-          <div className={`ml-${level === 1 ? '6' : '4'} mt-1 border-l-2 border-gray-100 pl-2 space-y-1`}>
-            {children.map(child => renderUnitTree(child, level + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
     if (loading) return <PageWithFilterSkeleton rows={8} />;
     return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (
-        <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all lg:hidden" title="Mở danh sách đơn vị"><PanelLeftOpen size={20} /></button>
+        <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all" title="Mở danh sách đơn vị"><PanelLeftOpen size={20} /></button>
       )}
 
-      {/* --- CỘT TRÁI (BỘ LỌC ĐƠN VỊ) --- */}
-      <div className={`${isListCollapsed ? 'w-0 opacity-0 -ml-80 lg:ml-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm z-50 lg:z-10 shrink-0 overflow-hidden`}>
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-[#05469B] flex items-center gap-2 whitespace-nowrap"><MapPin size={20} /> Bộ lọc Đơn vị</h2>
-            <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-[#05469B] hover:bg-blue-50 rounded-md transition-colors"><PanelLeftClose size={18} /></button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input type="text" placeholder="Tìm tên showroom..." className="w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#05469B] outline-none" value={unitSearchTerm} onChange={(e) => setUnitSearchTerm(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 min-w-[319px]">
-          <button onClick={() => { setSelectedUnitFilter(null); if(window.innerWidth < 1024) setIsListCollapsed(true); }} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${selectedUnitFilter === null ? 'bg-blue-50 text-[#05469B] border border-blue-100' : 'text-gray-700 hover:bg-gray-50'}`}>
-            <Car size={18} className={selectedUnitFilter === null ? 'text-[#05469B]' : 'text-gray-400'} /> Tất cả Đội xe Toàn quốc
-          </button>
-          <hr className="border-gray-100 mb-4 mx-2"/>
-
-          {loading ? (
-            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-[#05469B]" /></div>
-          ) : parentUnits.length === 0 ? (
-            <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
-          ) : (
-            <>
-              {vpdhUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">VPĐH</p>{vpdhUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {ctttNamUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Nam</p>{ctttNamUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {ctttBacUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Bắc</p>{ctttBacUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-              {otherUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>{otherUnits.map(dv => renderUnitTree(dv, 1))}</div>)}
-            </>
-          )}
-        </div>
-      </div>
+      <UnitFilterSidebar
+        donViList={donViList}
+        selectedUnitFilter={selectedUnitFilter}
+        setSelectedUnitFilter={setSelectedUnitFilter}
+        allowedDonViIds={allowedDonViIds}
+        unitSearchTerm={unitSearchTerm}
+        setUnitSearchTerm={setUnitSearchTerm}
+        expandedParents={expandedParents}
+        setExpandedParents={setExpandedParents}
+        isListCollapsed={isListCollapsed}
+        setIsListCollapsed={setIsListCollapsed}
+        themeColor="blue"
+        allUnitsLabel="Tất cả Đội xe Toàn quốc"
+      />
 
       {/* --- CỘT PHẢI (DANH SÁCH XE) --- */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full flex flex-col">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full flex flex-col">
         <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''} shrink-0`}>
           <div>
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Car size={28} /> Quản lý Đội xe</h2>
@@ -610,58 +604,166 @@ export default function VehiclePage() {
         )}
 
         {/* BẢNG DỮ LIỆU CHÍNH */}
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300 flex flex-col flex-1 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
-          <div className="overflow-x-auto w-full custom-scrollbar flex-1">
-            <table className="w-full text-left border-collapse min-w-[1250px]">
+        <div className={`flex flex-col flex-1 gap-4 transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+          
+          {/* BẢNG DỮ LIỆU PC */}
+          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full flex-1 overflow-x-auto custom-scrollbar">
+            <table className="w-full table-fixed text-left border-collapse min-w-[1100px] text-[12px]">
               <thead className="sticky top-0 bg-[#f8fafc] z-10">
-                <tr className="border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                  <th className="p-4 w-32 bg-[#f8fafc]">Biển số xe</th>
-                  <th className="p-4 w-48 bg-[#f8fafc]">Hãng - Loại xe</th>
-                  <th className="p-4 w-32 bg-[#f8fafc]">Phương tiện</th>
-                  <th className="p-4 w-36 bg-[#f8fafc]">Mục đích SD</th>
-                  <th className="p-4 bg-[#f8fafc]">Đơn vị quản lý</th>
-                  <th className="p-4 w-36 bg-[#f8fafc]">Tình trạng</th>
-                  <th className="p-4 text-center w-40 bg-[#f8fafc]">Thao tác</th> 
+                <tr className="border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+                  <th className="py-3 px-3 w-[10%] bg-[#f8fafc]">Biển số xe</th>
+                  <th className="py-3 px-3 w-[15%] bg-[#f8fafc]">Hãng - Loại xe</th>
+                  <th className="py-3 px-3 w-[8%] bg-[#f8fafc]">Phương tiện</th>
+                  <th className="py-3 px-3 w-[10%] bg-[#f8fafc]">Mục đích SD</th>
+                  <th className="py-3 px-3 w-[15%] bg-[#f8fafc]">Đơn vị quản lý</th>
+                  <th className="py-3 px-3 w-[17%] bg-[#f8fafc]">Chi phí</th>
+                  <th className="py-3 px-3 w-[10%] bg-[#f8fafc]">Tình trạng</th>
+                  <th className="py-3 px-3 text-center w-[15%] bg-[#f8fafc]">Thao tác</th> 
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {loading ? (
-                  <tr><td colSpan={7} className="p-12 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />Đang tải dữ liệu...</td></tr>
+                  <tr><td colSpan={8} className="p-12 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />Đang tải dữ liệu...</td></tr>
                 ) : filteredCars.length === 0 ? (
-                  <tr><td colSpan={7} className="p-16 text-center text-gray-500">
+                  <tr><td colSpan={8} className="p-16 text-center text-gray-500">
                     <Car size={48} className="mx-auto text-gray-300 mb-4" />
                     <p className="text-lg font-medium">Không có xe nào trong danh sách hiển thị.</p>
                   </td></tr>
                 ) : (
                   paginatedCars.map((item) => (
                     <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
-                      <td className="p-4 font-black text-[#05469B] text-base whitespace-nowrap">🚙 {item.bien_so}</td>
-                      <td className="p-4 font-bold text-gray-800">{item.hieu_xe} {item.loai_xe} {item.phien_ban ? `- ${item.phien_ban}` : ''}</td>
-                      <td className="p-4 text-gray-600 font-medium">{item.loai_phuong_tien}</td>
-                      <td className="p-4 text-indigo-600 font-semibold">{item.muc_dich_su_dung}</td>
-                      <td className="p-4 text-gray-700 font-bold">{getUnitFullName(item.id_don_vi)}</td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold whitespace-nowrap ${item.hien_trang === 'Đang hoạt động' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                      <td className="py-3 px-3 font-black text-[#05469B] text-sm whitespace-nowrap align-middle">🚙 {item.bien_so}</td>
+                      <td className="py-3 px-3 align-middle">
+                        <div className="flex flex-col justify-center items-start gap-1">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs truncate max-w-full ${getBrandBadgeStyle(item.hieu_xe)}`} title={`Hãng: ${item.hieu_xe || 'Khác'}`}>
+                            {item.hieu_xe || 'Khác'}
+                          </span>
+                          <p className="text-[11px] text-slate-500 truncate w-full font-medium" title={`${item.loai_xe || ''} ${item.phien_ban ? `- ${item.phien_ban}` : ''}`}>
+                            {item.loai_xe || '---'} {item.phien_ban ? `• ${item.phien_ban}` : ''}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-gray-700 font-medium align-middle truncate" title={item.loai_phuong_tien}>{item.loai_phuong_tien || '---'}</td>
+                      <td className="py-3 px-3 text-indigo-600 font-semibold align-middle truncate" title={item.muc_dich_su_dung}>{item.muc_dich_su_dung || '---'}</td>
+                      <td className="py-3 px-3 align-middle">
+                        {(() => {
+                          const unit = donViList.find(u => u.id === item.id_don_vi);
+                          if (!unit) return <span className="text-gray-400 font-medium">---</span>;
+                          
+                          const line1 = unit.ten_don_vi;
+                          const ancestors: string[] = [];
+                          let currParentId = unit.cap_quan_ly;
+                          let depth = 0;
+                          while (currParentId && currParentId !== 'HO' && depth < 5) {
+                            const p = donViList.find(u => u.id === currParentId);
+                            if (p) {
+                              ancestors.push(p.ten_don_vi);
+                              currParentId = p.cap_quan_ly;
+                            } else {
+                              break;
+                            }
+                            depth++;
+                          }
+
+                          let line2 = '';
+                          if (ancestors.length > 0) {
+                            line2 = `Trực thuộc: ${ancestors.join(' - ')}`;
+                          } else if (item.don_vi_chu_so_huu) {
+                            line2 = `CSH: ${item.don_vi_chu_so_huu}`;
+                          } else {
+                            line2 = `Sở hữu: ${item.hinh_thuc_so_huu || 'HO'}`;
+                          }
+
+                          return (
+                            <div className="flex flex-col justify-center">
+                              <p className="font-bold text-gray-800 text-[12px] leading-snug truncate" title={line1}>{line1}</p>
+                              <p className="text-[10.5px] font-semibold text-slate-500 mt-0.5 truncate" title={line2}>{line2}</p>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="py-3 px-3 align-middle">
+                        {(() => {
+                          const costs = chiPhiData
+                            .filter(cp => getCostCarId(cp) === item.id)
+                            .sort((a, b) => String(a.thang_nam || '').localeCompare(String(b.thang_nam || '')));
+                          
+                          if (costs.length === 0) {
+                            return <span className="text-gray-400 text-[11px] italic">Chưa phát sinh</span>;
+                          }
+
+                          const monthlyTotals = costs.map(cost => {
+                            const phikhac = (Number(cost.cp_thue_khau_hao) || 0) + (Number(cost.cp_dang_kiem) || 0) + (Number(cost.cp_bh_tnds) || 0) + (Number(cost.cp_bh_vc) || 0);
+                            const total = (Number(cost.cp_nhien_lieu) || 0) + (Number(cost.cp_cau_duong_ben_bai) || 0) + (Number(cost.cp_rua_xe) || 0) + (Number(cost.cp_bao_duong_sua_chua) || 0) + phikhac;
+                            return total;
+                          });
+
+                          const sumCost = monthlyTotals.reduce((a, b) => a + b, 0);
+                          const maxVal = Math.max(...monthlyTotals, 1);
+                          const minVal = Math.min(...monthlyTotals, 0);
+                          
+                          const n = monthlyTotals.length;
+                          let points = '';
+                          if (n === 1) {
+                            points = '5,14 95,14';
+                          } else {
+                            points = monthlyTotals.map((val, idx) => {
+                              const x = 5 + (idx / (n - 1)) * 90;
+                              const y = 24 - ((val - minVal) / (maxVal - minVal || 1)) * 20;
+                              return `${x.toFixed(1)},${y.toFixed(1)}`;
+                            }).join(' ');
+                          }
+
+                          return (
+                            <div className="flex flex-col gap-1 w-full cursor-pointer" onClick={() => openCostModal(item)} title={`Chi phí ${n} tháng: Tổng ${formatCurrency(sumCost)} VNĐ (Nhấn để xem chi tiết)`}>
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-bold text-gray-500">{n} tháng</span>
+                                <span className="font-black text-red-600">{formatCurrency(sumCost)}</span>
+                              </div>
+                              <div className="w-full h-[26px] bg-slate-50 rounded border border-slate-100 flex items-center justify-center px-1 overflow-hidden hover:border-indigo-200 transition-colors">
+                                <svg viewBox="0 0 100 28" className="w-full h-full overflow-visible">
+                                  <polyline
+                                    fill="none"
+                                    stroke="#05469B"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    points={points}
+                                  />
+                                  {n > 0 && (() => {
+                                    const lastVal = monthlyTotals[n - 1];
+                                    const lastX = n === 1 ? 95 : 5 + ((n - 1) / (n - 1)) * 90;
+                                    const lastY = 24 - ((lastVal - minVal) / (maxVal - minVal || 1)) * 20;
+                                    return <circle cx={lastX} cy={lastY} r="2.5" fill="#ef4444" />;
+                                  })()}
+                                </svg>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="py-3 px-3 align-middle">
+                        <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold whitespace-nowrap inline-block ${item.hien_trang === 'Đang hoạt động' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
                           {item.hien_trang === 'Đang hoạt động' ? '🟢' : '🔴'} {item.hien_trang}
                         </span>
                       </td>
-                      <td className="p-4 w-40">
-                        <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[130px] mx-auto">
+                      <td className="py-2 px-2 align-middle text-center">
+                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[110px] mx-auto">
                           {/* Dòng 1: Chi phí */}
-                          <button onClick={() => openCostModal(item)} className="w-full py-1.5 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded text-[11px] font-bold transition-colors flex items-center justify-center gap-1 shadow-sm">
-                            <Receipt size={14} /> Chi phí
+                          <button onClick={() => openCostModal(item)} className="w-full py-1 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded text-[10.5px] font-bold transition-colors flex items-center justify-center gap-1 shadow-2xs leading-none">
+                            <Receipt size={12} /> Chi phí
                           </button>
                           
                           {/* Dòng 2: Xem - Sửa - Xóa */}
                           <div className="grid grid-cols-3 gap-1">
-                            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="py-1.5 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded flex items-center justify-center shadow-sm transition-colors" title="Xem chi tiết">
-                              <Eye size={14} />
+                            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="py-1 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded flex items-center justify-center shadow-2xs transition-colors" title="Xem chi tiết">
+                              <Eye size={12} />
                             </button>
-                            <button onClick={() => openCarModal('update', item)} className="py-1.5 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded flex items-center justify-center shadow-sm transition-colors" title="Sửa">
-                              <Edit size={14} />
+                            <button onClick={() => openCarModal('update', item)} className="py-1 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded flex items-center justify-center shadow-2xs transition-colors" title="Sửa">
+                              <Edit size={12} />
                             </button>
-                            <button onClick={() => { setItemToDelete({id: item.id, type: 'xe'}); setIsConfirmOpen(true); }} className="py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded flex items-center justify-center shadow-sm transition-colors" title="Xóa">
-                              <Trash2 size={14} />
+                            <button onClick={() => { setItemToDelete({id: item.id, type: 'xe'}); setIsConfirmOpen(true); }} className="py-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded flex items-center justify-center shadow-2xs transition-colors" title="Xóa">
+                              <Trash2 size={12} />
                             </button>
                           </div>
                         </div>
@@ -673,78 +775,106 @@ export default function VehiclePage() {
             </table>
           </div>
 
-          {/* 🟢 GIAO DIỆN PHÂN TRANG (PAGINATION BAR) */}
-          {filteredCars.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 gap-4 shrink-0">
-              <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-                  disabled={currentPage === 1}
-                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Trang trước"
-                >
-                  <ChevronLeft size={16} />
-                </button>
+          {/* 🟢 VIEW TRÊN MOBILE: THẺ CARD DỌC */}
+          <div className="block md:hidden space-y-4 custom-scrollbar">
+            {filteredCars.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center text-gray-400 italic">Không có xe nào trong danh sách hiển thị.</div>
+            ) : (
+              paginatedCars.map((item) => {
+                const unit = donViList.find(u => u.id === item.id_don_vi);
+                const line1 = unit ? unit.ten_don_vi : '---';
                 
-                <span className="flex items-center gap-2">
-                  Trang 
-                  <input 
-                    type="number" 
-                    min={1} 
-                    max={totalPages} 
-                    value={currentPage} 
-                    onChange={(e) => {
-                      let val = parseInt(e.target.value);
-                      if (!isNaN(val)) {
-                        if (val > totalPages) val = totalPages;
-                        if (val < 1) val = 1;
-                        setCurrentPage(val);
-                      }
-                    }}
-                    className="w-12 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B]"
-                  /> 
-                  / {totalPages}
-                </span>
+                const costs = chiPhiData
+                  .filter(cp => getCostCarId(cp) === item.id)
+                  .sort((a, b) => String(a.thang_nam || '').localeCompare(String(b.thang_nam || '')));
+                
+                const monthlyTotals = costs.map(cost => {
+                  const phikhac = (Number(cost.cp_thue_khau_hao) || 0) + (Number(cost.cp_dang_kiem) || 0) + (Number(cost.cp_bh_tnds) || 0) + (Number(cost.cp_bh_vc) || 0);
+                  const total = (Number(cost.cp_nhien_lieu) || 0) + (Number(cost.cp_cau_duong_ben_bai) || 0) + (Number(cost.cp_rua_xe) || 0) + (Number(cost.cp_bao_duong_sua_chua) || 0) + phikhac;
+                  return total;
+                });
+                const sumCost = monthlyTotals.reduce((a, b) => a + b, 0);
+                const n = monthlyTotals.length;
 
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
-                  disabled={currentPage === totalPages}
-                  className="p-1.5 bg-white border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Trang tiếp theo"
-                >
-                  <ChevronRight size={16} />
-                </button>
+                return (
+                  <div 
+                    key={item.id}
+                    className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm relative flex flex-col gap-3 transition-all"
+                  >
+                    {/* Header: Biển số & Hiệu xe & Hiện trạng */}
+                    <div className="pb-2.5 border-b border-gray-100">
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="font-black text-[#05469B] text-sm">🚙 {item.bien_so}</span>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap ${item.hien_trang === 'Đang hoạt động' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                          {item.hien_trang === 'Đang hoạt động' ? '🟢' : '🔴'} {item.hien_trang}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold shadow-2xs ${getBrandBadgeStyle(item.hieu_xe)}`}>
+                          {item.hieu_xe || 'Khác'}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-medium">({item.loai_xe || '---'} {item.phien_ban ? `• ${item.phien_ban}` : ''})</span>
+                      </div>
+                    </div>
 
-                <div className="flex items-center gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-300">
-                  <input 
-                    type="number" 
-                    min={1} 
-                    value={rowsPerPage} 
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setRowsPerPage(val === '' ? '' : parseInt(val));
-                      setCurrentPage(1); 
-                    }}
-                    className="w-16 text-center border border-gray-300 rounded p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B] text-[#05469B] font-bold"
-                  />
-                  <span>dòng</span>
-                </div>
-              </div>
-              
-              <div className="text-sm text-gray-500 hidden md:block">
-                Hiển thị {(currentPage - 1) * actualRowsPerPage + 1} - {Math.min(currentPage * actualRowsPerPage, filteredCars.length)} trong tổng số <span className="font-bold text-gray-800">{filteredCars.length}</span> xe
-              </div>
-            </div>
-          )}
+                    {/* Body: Details */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase">Loại phương tiện</p>
+                        <p className="font-bold text-gray-700 mt-0.5">{item.loai_phuong_tien || '---'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase">Mục đích SD</p>
+                        <p className="font-semibold text-indigo-600 mt-0.5">{item.muc_dich_su_dung || '---'}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase">Đơn vị quản lý</p>
+                        <p className="font-bold text-gray-800 mt-0.5">{line1}</p>
+                        {item.don_vi_chu_so_huu && <p className="text-[9px] text-gray-400 font-medium mt-0.5">Sở hữu: {item.don_vi_chu_so_huu}</p>}
+                      </div>
+                      <div className="col-span-2 bg-gray-50 p-2.5 rounded-lg border border-gray-100 flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase">Tổng chi phí ({n} tháng)</span>
+                          <span className="text-xs font-black text-red-600 mt-0.5">{formatCurrency(sumCost)} VNĐ</span>
+                        </div>
+                        <button onClick={() => openCostModal(item)} className="px-2 py-1 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-md text-[10px] font-bold shadow-2xs">Chi tiết</button>
+                      </div>
+                    </div>
+
+                    {/* Footer: Actions */}
+                    <div className="flex items-center justify-between gap-1.5 pt-2.5 border-t border-gray-100 mt-1">
+                      <button onClick={() => openCostModal(item)} className="py-1.5 px-2 bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 shadow-2xs" title="Quản lý chi phí xe"><Receipt size={13} /> QL Chi phí</button>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xem chi tiết"><Eye size={13} /> Xem</button>
+                        <button onClick={() => openCarModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit size={13} /> Sửa</button>
+                        <button onClick={() => { setItemToDelete({id: item.id, type: 'xe'}); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa"><Trash2 size={13} /> Xóa</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* 🟢 GIAO DIỆN PHÂN TRANG (PAGINATION BAR) */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            rowsPerPage={rowsPerPage}
+            totalRows={filteredCars.length}
+            onPageChange={setCurrentPage}
+            onRowsPerPageChange={(rows) => { setRowsPerPage(rows); setCurrentPage(1); }}
+            itemName="xe"
+          />
 
         </div>
       </div>
 
       {/* --- MODAL NHẬP THÔNG TIN TÀI SẢN XE --- */}
       {isCarModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between p-5 border-b border-gray-100 bg-gray-50 rounded-t-2xl shrink-0">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+            <div className="flex justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50 rounded-t-3xl sm:rounded-t-2xl shrink-0">
               <h3 className="text-xl font-bold text-[#05469B] flex items-center gap-2"><Car size={24}/> {modalMode === 'create' ? 'Thêm Xe Mới' : 'Cập nhật Thông tin Xe'}</h3>
               <button onClick={() => setCarModal(prev => ({ ...prev, isOpen: false }))} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
             </div>
@@ -881,34 +1011,36 @@ export default function VehiclePage() {
 
       {/* --- MODAL XEM CHI TIẾT XE VÀ THỐNG KÊ CHI PHÍ --- */}
       {isViewModalOpen && viewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200 overflow-hidden">
-            <div className="flex justify-between p-5 border-b border-gray-100 bg-[#05469B] rounded-t-2xl shrink-0">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2"><Car size={24}/> Chi tiết Thông tin & Hoạt động Xe</h3>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-t-3xl md:rounded-2xl shadow-2xl w-full max-h-[92vh] md:max-h-[90vh] md:max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 md:zoom-in duration-200 overflow-hidden mt-auto md:mt-0">
+            <div className="flex justify-between p-4 md:p-5 border-b border-gray-100 bg-[#05469B] rounded-t-3xl md:rounded-t-2xl shrink-0">
+              <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2"><Car size={24}/> Chi tiết Thông tin & Hoạt động Xe</h3>
               <button onClick={() => setIsViewModalOpen(false)} className="text-blue-200 hover:text-white rounded-full p-1 transition-colors"><X className="w-6 h-6" /></button>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-1 min-h-0 flex flex-col gap-6 custom-scrollbar">
+            <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 flex flex-col gap-5 md:gap-6 custom-scrollbar">
               
               {/* Info Header */}
-              <div className="flex items-center gap-5 border-b border-gray-100 pb-6 shrink-0">
-                <div className="w-24 h-24 bg-blue-50 text-[#05469B] rounded-2xl flex items-center justify-center border border-blue-100 shadow-inner">
-                  <Car size={48} />
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-3xl font-black text-gray-800 tracking-tight">{viewData.bien_so}</h2>
-                  <p className="text-xl font-bold text-[#05469B] mt-1">{viewData.hieu_xe} {viewData.loai_xe} {viewData.phien_ban ? `- ${viewData.phien_ban}` : ''}</p>
-                  <div className="flex gap-2 mt-3">
-                    <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded text-xs font-bold uppercase">{viewData.loai_phuong_tien}</span>
-                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-bold">{viewData.muc_dich_su_dung}</span>
-                    <span className={`px-2.5 py-1 rounded text-xs font-bold ${viewData.hien_trang === 'Đang hoạt động' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                      {viewData.hien_trang}
-                    </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5 md:pb-6 shrink-0">
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-50 text-[#05469B] rounded-2xl flex items-center justify-center border border-blue-100 shadow-inner shrink-0">
+                    <Car size={40} className="sm:w-12 sm:h-12" />
+                  </div>
+                  <div className="flex-1 text-center sm:text-left">
+                    <h2 className="text-2xl sm:text-3xl font-black text-gray-800 tracking-tight">{viewData.bien_so}</h2>
+                    <p className="text-base sm:text-xl font-bold text-[#05469B] mt-1">{viewData.hieu_xe} {viewData.loai_xe} {viewData.phien_ban ? `- ${viewData.phien_ban}` : ''}</p>
+                    <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-3">
+                      <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded text-xs font-bold uppercase">{viewData.loai_phuong_tien}</span>
+                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-bold">{viewData.muc_dich_su_dung}</span>
+                      <span className={`px-2.5 py-1 rounded text-xs font-bold ${viewData.hien_trang === 'Đang hoạt động' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                        {viewData.hien_trang}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="text-right hidden sm:block">
-                  <p className="text-xs text-gray-500 font-bold uppercase mb-1">Đơn vị quản lý</p>
-                  <p className="text-lg font-black text-gray-800">{getUnitFullName(viewData.id_don_vi)}</p>
+                <div className="text-center sm:text-right shrink-0 mt-2 sm:mt-0">
+                  <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase mb-1">Đơn vị quản lý</p>
+                  <p className="text-sm sm:text-lg font-black text-gray-800">{getUnitFullName(viewData.id_don_vi)}</p>
                 </div>
               </div>
 
@@ -962,7 +1094,7 @@ export default function VehiclePage() {
                     <p>Chưa có dữ liệu khai báo chi phí cho xe này.</p>
                   </div>
                 ) : (
-                  <div className="relative h-64 mt-4 px-12">
+                  <div className="relative h-56 sm:h-64 mt-4 px-10 sm:px-12">
                     <div className="absolute left-0 top-0 h-[calc(100%-24px)] flex flex-col justify-between text-[9px] font-bold text-gray-400 border-r border-gray-100 pr-2">
                       <span>{formatCurrency(chartScale.maxCP)} đ</span>
                       <span>{formatCurrency(chartScale.maxCP / 2)} đ</span>
@@ -1047,8 +1179,8 @@ export default function VehiclePage() {
 
               {/* Detailed Table */}
               <div className="border border-gray-200 rounded-xl flex flex-col overflow-hidden shrink-0 mt-2">
-                <div className="overflow-y-auto max-h-56 w-full custom-scrollbar relative">
-                  <table className="w-full text-left text-sm border-collapse">
+                <div className="overflow-x-auto overflow-y-auto max-h-56 w-full custom-scrollbar relative">
+                  <table className="w-full text-left text-sm border-collapse min-w-[600px]">
                     <thead className="sticky top-0 z-10 bg-gray-50 shadow-sm border-b border-gray-200">
                       <tr className="text-[11px] text-gray-600 uppercase tracking-wider">
                         <th className="p-3 bg-gray-50">Tháng</th>

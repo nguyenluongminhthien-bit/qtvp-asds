@@ -5,6 +5,11 @@ export const formatCurrency = (val: string | number | undefined | null): string 
   return num.toLocaleString('vi-VN') + ' VNĐ';
 };
 
+export const formatCurrencySpace = (val: string | number | undefined | null): string => {
+  if (!val) return '';
+  return val.toString().replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+};
+
 export const parseDateStrict = (val: any): Date | null => {
   if (!val || val === 0 || val === '0') return null;
   const d = new Date(val);
@@ -20,4 +25,33 @@ export const parseDateStrict = (val: any): Date | null => {
     return new Date((Number(numMatch[1]) - 25569) * 86400 * 1000);
   }
   return null;
+};
+
+export const formatPhoneNumber = (val: string | number | undefined | null): string => {
+  if (!val) return '';
+  const cleaned = val.toString().replace(/\D/g, ''); 
+  if (cleaned.length <= 4) return cleaned;
+  if (cleaned.length <= 7) return `${cleaned.slice(0, 4)} ${cleaned.slice(4)}`;
+  return `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7, 11)}`;
+};
+
+export const getDirectImageLink = (url: string): string => {
+  if (!url) return '';
+  const match = url.match(/[-\w]{25,}/);
+  if (match && match[0]) {
+    return `https://drive.google.com/thumbnail?id=${match[0]}&sz=w800`;
+  }
+  return url; 
+};
+
+export const toUnaccented = (str: any): string => {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9\s]/g, "") // Giữ khoảng trắng (\s)
+    .replace(/\s+/g, " ")       // Thu gọn nhiều khoảng trắng liên tiếp
+    .trim();                     // Cắt bỏ khoảng trắng ở đầu và cuối
 };

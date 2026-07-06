@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
 import Login from './pages/LoginPage'; 
@@ -13,10 +13,31 @@ import PolicyPage from './pages/PolicyPage';
 import EquipmentPage from './pages/EquipmentPage'; 
 import FireSafetyPage from './pages/FireSafetyPage';
 import AtvsldPage from './pages/AtvsldPage'; // 🟢 ĐÃ THÊM: Import trang ATVSLĐ mới
-
-// Import các trang Hệ thống
 import AccountPage from './pages/AccountPage';
 import LogPage from './pages/LogPage';
+
+interface TabContainerProps {
+  active: boolean;
+  children: React.ReactNode;
+}
+
+function TabContainer({ active, children }: TabContainerProps) {
+  const [hasBeenVisited, setHasBeenVisited] = useState(false);
+
+  useEffect(() => {
+    if (active) {
+      setHasBeenVisited(true);
+    }
+  }, [active]);
+
+  if (!hasBeenVisited) return null;
+
+  return (
+    <div className={`absolute inset-0 transition-opacity duration-200 ${active ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
+      {children}
+    </div>
+  );
+}
 
 function AppContent() {
   const { user } = useAuth();
@@ -30,6 +51,14 @@ function AppContent() {
   }
 
   // LỚP 2: HIỂN THỊ GIAO DIỆN CHÍNH (Đã đăng nhập)
+  const checkPermission = (moduleId: string) => {
+    if (!user) return false;
+    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
+      return true;
+    }
+    return String(user.quyen_truy_cap || '').includes(moduleId);
+  };
+
   return (
     <div className="flex h-screen w-full bg-gray-100 overflow-hidden font-sans">
       
@@ -37,53 +66,72 @@ function AppContent() {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
       {/* Khu vực nội dung bên phải */}
-      <main className="flex-1 h-full overflow-hidden bg-[#f4f7f9] relative">
+      <main className="flex-1 min-w-0 max-w-full h-full overflow-hidden bg-[#f4f7f9] relative">
         
         {/* TUYỆT CHIÊU GIỮ CACHE */}
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'dashboard' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
+        <TabContainer active={activeTab === 'dashboard'}>
           <DashboardPage />
-        </div>
+        </TabContainer>
         
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'personnel' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <PersonnelPage />
-        </div>
+        {checkPermission('NhanSu') && (
+          <TabContainer active={activeTab === 'personnel'}>
+            <PersonnelPage />
+          </TabContainer>
+        )}
 
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'firesafety' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <FireSafetyPage />
-        </div>
+        {checkPermission('PCCC') && (
+          <TabContainer active={activeTab === 'firesafety'}>
+            <FireSafetyPage />
+          </TabContainer>
+        )}
 
-        {/* 🟢 ĐÃ THÊM: KHỐI HIỂN THỊ TRANG ATVSLĐ */}
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'atvsld' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <AtvsldPage />
-        </div>
+        {checkPermission('ATVSLD') && (
+          <TabContainer active={activeTab === 'atvsld'}>
+            <AtvsldPage />
+          </TabContainer>
+        )}
         
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'vehicles' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <VehiclePage />
-        </div>
+        {checkPermission('Xe') && (
+          <TabContainer active={activeTab === 'vehicles'}>
+            <VehiclePage />
+          </TabContainer>
+        )}
         
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'equipments' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <EquipmentPage />
-        </div>
+        {checkPermission('ThietBi') && (
+          <TabContainer active={activeTab === 'equipments'}>
+            <EquipmentPage />
+          </TabContainer>
+        )}
         
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'documents' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <DocumentPage />
-        </div>
+        {checkPermission('VanBan') && (
+          <TabContainer active={activeTab === 'documents'}>
+            <DocumentPage />
+          </TabContainer>
+        )}
         
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'policies' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <PolicyPage />
-        </div>
+        {checkPermission('QuyDinh') && (
+          <TabContainer active={activeTab === 'policies'}>
+            <PolicyPage />
+          </TabContainer>
+        )}
         
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'departments' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <DepartmentPage />
-        </div>
+        {checkPermission('CongTy') && (
+          <TabContainer active={activeTab === 'departments'}>
+            <DepartmentPage />
+          </TabContainer>
+        )}
 
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'accounts' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <AccountPage />
-        </div>
+        {String(user?.quyen).toUpperCase() === 'ADMIN' && (
+          <TabContainer active={activeTab === 'accounts'}>
+            <AccountPage />
+          </TabContainer>
+        )}
         
-        <div className={`absolute inset-0 transition-opacity duration-200 ${activeTab === 'logs' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-          <LogPage />
-        </div>
+        {String(user?.quyen).toUpperCase() === 'ADMIN' && (
+          <TabContainer active={activeTab === 'logs'}>
+            <LogPage />
+          </TabContainer>
+        )}
         
       </main>
     </div>

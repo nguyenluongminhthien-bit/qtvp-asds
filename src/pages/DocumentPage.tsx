@@ -10,7 +10,10 @@ import { apiService } from '../services/api';
 import { DonVi, VB_TB } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../utils/toast';
+import { toUnaccented } from '../utils/formatters';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
+import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
+import Pagination from '../components/ui/Pagination';
 
 // HÀM KIỂM TRA VĂN BẢN MẬT
 const isMatDocument = (val: any) => {
@@ -26,6 +29,24 @@ const isNewDocument = (dateString: string | null) => {
   const diffInDays = (now - docDate) / (1000 * 3600 * 24);
   // Hiển thị nhãn Mới nếu văn bản ban hành từ 0-7 ngày trước (hoặc tính cả ngày hôm nay)
   return diffInDays >= -1 && diffInDays <= 7;
+};
+
+// HÀM CHUẨN HÓA TÊN NGƯỜI KÝ (COLLAPSE CÁC BIẾN THỂ TRÙNG LẶP)
+const normalizeSignerName = (name: string) => {
+  if (!name) return '';
+  // Chuẩn hóa Unicode dựng sẵn (NFC) để tránh trùng lặp do bảng mã tiếng Việt khác nhau (tổ hợp vs dựng sẵn)
+  let normalized = name.normalize('NFC').trim().replace(/\s+/g, ' '); 
+  // Viết hoa chữ cái đầu từng từ
+  normalized = normalized.split(' ').map(word => {
+    if (!word) return '';
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
+  
+  // Sửa lỗi chính tả biến thể của tên "Nguyễn Quang Bảo"
+  if (normalized === 'Nguyển Quang Bảo' || normalized === 'Nguyen Quang Bao') {
+    return 'Nguyễn Quang Bảo';
+  }
+  return normalized;
 };
 
 // HÀM LẤY NHÃN HIỂN THỊ ĐỘNG CHO NƠI GỬI/NHẬN
@@ -130,6 +151,11 @@ export default function DocumentPage() {
   const [selectedUnitFilter, setSelectedUnitFilter] = useState<string | null>(null);
   const [selectedPhanLoai, setSelectedPhanLoai] = useState<string | null>('Thông báo');
   const [selectedYear, setSelectedYear] = useState<string>('all'); 
+  const [selectedSigner, setSelectedSigner] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedDateFrom, setSelectedDateFrom] = useState<string>('');
+  const [selectedDateTo, setSelectedDateTo] = useState<string>('');
+  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState<boolean>(false);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -284,14 +310,39 @@ export default function DocumentPage() {
   };
 
   const availableYears = useMemo(() => {
+    let docs = visibleDocuments;
+    if (selectedPhanLoai) {
+      docs = docs.filter(item => item.phan_loai === selectedPhanLoai);
+    }
     const years = new Set(
-      visibleDocuments.map(item => {
+      docs.map(item => {
         if (!item.ngay_ban_hanh) return null;
         return new Date(item.ngay_ban_hanh).getFullYear().toString();
       }).filter(Boolean) as string[]
     );
     return Array.from(years).sort((a, b) => Number(b) - Number(a));
-  }, [visibleDocuments]);
+  }, [visibleDocuments, selectedPhanLoai]);
+
+  const availableSigners = useMemo(() => {
+    let docs = visibleDocuments;
+    if (selectedPhanLoai) {
+      docs = docs.filter(item => item.phan_loai === selectedPhanLoai);
+    }
+    const signers = new Set<string>(
+      docs.map(item => item.nguoi_ky ? normalizeSignerName(item.nguoi_ky) : '').filter(Boolean)
+    );
+    return Array.from(signers).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [visibleDocuments, selectedPhanLoai]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (selectedYear !== 'all') count++;
+    if (selectedSigner !== 'all') count++;
+    if (selectedStatus !== 'all') count++;
+    if (selectedDateFrom) count++;
+    if (selectedDateTo) count++;
+    return count;
+  }, [selectedYear, selectedSigner, selectedStatus, selectedDateFrom, selectedDateTo]);
 
   const filteredDocs = useMemo(() => {
     let result = [...visibleDocuments];
@@ -315,12 +366,24 @@ export default function DocumentPage() {
     if (selectedYear !== 'all') {
       result = result.filter(item => item.ngay_ban_hanh && new Date(item.ngay_ban_hanh).getFullYear().toString() === selectedYear);
     }
+    if (selectedSigner !== 'all') {
+      result = result.filter(item => item.nguoi_ky && normalizeSignerName(item.nguoi_ky) === selectedSigner);
+    }
+    if (selectedStatus !== 'all') {
+      result = result.filter(item => item.hieu_luc === selectedStatus);
+    }
+    if (selectedDateFrom) {
+      result = result.filter(item => item.ngay_ban_hanh && item.ngay_ban_hanh >= selectedDateFrom);
+    }
+    if (selectedDateTo) {
+      result = result.filter(item => item.ngay_ban_hanh && item.ngay_ban_hanh <= selectedDateTo);
+    }
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
+      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
       result = result.filter(item => 
-        String(item.so_hieu || '').toLowerCase().includes(lower) || 
-        String(item.tieu_de || '').toLowerCase().includes(lower) ||
-        String(item.nghiep_vu || '').toLowerCase().includes(lower)
+        toUnaccented(item.so_hieu || '').toLowerCase().includes(cleanSearch) || 
+        toUnaccented(item.tieu_de || '').toLowerCase().includes(cleanSearch) ||
+        toUnaccented(item.nghiep_vu || '').toLowerCase().includes(cleanSearch)
       );
     }
 
@@ -335,7 +398,10 @@ export default function DocumentPage() {
     });
 
     return result;
-  }, [visibleDocuments, searchTerm, selectedUnitFilter, selectedPhanLoai, selectedYear, isViewerHanChe, advancedRules]);
+  }, [
+    visibleDocuments, searchTerm, selectedUnitFilter, selectedPhanLoai, selectedYear,
+    selectedSigner, selectedStatus, selectedDateFrom, selectedDateTo, isViewerHanChe, advancedRules
+  ]);
 
   const selectedUnitName = useMemo(() => {
     if (!selectedUnitFilter) return 'Toàn hệ thống';
@@ -351,7 +417,10 @@ export default function DocumentPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedUnitFilter, selectedPhanLoai, selectedYear, searchTerm]);
+  }, [
+    selectedUnitFilter, selectedPhanLoai, selectedYear, searchTerm,
+    selectedSigner, selectedStatus, selectedDateFrom, selectedDateTo
+  ]);
 
   const paginatedDocs = useMemo(() => {
     const startIndex = (currentPage - 1) * actualRowsPerPage;
@@ -519,7 +588,7 @@ export default function DocumentPage() {
 
   if (loading) return <PageWithFilterSkeleton rows={8} />;
   return (
-    <div className="flex h-full bg-[#f4f7f9] overflow-hidden relative">
+    <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       
       {/* 🟢 NÚT MỞ BỘ LỌC TRÊN PC */}
       {isListCollapsed && (
@@ -636,7 +705,7 @@ export default function DocumentPage() {
       </div>
 
       {/* CỘT PHẢI: BẢNG DỮ LIỆU CHÍNH */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col w-full">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col w-full">
         
         {/* TOP BAR HIỂN THỊ RESPONSIVE */}
         <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''} shrink-0`}>
@@ -659,18 +728,7 @@ export default function DocumentPage() {
             </button>
           </div>
           
-          <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-3">
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-3 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm font-bold text-[#05469B] cursor-pointer"
-            >
-              <option value="all">Tất cả năm</option>
-              {availableYears.map(year => (
-                <option key={year} value={year}>Năm {year}</option>
-              ))}
-            </select>
-
+          <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-3 items-stretch sm:items-center">
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input 
@@ -680,6 +738,131 @@ export default function DocumentPage() {
                 value={searchTerm} 
                 onChange={(e) => setSearchTerm(e.target.value)} 
               />
+            </div>
+
+            <div className="relative">
+              <button
+                onClick={() => setIsFilterPopoverOpen(prev => !prev)}
+                className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-bold shadow-sm transition-all whitespace-nowrap
+                  ${activeFiltersCount > 0 
+                    ? 'bg-blue-50 text-[#05469B] border-blue-200' 
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+              >
+                <Filter className="w-4 h-4" />
+                <span>Bộ lọc nâng cao</span>
+                {activeFiltersCount > 0 && (
+                  <span className="flex items-center justify-center w-5 h-5 text-[10px] font-black text-white bg-red-500 rounded-full animate-pulse">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
+
+              {/* 🟢 FLOATING FILTER PANEL (POPOVER) */}
+              {isFilterPopoverOpen && (
+                <>
+                  {/* Backdrop */}
+                  <div className="fixed inset-0 z-45 bg-transparent" onClick={() => setIsFilterPopoverOpen(false)}></div>
+                  
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex justify-between items-center pb-2.5 border-b border-gray-100 mb-3">
+                      <h3 className="font-bold text-[#05469B] text-sm flex items-center gap-1.5"><Filter size={16}/> Lọc nâng cao</h3>
+                      <button 
+                        onClick={() => {
+                          setSelectedYear('all');
+                          setSelectedSigner('all');
+                          setSelectedStatus('all');
+                          setSelectedDateFrom('');
+                          setSelectedDateTo('');
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700 font-bold hover:underline"
+                      >
+                        Đặt lại
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 block">
+                      {/* Tiêu chí 1: Năm ban hành */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Năm ban hành</label>
+                        <select
+                          value={selectedYear}
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                          className="w-full px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
+                        >
+                          <option value="all">Tất cả các năm</option>
+                          {availableYears.map(year => (
+                            <option key={year} value={year}>Năm {year}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Tiêu chí 2: Người ký */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Người ký</label>
+                        <select
+                          value={selectedSigner}
+                          onChange={(e) => setSelectedSigner(e.target.value)}
+                          className="w-full px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
+                        >
+                          <option value="all">Tất cả người ký</option>
+                          {availableSigners.map(signer => (
+                            <option key={signer} value={signer}>{signer}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Tiêu chí 3: Hiệu lực */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Trạng thái hiệu lực</label>
+                        <select
+                          value={selectedStatus}
+                          onChange={(e) => setSelectedStatus(e.target.value)}
+                          className="w-full px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
+                        >
+                          <option value="all">Tất cả trạng thái</option>
+                          <option value="Còn hiệu lực">Còn hiệu lực</option>
+                          <option value="Hết hiệu lực">Hết hiệu lực</option>
+                          <option value="Thay thế VB khác">Thay thế VB khác</option>
+                        </select>
+                      </div>
+
+                      {/* Tiêu chí 4: Khoảng ngày ban hành */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Khoảng ngày ban hành</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[9px] text-gray-400 block mb-0.5">Từ ngày</span>
+                            <input 
+                              type="date"
+                              value={selectedDateFrom}
+                              onChange={(e) => setSelectedDateFrom(e.target.value)}
+                              className="w-full px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-gray-400 block mb-0.5">Đến ngày</span>
+                            <input 
+                              type="date"
+                              value={selectedDateTo}
+                              onChange={(e) => setSelectedDateTo(e.target.value)}
+                              className="w-full px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+                      <button
+                        onClick={() => setIsFilterPopoverOpen(false)}
+                        className="w-full py-2 bg-[#05469B] text-white rounded-lg text-xs font-bold hover:bg-[#04367a] shadow-sm transition-all"
+                      >
+                        Áp dụng ({filteredDocs.length} văn bản)
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             
             {/* 🟢 ẨN NÚT BAN HÀNH THEO MA TRẬN QUYỀN MỚI VÀ QUYỀN HẠN CHẾ */}
@@ -714,7 +897,7 @@ export default function DocumentPage() {
                   <th className="py-3 px-3 w-[125px] bg-[#f8fafc]">Ngày Ban hành</th>
                   <th className="py-3 px-3 min-w-[250px] bg-[#f8fafc]">Tiêu đề & Nội dung</th>
                   <th className="py-3 px-3 w-44 bg-[#f8fafc]">Phạm vi áp dụng</th>
-                  <th className="py-3 px-3 w-32 bg-[#f8fafc]">Nghiệp vụ</th>
+                  <th className="py-3 px-3 w-40 bg-[#f8fafc]">Người ký - Chức vụ</th>
                   <th className="py-3 px-3 w-28 bg-[#f8fafc]">Hiệu lực</th>
                   <th className="py-3 px-3 text-center w-28 bg-[#f8fafc]">Thao tác</th>
                 </tr>
@@ -740,10 +923,10 @@ export default function DocumentPage() {
         key={item.id} 
         className={`transition-all duration-200 group ${item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-50/80 opacity-60 hover:opacity-100 hover:bg-gray-100 grayscale-[20%]' : 'bg-white hover:bg-blue-50/50'}`}
       >
-        {/* 1. Số hiệu / Phân loại (Đã có nhãn MỚI) */}
+        {/* 1. Số hiệu / Phân loại (Đã có nhãn MỚI VÀ NGHIỆP VỤ) */}
         <td className="py-2.5 px-3">
           <div className="flex items-center flex-wrap gap-1 mb-1">
-            <span className="font-black text-[#05469B] bg-blue-50 px-1.5 py-0.5 rounded text-xs whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
+            <span className="font-black text-[#05469B] bg-blue-50 px-1.5 py-0.5 rounded text-[13px] leading-[15px] whitespace-nowrap border border-blue-100">{item.so_hieu}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">{item.phan_loai}</span>
@@ -751,6 +934,11 @@ export default function DocumentPage() {
               <span className="text-[8px] font-black text-white bg-red-500 px-1.5 py-0.5 rounded animate-pulse uppercase tracking-wider shrink-0">Mới</span>
             )}
           </div>
+          {item.nghiep_vu && item.nghiep_vu.trim() !== '' && !/Chưa phân loại|Chưa PL|Trống/i.test(item.nghiep_vu.trim()) && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">{item.nghiep_vu}</span>
+            </div>
+          )}
         </td>
 
         {/* 2. Ngày ban hành */}
@@ -783,15 +971,10 @@ export default function DocumentPage() {
           </div>
         </td>
 
-        {/* 5. Nghiệp vụ (Khôi phục khối màu) */}
+        {/* 5. Người ký - Chức vụ */}
         <td className="py-2.5 px-3">
-          {item.nghiep_vu ? (
-            <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[11px] font-bold border border-indigo-100 inline-block truncate max-w-full">
-              {item.nghiep_vu}
-            </span>
-          ) : (
-            <span className="text-gray-400 italic text-[11px]">Chưa PL</span>
-          )}
+          <div className="font-bold text-xs text-gray-800">{item.nguoi_ky ? normalizeSignerName(item.nguoi_ky) : '-'}</div>
+          <div className="text-[10px] text-gray-500 font-semibold mt-0.5">{item.chuc_vu || '-'}</div>
         </td>
 
         {/* 6. Hiệu lực (Dropdown màu) */}
@@ -851,12 +1034,21 @@ export default function DocumentPage() {
                       <span className="font-black text-[#05469B] bg-blue-50 px-2 py-0.5 rounded text-[10px] border border-blue-100">{item.so_hieu}</span>
                       <span className="text-[9px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded uppercase">{item.phan_loai}</span>
                       {isMatDocument(item.mat) && <span className="text-[9px] font-black text-red-600 bg-red-100 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-red-200"><Lock size={10}/> MẬT</span>}
+                      {item.nghiep_vu && item.nghiep_vu.trim() !== '' && !/Chưa phân loại|Chưa PL|Trống/i.test(item.nghiep_vu.trim()) && (
+                        <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded uppercase border border-indigo-100">{item.nghiep_vu}</span>
+                      )}
                     </div>
                   </div>
 
                   <div className="pl-2 mb-3">
                     <h3 className={`font-bold text-sm leading-snug mb-1.5 ${isMatDocument(item.mat) ? 'text-red-700' : 'text-gray-800'}`}>{item.tieu_de}</h3>
-                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{item.noi_dung}</p>
+                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed mb-2">{item.noi_dung}</p>
+                    {(item.nguoi_ky || item.chuc_vu) && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-semibold bg-gray-50/50 p-1.5 rounded-lg border border-gray-100 w-max">
+                        <span className="text-gray-700">{item.nguoi_ky ? normalizeSignerName(item.nguoi_ky) : '-'}</span>
+                        {item.chuc_vu && <span className="text-gray-400">({item.chuc_vu})</span>}
+                      </div>
+                    )}
                   </div>
 
                   <div className="pl-2 flex justify-between items-center text-[10px] text-gray-500 border-t border-gray-100 pt-3">
@@ -898,75 +1090,22 @@ export default function DocumentPage() {
           </div>
 
           {/* GIAO DIỆN PHÂN TRANG (TỐI ƯU MOBILE) */}
-          {filteredDocs.length > 0 && (
-            <div className="fixed md:static bottom-0 left-0 w-full flex flex-col sm:flex-row items-center justify-between p-3 md:px-4 md:h-[50px] bg-white md:bg-gray-50 border-t border-gray-200 gap-3 shrink-0 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.1)] md:shadow-none z-30">
-              <div className="flex w-full md:w-auto items-center justify-between md:justify-start gap-2 text-sm text-gray-600 font-medium">
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-                  disabled={currentPage === 1}
-                  className="p-2 md:p-1.5 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Trang trước"
-                >
-                  <ChevronLeft size={18} />
-                </button>
-                
-                <span className="flex items-center gap-2">
-                  Trang 
-                  <input 
-                    type="number" 
-                    min={1} 
-                    max={totalPages} 
-                    value={currentPage} 
-                    onChange={(e) => {
-                      let val = parseInt(e.target.value);
-                      if (!isNaN(val)) {
-                        if (val > totalPages) val = totalPages;
-                        if (val < 1) val = 1;
-                        setCurrentPage(val);
-                      }
-                    }}
-                    className="w-12 text-center border border-gray-300 rounded-lg py-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B]"
-                  /> 
-                  / {totalPages}
-                </span>
-
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
-                  disabled={currentPage === totalPages}
-                  className="p-2 md:p-1.5 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Trang tiếp theo"
-                >
-                  <ChevronRight size={18} />
-                </button>
-
-                <div className="hidden md:flex items-center gap-2 ml-4 pl-4 border-l border-gray-300">
-                  <input 
-                    type="number" 
-                    min={1} 
-                    value={rowsPerPage} 
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setRowsPerPage(val === '' ? '' : parseInt(val));
-                      setCurrentPage(1); 
-                    }}
-                    className="w-16 text-center border border-gray-300 rounded-lg p-1 outline-none focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B] text-[#05469B] font-bold"
-                  />
-                  <span>dòng</span>
-                </div>
-              </div>
-              
-              <div className="text-xs md:text-sm text-gray-500 hidden md:block">
-                Hiển thị {(currentPage - 1) * actualRowsPerPage + 1} - {Math.min(currentPage * actualRowsPerPage, filteredDocs.length)} trong tổng số <span className="font-bold text-gray-800">{filteredDocs.length}</span> văn bản
-              </div>
-            </div>
-          )}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            rowsPerPage={rowsPerPage}
+            totalRows={filteredDocs.length}
+            onPageChange={setCurrentPage}
+            onRowsPerPageChange={(rows) => { setRowsPerPage(rows); setCurrentPage(1); }}
+            itemName="văn bản"
+          />
 
         </div>
       </div>
 
       {/* 🟢 MODAL THÊM / SỬA VĂN BẢN (KHÔI PHỤC BỐ CỤC PHẲNG - CHUẨN RESPONSIVE) */}
       {isModalOpen && (
-        <div className="absolute inset-0 z-[999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all">
           <div className="bg-white rounded-t-3xl md:rounded-2xl shadow-2xl w-full max-h-[95vh] md:max-h-[90vh] md:h-auto md:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 md:zoom-in duration-200 mt-auto md:mt-0 overflow-hidden">
             
             {/* Header */}
@@ -1197,7 +1336,7 @@ export default function DocumentPage() {
 
       {/* 🟢 MODAL XEM CHI TIẾT (ĐÃ XỬ LÝ KHUNG TRÀN BỀ NGANG / BỀ DỌC TRÊN MOBILE) */}
       {isViewModalOpen && viewData && (
-        <div className="absolute inset-0 z-[999] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 z-[999] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm transition-all">
           <div className="bg-white rounded-t-3xl md:rounded-2xl shadow-2xl w-full max-h-[92vh] md:max-h-[90vh] md:h-auto md:max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 md:zoom-in duration-200 overflow-hidden mt-auto md:mt-0">
             <div className="flex justify-between items-center p-4 md:p-5 border-b border-gray-100 bg-[#05469B] text-white rounded-t-3xl md:rounded-t-2xl shrink-0">
               <h3 className="text-lg md:text-xl font-bold flex items-center gap-2 truncate pr-2">
@@ -1341,7 +1480,7 @@ export default function DocumentPage() {
 
       {/* XÁC NHẬN XÓA */}
       {isConfirmOpen && (
-        <div className="absolute inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white p-6 md:p-8 rounded-3xl md:rounded-2xl shadow-2xl w-full max-w-sm text-center animate-in zoom-in duration-200">
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-4 border-4 border-red-100">
               <AlertCircle className="w-8 h-8" />

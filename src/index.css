@@ -1,1 +1,120 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* =========================================================
+   🌙 CHẾ ĐỘ BAN ĐÊM (DARK MODE) SANG TRỌNG & CAO CẤP
+   ========================================================= */
+html.dark-mode, body.dark-mode {
+  background-color: #0b1329 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark-mode .bg-\[\#f4f7f9\],
+.dark-mode .bg-gray-100,
+.dark-mode .bg-gray-50,
+.dark-mode .bg-slate-50,
+.dark-mode .bg-\[\#f8fafc\],
+.dark-mode .bg-\[\#f0f4f8\] {
+  background-color: #0b1329 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark-mode .bg-white {
+  background-color: #162038 !important;
+  color: #f1f5f9 !important;
+  border-color: #273554 !important;
+}
+
+.dark-mode .bg-white\/80,
+.dark-mode .bg-white\/90,
+.dark-mode .bg-white\/95 {
+  background-color: rgba(22, 32, 56, 0.95) !important;
+  color: #f1f5f9 !important;
+  border-color: #273554 !important;
+}
+
+.dark-mode .bg-gray-50\/80,
+.dark-mode .bg-blue-50\/50,
+.dark-mode .bg-slate-50\/50,
+.dark-mode .hover\:bg-blue-50\/50:hover,
+.dark-mode .hover\:bg-gray-50:hover,
+.dark-mode .hover\:bg-slate-50:hover {
+  background-color: #202e4f !important;
+  color: #ffffff !important;
+}
+
+.dark-mode .border-gray-100,
+.dark-mode .border-gray-200,
+.dark-mode .border-gray-300,
+.dark-mode .border-slate-100,
+.dark-mode .border-slate-200,
+.dark-mode .border-slate-300,
+.dark-mode .border-b,
+.dark-mode .border-t,
+.dark-mode .border {
+  border-color: #273554 !important;
+}
+
+.dark-mode .text-gray-900,
+.dark-mode .text-gray-800,
+.dark-mode .text-gray-700,
+.dark-mode .text-gray-600,
+.dark-mode .text-slate-900,
+.dark-mode .text-slate-800,
+.dark-mode .text-slate-700,
+.dark-mode .text-slate-600 {
+  color: #e2e8f0 !important;
+}
+
+.dark-mode .text-gray-500,
+.dark-mode .text-gray-400,
+.dark-mode .text-slate-500,
+.dark-mode .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark-mode select option {
+  background-color: #162038 !important;
+  color: #f8fafc !important;
+}
+
+.dark-mode table thead th,
+.dark-mode table thead tr {
+  background-color: #0f182c !important;
+  color: #94a3b8 !important;
+  border-bottom-color: #273554 !important;
+}
+
+.dark-mode table tbody tr {
+  border-bottom-color: #273554 !important;
+}
+
+.dark-mode table tbody tr:hover {
+  background-color: #202e4f/80 !important;
+}
+
+/* Đảm bảo nhãn màu sắc (Badges / Pills) luôn hiển thị rõ nét trên nền tối */
+.dark-mode [class*="bg-"][class*="text-"][class*="border"] {
+  filter: brightness(0.95) contrast(1.15);
+}
+
+/* Thanh cuộn (Scrollbar) trên nền tối */
+.dark-mode::-webkit-scrollbar-track {
+  background: #0f182c;
+}
+.dark-mode::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+.dark-mode::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
