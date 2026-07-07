@@ -876,7 +876,7 @@ export default function DepartmentPage() {
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (
-        <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all" title="Mở danh sách đơn vị"><PanelLeftOpen size={20} /></button>
+        <button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all" title="Mở danh sách đơn vị"><PanelLeftOpen size={20} /></button>
       )}
 
       {/* CỘT TRÁI BỘ LỌC */}
@@ -914,7 +914,16 @@ export default function DepartmentPage() {
 
       {/* CỘT PHẢI CHI TIẾT */}
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-6 relative transition-all duration-300 w-full">
-        <div className={`max-w-6xl mx-auto space-y-8 pb-12 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
+        {isListCollapsed && (
+          <button 
+            onClick={() => setIsListCollapsed(false)} 
+            className="md:hidden mb-4 bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0 w-fit"
+            title="Mở danh sách đơn vị"
+          >
+            <PanelLeftOpen size={18} />
+          </button>
+        )}
+        <div className={`max-w-6xl mx-auto space-y-8 pb-12 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
           {error && <div className="mb-4 p-4 bg-red-50 text-red-700 flex gap-3 rounded-lg"><AlertCircle size={20} /> <p>{error}</p></div>}
           {!selectedUnit ? (
             <div className="h-[80vh] flex items-center justify-center text-gray-400 flex-col"><Building2 size={64} className="mb-4 opacity-20" /><p className="text-lg">Vui lòng chọn một Đơn vị ở danh sách bên trái</p></div>

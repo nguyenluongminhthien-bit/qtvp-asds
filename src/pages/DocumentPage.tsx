@@ -710,13 +710,24 @@ export default function DocumentPage() {
         {/* TOP BAR HIỂN THỊ RESPONSIVE */}
         <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''} shrink-0`}>
           <div className="w-full flex justify-between items-center">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold text-[#05469B] flex items-center gap-2">
-                <FileText className="w-6 h-6 md:w-7 md:h-7" /> Quản lý Văn bản
-              </h2>
-              <p className="text-sm font-medium text-gray-500 mt-1 hidden md:block">
-                Lọc: <span className="text-emerald-600 font-bold">{selectedPhanLoai || 'Tất cả'}</span> • Khu vực: <span className="text-emerald-600 font-bold">{selectedUnitName}</span>
-              </p>
+            <div className="flex items-center gap-2.5">
+              {isListCollapsed && (
+                <button 
+                  onClick={() => setIsListCollapsed(false)} 
+                  className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
+                  title="Mở bộ lọc đơn vị"
+                >
+                  <PanelLeftOpen size={18} />
+                </button>
+              )}
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-[#05469B] flex items-center gap-2">
+                  <FileText className="w-6 h-6 md:w-7 md:h-7" /> Quản lý Văn bản
+                </h2>
+                <p className="text-sm font-medium text-gray-500 mt-1 hidden md:block">
+                  Lọc: <span className="text-emerald-600 font-bold">{selectedPhanLoai || 'Tất cả'}</span> • Khu vực: <span className="text-emerald-600 font-bold">{selectedUnitName}</span>
+                </p>
+              </div>
             </div>
 
             {/* 🟢 Nút mở bộ lọc nhanh trên Mobile */}

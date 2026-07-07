@@ -607,7 +607,7 @@ export default function EquipmentPage() {
   if (loading) return <PageWithFilterSkeleton rows={8} />;
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
-      {isListCollapsed && (<button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all"><PanelLeftOpen size={20} /></button>)}
+      {isListCollapsed && (<button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all"><PanelLeftOpen size={20} /></button>)}
 
       {/* CỘT TRÁI (BỘ LỌC ĐỒNG BỘ) */}
       <UnitFilterSidebar
@@ -627,10 +627,21 @@ export default function EquipmentPage() {
 
       {/* NỘI DUNG CHÍNH */}
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300">
-        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 ${isListCollapsed ? 'pl-10' : ''}`}>
-          <div>
-            <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Layers size={28} /> Quản lý Tài sản & Thiết bị</h2>
-            <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredTBs.length} khoản mục)</p>
+        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 ${isListCollapsed ? 'md:pl-10' : ''}`}>
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            {isListCollapsed && (
+              <button 
+                onClick={() => setIsListCollapsed(false)} 
+                className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
+                title="Mở bộ lọc đơn vị"
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            )}
+            <div>
+              <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Layers size={28} /> Quản lý Tài sản & Thiết bị</h2>
+              <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredTBs.length} khoản mục)</p>
+            </div>
           </div>
           <div className="flex flex-wrap w-full sm:w-auto gap-3 justify-end items-center">
             {selectedItemsForPrint.length > 0 && (
@@ -662,11 +673,11 @@ export default function EquipmentPage() {
 
         {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
 
-        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden ${isListCollapsed ? 'ml-10' : ''}`}>
+        <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden ${isListCollapsed ? 'md:ml-10' : ''}`}>
         
         {/* 🟢 THANH CẢNH BÁO HẠN BẢO HÀNH (ĐỒNG BỘ VỚI DASHBOARD) */}
         {expiringEquipments.length > 0 && !isDismissed && (
-          <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'ml-10' : ''}`}>
+          <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''}`}>
             <div className="bg-red-50 border border-red-200 rounded-xl overflow-hidden shadow-sm">
               
               {/* HEADER - BẤM ĐỂ MỞ RỘNG/THU GỌN */}

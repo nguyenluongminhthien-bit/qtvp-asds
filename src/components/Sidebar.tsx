@@ -64,13 +64,15 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   return (
     <>
       {/* Nút bấm nổi mở Menu trên di động */}
-      <button 
-        onClick={() => setIsCollapsed(!isCollapsed)} 
-        className="fixed left-3 bottom-5 z-[60] md:hidden bg-[#05408A] hover:bg-[#04367a] text-white p-3.5 rounded-full shadow-2xl border border-blue-400/40 flex items-center justify-center transition-all animate-pulse"
-        title="Menu"
-      >
-        {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-      </button>
+      {isCollapsed && (
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)} 
+          className="fixed left-3 bottom-5 z-[60] md:hidden bg-[#05408A] hover:bg-[#04367a] text-white p-3.5 rounded-full shadow-2xl border border-blue-400/40 flex items-center justify-center transition-all animate-pulse"
+          title="Menu"
+        >
+          <PanelLeftOpen size={20} />
+        </button>
+      )}
 
       {/* Lớp nền mờ khi mở Menu trên di động */}
       {!isCollapsed && (

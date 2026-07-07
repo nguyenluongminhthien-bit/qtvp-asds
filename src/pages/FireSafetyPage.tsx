@@ -438,7 +438,7 @@ export default function FireSafetyPage() {
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (
-        <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-red-600 hover:bg-red-50 transition-all"><PanelLeftOpen size={20} /></button>
+        <button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-red-600 hover:bg-red-50 transition-all"><PanelLeftOpen size={20} /></button>
       )}
 
       {/* CỘT TRÁI BỘ LỌC ĐỒNG BỘ */}
@@ -459,10 +459,21 @@ export default function FireSafetyPage() {
 
       {/* CỘT PHẢI CHI TIẾT */}
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full">
-        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
-          <div>
-            <h2 className="text-2xl font-bold text-red-600 flex items-center gap-2"><Flame size={28} /> Quản lý Hồ sơ PCCC</h2>
-            <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{donViMap[selectedUnitFilter || ''] || 'Tất cả Đơn vị'}</span></p>
+        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            {isListCollapsed && (
+              <button 
+                onClick={() => setIsListCollapsed(false)} 
+                className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-red-600 hover:bg-red-50 transition-all flex items-center justify-center shrink-0"
+                title="Mở bộ lọc đơn vị"
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            )}
+            <div>
+              <h2 className="text-2xl font-bold text-red-600 flex items-center gap-2"><Flame size={28} /> Quản lý Hồ sơ PCCC</h2>
+              <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{donViMap[selectedUnitFilter || ''] || 'Tất cả Đơn vị'}</span></p>
+            </div>
           </div>
           <div className="flex w-full sm:w-auto gap-3">
             <div className="relative w-full sm:w-72">
@@ -476,7 +487,7 @@ export default function FireSafetyPage() {
 
         {/* 🟢 THANH CẢNH BÁO HẠN PCCC (ĐỒNG BỘ GIAO DIỆN) */}
         {expiringPCCC.length > 0 && !isDismissed && (
-          <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
+          <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
             <div className="bg-red-50 border border-red-200 rounded-xl overflow-hidden shadow-sm">
               
               {/* HEADER - BẤM ĐỂ MỞ RỘNG/THU GỌN */}
@@ -552,7 +563,7 @@ export default function FireSafetyPage() {
         )}
         
         {/* BẢNG DỮ LIỆU HIỂN THỊ TRONG MÀN HÌNH CHÍNH */}
-        <div className={`flex flex-col flex-1 gap-4 transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+        <div className={`flex flex-col flex-1 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
           
           {/* BẢNG DỮ LIỆU PC */}
           <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full flex-1 overflow-x-auto custom-scrollbar">

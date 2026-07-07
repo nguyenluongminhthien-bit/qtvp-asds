@@ -383,7 +383,7 @@ export default function AtvsldPage() {
       
       {/* NÚT MỞ SIDEBAR NẾU ĐANG ẨN */}
       {isListCollapsed && (
-        <button onClick={() => setIsListCollapsed(false)} className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all" title="Mở bộ lọc đơn vị">
+        <button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all" title="Mở bộ lọc đơn vị">
           <PanelLeftOpen size={20} />
         </button>
       )}
@@ -406,10 +406,21 @@ export default function AtvsldPage() {
 
       {/* 🟢 CỘT PHẢI: NỘI DUNG CHÍNH */}
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 custom-scrollbar flex flex-col">
-        <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''} shrink-0`}>
-          <div>
-            <h2 className="text-2xl font-black text-emerald-700 flex items-center gap-2"><HardHat size={28} /> Quản lý Hồ sơ ATVSLĐ</h2>
-            <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span></p>
+        <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''} shrink-0`}>
+          <div className="flex items-center gap-2.5">
+            {isListCollapsed && (
+              <button 
+                onClick={() => setIsListCollapsed(false)} 
+                className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all flex items-center justify-center shrink-0"
+                title="Mở bộ lọc đơn vị"
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            )}
+            <div>
+              <h2 className="text-2xl font-black text-emerald-700 flex items-center gap-2"><HardHat size={28} /> Quản lý Hồ sơ ATVSLĐ</h2>
+              <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span></p>
+            </div>
           </div>
           
           <div className="flex flex-col items-end gap-3 w-full xl:w-auto">
@@ -420,7 +431,7 @@ export default function AtvsldPage() {
         </div>
 
         {/* 🟢 KHU VỰC CHUYỂN TAB */}
-        <div className={`border-b border-gray-200 mb-6 flex gap-6 px-1 transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''} shrink-0`}>
+        <div className={`border-b border-gray-200 mb-6 flex gap-6 px-1 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''} shrink-0`}>
           <button onClick={() => setActiveTab('hoso')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'hoso' ? 'text-emerald-700' : 'text-gray-400 hover:text-gray-700'}`}>
             <Building2 size={18} /> Hồ sơ Báo cáo Cơ sở
             {activeTab === 'hoso' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-600 rounded-t-md animate-in slide-in-from-left-2 duration-300"></div>}
@@ -433,7 +444,7 @@ export default function AtvsldPage() {
 
         {/* 🟢 TAB 1: HỒ SƠ ATVSLĐ (BÁO CÁO CÁC CƠ SỞ) */}
         {activeTab === 'hoso' && (
-          <div className={`transition-all duration-300 ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+          <div className={`transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
             <div className="max-w-[1400px] mx-auto space-y-6">
               
               {/* Thanh tìm kiếm của Tab Hồ Sơ */}
@@ -677,7 +688,7 @@ export default function AtvsldPage() {
 {/*PHẦN 4: TAB KẾ HOẠCH ĐÀO TẠO ATVSLĐ VÀ MODALS*/}
         {/* 🟢 TAB 2: KẾ HOẠCH ĐÀO TẠO ATVSLĐ (TÍNH NĂNG MỚI) */}
         {activeTab === 'kehoach' && (
-          <div className={`transition-all duration-300 flex flex-col h-full ${isListCollapsed ? 'ml-10 lg:ml-0' : ''}`}>
+          <div className={`transition-all duration-300 flex flex-col h-full ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
             
             {/* KHỐI 4 THẺ CHỈ SỐ KPI TÌNH TRẠNG THẺ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5 shrink-0">

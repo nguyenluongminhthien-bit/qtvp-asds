@@ -1347,7 +1347,7 @@ export default function DashboardPage() {
       {isListCollapsed && (
         <button 
           onClick={() => setIsListCollapsed(false)} 
-          className="absolute top-6 left-6 z-20 bg-white p-2.5 rounded-xl shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all hover:scale-105"
+          className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-xl shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all hover:scale-105"
         >
           <PanelLeftOpen size={20} />
         </button>
@@ -1372,15 +1372,26 @@ export default function DashboardPage() {
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 lg:p-8 relative transition-all duration-300">
         
         {/* Header Dashboard */}
-        <div className={`flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 transition-all duration-300 ${isListCollapsed ? 'pl-10 lg:pl-12' : ''}`}>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-[#05469B] dark:text-blue-400 flex items-center gap-2.5 tracking-tight"><LayoutDashboard size={32} /> Tổng Quan Hệ Thống</h1>
-            <p className="text-gray-500 dark:text-slate-400 font-medium mt-1 flex items-center gap-2 text-sm">
-              Đang phân tích dữ liệu: 
-              <span className="px-3 py-1 bg-blue-50 dark:bg-slate-800 text-[#05469B] dark:text-blue-300 border border-blue-100 dark:border-slate-700 rounded-lg font-bold text-xs shadow-sm">
-                {selectedUnitName}
-              </span>
-            </p>
+        <div className={`flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
+          <div className="flex items-center gap-2.5">
+            {isListCollapsed && (
+              <button 
+                onClick={() => setIsListCollapsed(false)} 
+                className="lg:hidden bg-white p-2 rounded-xl shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
+                title="Mở bộ lọc đơn vị"
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            )}
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black text-[#05469B] dark:text-blue-400 flex items-center gap-2.5 tracking-tight"><LayoutDashboard size={32} /> Tổng Quan Hệ Thống</h1>
+              <p className="text-gray-500 dark:text-slate-400 font-medium mt-1 flex items-center gap-2 text-sm">
+                Đang phân tích dữ liệu: 
+                <span className="px-3 py-1 bg-blue-50 dark:bg-slate-800 text-[#05469B] dark:text-blue-300 border border-blue-100 dark:border-slate-700 rounded-lg font-bold text-xs shadow-sm">
+                  {selectedUnitName}
+                </span>
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
