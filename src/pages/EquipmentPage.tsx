@@ -3,7 +3,7 @@ import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, 
   MonitorSmartphone, Building2, MapPin, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen,
   History, Calendar, Info, Eye, Cpu, Image as ImageIcon, FileText, Link as LinkIcon,
-  Sofa, Video, Package, Layers, Camera
+  Sofa, Video, Package, Layers, Camera, QrCode, Printer
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { DonVi, ThietBi, NhatKyThietBi, Personnel } from '../types';
@@ -17,6 +17,10 @@ import ExpiryAlert from '../components/ExpiryAlert';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
 import CustomAutocomplete from '../components/ui/CustomAutocomplete';
+// @ts-ignore
+import { QRCodeSVG } from 'qrcode.react';
+// @ts-ignore
+import { Html5Qrcode } from 'html5-qrcode';
 
 
 // --- DANH SÁCH NHÓM TÀI SẢN CHUẨN ---
@@ -88,6 +92,21 @@ export default function EquipmentPage() {
   const [selectedTbForNk, setSelectedTbForNk] = useState<any | null>(null);
   const [nkFormData, setNkFormData] = useState<any>({});
   const [nkModalMode, setNkModalMode] = useState<'create' | 'update'>('create');
+  const [nkFormBp, setNkFormBp] = useState('');
+  const [nkFormDv, setNkFormDv] = useState('');
+
+  // Đồng bộ bp_quan_ly_su_dung vào 2 state Bộ phận (nkFormBp) & Đơn vị (nkFormDv)
+  useEffect(() => {
+    const combined = nkFormData.bp_quan_ly_su_dung || '';
+    if (combined.includes(' - ')) {
+      const parts = combined.split(' - ');
+      setNkFormBp(parts[0] || '');
+      setNkFormDv(parts[1] || '');
+    } else {
+      setNkFormBp(combined);
+      setNkFormDv('');
+    }
+  }, [nkFormData.bp_quan_ly_su_dung, nkFormData.id]);
 
   // Modal Xem chi tiết
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -101,6 +120,114 @@ export default function EquipmentPage() {
   
   // 🟢 THÊM DÒNG NÀY: Trạng thái ẩn hoàn toàn thông báo
   const [isDismissed, setIsDismissed] = useState(false);
+
+  // 🟢 STATE PHỤC VỤ TÍNH NĂNG QR CODE & IN TEM NHÃN
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [selectedItemsForPrint, setSelectedItemsForPrint] = useState<string[]>([]);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printItemsList, setPrintItemsList] = useState<any[]>([]);
+
+  // Hàm xử lý khi quét được mã QR thành công
+  const handleScannedCode = (code: string) => {
+    let assetCode = code;
+    // Hỗ trợ bóc tách tham số "qr" nếu quét bằng camera thường ra link URL đầy đủ
+    if (code.includes('?')) {
+      try {
+        const matches = code.match(/[?&]qr=([^&]+)/);
+        if (matches && matches[1]) {
+          assetCode = matches[1];
+        }
+      } catch (e) {
+        console.error("Lỗi phân tích URL mã QR:", e);
+      }
+    }
+
+    const matchedAsset = tbData.find(tb => String(tb.ma_tai_san).trim().toUpperCase() === assetCode.trim().toUpperCase());
+    if (matchedAsset) {
+      setViewData(matchedAsset);
+      setIsViewModalOpen(true);
+      toast.success(`Đã tìm thấy tài sản: ${matchedAsset.ten_thiet_bi}`);
+    } else {
+      toast.error(`Không tìm thấy tài sản nào có mã "${assetCode}"!`);
+    }
+  };
+
+  // Tìm người đang sử dụng tài sản gần nhất từ lịch sử nhật ký
+  const getLatestUser = (itemId: string) => {
+    const logs = nkData.filter(log => log.id_ts_thiet_bi === itemId);
+    if (logs.length === 0) return { name: 'Chưa bàn giao', msnv: '---' };
+    
+    // Sắp xếp các nhật ký mới nhất lên đầu
+    const sorted = [...logs].sort((a, b) => String(b.ngay_ghi_nhan || '').localeCompare(String(a.ngay_ghi_nhan || '')));
+    
+    // Tìm nhật ký gần nhất có ghi nhận người nhận
+    const latestUserLog = sorted.find(log => log.ho_ten_nguoi_dung);
+    if (latestUserLog) {
+      return { 
+        name: latestUserLog.ho_ten_nguoi_dung, 
+        msnv: latestUserLog.msnv_nguoi_dung || '---' 
+      };
+    }
+    return { name: 'Chưa bàn giao', msnv: '---' };
+  };
+
+  // Vòng đời camera quét QR trong ứng dụng
+  useEffect(() => {
+    if (!isScannerOpen) return;
+    
+    // Đợi DOM dựng xong thẻ div#reader
+    const timer = setTimeout(() => {
+      const html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          html5QrCode.stop().then(() => {
+            setIsScannerOpen(false);
+            handleScannedCode(decodedText);
+          }).catch(err => {
+            console.error("Lỗi dừng camera quét QR:", err);
+            setIsScannerOpen(false);
+          });
+        },
+        () => {
+          // Callback quét lỗi (có thể bỏ qua để tránh log rác khi đang quét)
+        }
+      ).catch(err => {
+        console.error("Lỗi khởi động camera:", err);
+        toast.error("Không thể mở Camera. Vui lòng cấp quyền truy cập camera!");
+        setIsScannerOpen(false);
+      });
+
+      return () => {
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().catch(err => console.error("Lỗi dừng camera clean-up:", err));
+        }
+      };
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [isScannerOpen, tbData]);
+
+  // 🟢 DEEP LINK: TỰ ĐỘNG MỞ CHI TIẾT TÀI SẢN KHI TRUY CẬP QUA LINK QR
+  useEffect(() => {
+    if (tbData.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const qrParam = params.get('qr');
+    if (qrParam) {
+      const matchedAsset = tbData.find(tb => String(tb.ma_tai_san).trim().toUpperCase() === qrParam.trim().toUpperCase());
+      if (matchedAsset) {
+        setViewData(matchedAsset);
+        setIsViewModalOpen(true);
+        // Xóa tham số qr khỏi URL để tránh tự mở lại khi refresh trang
+        const cleanSearch = window.location.search.replace(/[?&]qr=[^&]+/, '').replace(/^&/, '?');
+        const newUrl = window.location.origin + window.location.pathname + (cleanSearch === '?' ? '' : cleanSearch);
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    }
+  }, [tbData]);
 
   const loadData = async () => {
     setLoading(true); setError(null);
@@ -205,6 +332,17 @@ export default function EquipmentPage() {
     
     const filteredNs = nhansuData.filter(ns => validIds.includes(ns.id_don_vi));
     return Array.from(new Set(filteredNs.map(item => item.ho_ten).filter(Boolean))) as string[];
+  }, [nhansuData, selectedTbForNk, donViList]);
+
+  // Lọc danh sách mã số nhân viên của các nhân sự thuộc đơn vị
+  const suggestMsnv = useMemo(() => {
+    if (!selectedTbForNk) return [];
+    const unitId = selectedTbForNk.id_don_vi;
+    const validIds = [unitId, ...getAllSubordinateIds(unitId, donViList)];
+    
+    const filteredNs = nhansuData.filter(ns => validIds.includes(ns.id_don_vi));
+    // Hỗ trợ cả ma_so_nhan_vien hoặc ma_nv
+    return Array.from(new Set(filteredNs.map(item => (item as any).ma_so_nhan_vien || (item as any).ma_nv).filter(Boolean))) as string[];
   }, [nhansuData, selectedTbForNk, donViList]);
 
   const getEquipmentDescription = (item: any) => {
@@ -368,16 +506,54 @@ export default function EquipmentPage() {
     }
 
     if (foundNs) {
+      const bp = foundNs.phong_ban || '';
+      const dv = donViMap[foundNs.id_don_vi] || '';
+      const combined = [bp.trim(), dv.trim()].filter(Boolean).join(' - ');
       setNkFormData((prev: any) => ({ 
         ...prev, 
         ho_ten_nguoi_dung: name, 
-        // 🟢 ĐIỂM FIX: Khớp đúng tên cột ma_so_nhan_vien của bảng nhân sự
         msnv_nguoi_dung: (foundNs as any).ma_so_nhan_vien || (foundNs as any).ma_nv || '', 
-        bp_quan_ly_su_dung: donViMap[foundNs.id_don_vi] || foundNs.id_don_vi || '' 
+        bp_quan_ly_su_dung: combined
       }));
     } else {
       setNkFormData((prev: any) => ({ ...prev, ho_ten_nguoi_dung: name }));
     }
+  };
+
+  const handleNkMsnvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const msnv = e.target.value;
+    
+    // Tìm nhân sự theo msnv (hỗ trợ cả ma_so_nhan_vien hoặc ma_nv)
+    let foundNs = nhansuData.find(ns => {
+      const code = String((ns as any).ma_so_nhan_vien || (ns as any).ma_nv || '').trim().toUpperCase();
+      return code === msnv.trim().toUpperCase();
+    });
+
+    if (foundNs) {
+      const bp = foundNs.phong_ban || '';
+      const dv = donViMap[foundNs.id_don_vi] || '';
+      const combined = [bp.trim(), dv.trim()].filter(Boolean).join(' - ');
+      setNkFormData((prev: any) => ({ 
+        ...prev, 
+        msnv_nguoi_dung: msnv, 
+        ho_ten_nguoi_dung: foundNs.ho_ten || '', 
+        bp_quan_ly_su_dung: combined
+      }));
+    } else {
+      setNkFormData((prev: any) => ({ ...prev, msnv_nguoi_dung: msnv }));
+    }
+  };
+
+  const handleNkBpChange = (val: string) => {
+    setNkFormBp(val);
+    const combined = [val.trim(), nkFormDv.trim()].filter(Boolean).join(' - ');
+    setNkFormData((prev: any) => ({ ...prev, bp_quan_ly_su_dung: combined }));
+  };
+
+  const handleNkDvChange = (val: string) => {
+    setNkFormDv(val);
+    const combined = [nkFormBp.trim(), val.trim()].filter(Boolean).join(' - ');
+    setNkFormData((prev: any) => ({ ...prev, bp_quan_ly_su_dung: combined }));
   };
 
   const confirmDelete = async () => {
@@ -447,8 +623,27 @@ export default function EquipmentPage() {
             <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Layers size={28} /> Quản lý Tài sản & Thiết bị</h2>
             <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredTBs.length} khoản mục)</p>
           </div>
-          <div className="flex w-full sm:w-auto gap-3">
-            <div className="relative w-full sm:w-72">
+          <div className="flex flex-wrap w-full sm:w-auto gap-3 justify-end items-center">
+            {selectedItemsForPrint.length > 0 && (
+              <button 
+                onClick={() => {
+                  const items = tbData.filter(tb => selectedItemsForPrint.includes(tb.id));
+                  setPrintItemsList(items);
+                  setIsPrintModalOpen(true);
+                }} 
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap animate-in fade-in zoom-in duration-200"
+              >
+                <Printer className="w-5 h-5" /> In {selectedItemsForPrint.length} nhãn
+              </button>
+            )}
+            <button 
+              onClick={() => setIsScannerOpen(true)} 
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"
+              title="Quét mã QR qua Camera"
+            >
+              <Camera className="w-5 h-5" /> Quét QR
+            </button>
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input type="text" placeholder="Tìm Mã, Tên, Pháp nhân, Vị trí..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
@@ -544,6 +739,24 @@ export default function EquipmentPage() {
           <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
                 <tr className="bg-[#f8fafc] border-b border-gray-200 text-xs font-bold text-gray-600 uppercase tracking-wider">
+                  <th className="p-4 w-12 text-center">
+                    <input 
+                      type="checkbox" 
+                      checked={currentTableData.length > 0 && currentTableData.every(item => selectedItemsForPrint.includes(item.id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const newSelected = [...selectedItemsForPrint];
+                          currentTableData.forEach(item => {
+                            if (!newSelected.includes(item.id)) newSelected.push(item.id);
+                          });
+                          setSelectedItemsForPrint(newSelected);
+                        } else {
+                          setSelectedItemsForPrint(selectedItemsForPrint.filter(id => !currentTableData.some(item => item.id === id)));
+                        }
+                      }}
+                      className="w-4 h-4 text-[#05469B] border-gray-300 rounded focus:ring-[#05469B] cursor-pointer"
+                    />
+                  </th>
                   <th className="p-4 w-32">Mã / Nhóm</th>
                   <th className="p-4 w-56">Tên Tài sản / Thiết bị</th>
                   <th className="p-4 w-32">Vị trí &amp; SL</th>
@@ -554,9 +767,23 @@ export default function EquipmentPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {loading ? (<tr><td colSpan={7} className="p-12 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />Đang tải...</td></tr>) : filteredTBs.length === 0 ? (<tr><td colSpan={7} className="p-16 text-center text-gray-500"><Package size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-lg font-medium">Không có tài sản nào hiển thị.</p></td></tr>) : (
+                {loading ? (<tr><td colSpan={8} className="p-12 text-center text-gray-500"><Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-[#05469B]" />Đang tải...</td></tr>) : filteredTBs.length === 0 ? (<tr><td colSpan={8} className="p-16 text-center text-gray-500"><Package size={48} className="mx-auto text-gray-300 mb-4" /><p className="text-lg font-medium">Không có tài sản nào hiển thị.</p></td></tr>) : (
                   currentTableData.map((item) => (
                     <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
+                      <td className="p-4 align-top text-center">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedItemsForPrint.includes(item.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItemsForPrint([...selectedItemsForPrint, item.id]);
+                            } else {
+                              setSelectedItemsForPrint(selectedItemsForPrint.filter(id => id !== item.id));
+                            }
+                          }}
+                          className="w-4 h-4 text-[#05469B] border-gray-300 rounded focus:ring-[#05469B] cursor-pointer mt-1"
+                        />
+                      </td>
                       <td className="p-4 align-top">
                         <div className="font-black text-[#05469B] text-[13px] whitespace-nowrap mb-1">🏷️ {item.ma_tai_san || 'Chưa cấp mã'}</div>
                         <span className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[10px] font-bold border border-indigo-100">{item.nhom_thiet_bi || 'Khác'}</span>
@@ -589,10 +816,11 @@ export default function EquipmentPage() {
                       <td className="p-4 align-top w-36">
                         <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-full max-w-[120px] mx-auto">
                           <button onClick={() => openNkModal(item)} className="w-full py-1 bg-white border border-purple-200 text-purple-600 hover:bg-purple-50 rounded text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm"><History size={13} /> Nhật ký</button>
-                          <div className="grid grid-cols-3 gap-1">
-                            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="py-1 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded flex items-center justify-center shadow-sm"><Eye size={13} /></button>
-                            <button onClick={() => openTbModal('update', item)} className="py-1 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded flex items-center justify-center shadow-sm"><Edit size={13} /></button>
-                            <button onClick={() => { setItemToDelete({id: item.id, type: 'tb'}); setIsConfirmOpen(true); }} className="py-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded flex items-center justify-center shadow-sm"><Trash2 size={13} /></button>
+                          <div className="grid grid-cols-4 gap-1">
+                            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="py-1 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded flex items-center justify-center shadow-sm" title="Xem chi tiết"><Eye size={13} /></button>
+                            <button onClick={() => openTbModal('update', item)} className="py-1 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded flex items-center justify-center shadow-sm" title="Sửa"><Edit size={13} /></button>
+                            <button onClick={() => { setPrintItemsList([item]); setIsPrintModalOpen(true); }} className="py-1 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded flex items-center justify-center shadow-sm" title="In nhãn tem QR"><QrCode size={13} /></button>
+                            <button onClick={() => { setItemToDelete({id: item.id, type: 'tb'}); setIsConfirmOpen(true); }} className="py-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded flex items-center justify-center shadow-sm" title="Xóa"><Trash2 size={13} /></button>
                           </div>
                         </div>
                       </td>
@@ -616,7 +844,21 @@ export default function EquipmentPage() {
                   {/* Header: Mã & Nhóm & Tên */}
                   <div className="pb-2.5 border-b border-gray-100">
                     <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-[10px] text-gray-400 font-mono">🏷️ {item.ma_tai_san || 'Chưa cấp mã'}</span>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedItemsForPrint.includes(item.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItemsForPrint([...selectedItemsForPrint, item.id]);
+                            } else {
+                              setSelectedItemsForPrint(selectedItemsForPrint.filter(id => id !== item.id));
+                            }
+                          }}
+                          className="w-4 h-4 text-[#05469B] border-gray-300 rounded focus:ring-[#05469B] cursor-pointer"
+                        />
+                        <span className="text-[10px] text-gray-400 font-mono">🏷️ {item.ma_tai_san || 'Chưa cấp mã'}</span>
+                      </div>
                       <span className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[9px] font-bold border border-indigo-100">{item.nhom_thiet_bi || 'Khác'}</span>
                     </div>
                     <h4 className="font-extrabold text-[#05469B] text-sm leading-snug">{item.ten_thiet_bi}</h4>
@@ -658,7 +900,8 @@ export default function EquipmentPage() {
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xem chi tiết"><Eye size={13} /> Xem</button>
                       <button onClick={() => openTbModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit size={13} /> Sửa</button>
-                      <button onClick={() => { setItemToDelete({id: item.id, type: 'tb'}); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa"><Trash2 size={13} /> Xóa</button>
+                      <button onClick={() => { setPrintItemsList([item]); setIsPrintModalOpen(true); }} className="p-1.5 text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="In nhãn tem QR"><QrCode size={13} /></button>
+                      <button onClick={() => { setItemToDelete({id: item.id, type: 'tb'}); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa"><Trash2 size={13} /></button>
                     </div>
                   </div>
                 </div>
@@ -688,6 +931,199 @@ export default function EquipmentPage() {
       <datalist id="suggest-hdd">{suggestHDD.map(v => <option key={v} value={v} />)}</datalist>
       <datalist id="suggest-vitri">{suggestViTri.map(v => <option key={v} value={v} />)}</datalist>
       <datalist id="suggest-phapnhan">{suggestPhapNhan.map(v => <option key={v} value={v} />)}</datalist>
+
+      {/* --- MODAL QUÉT MÃ QR CAMERA --- */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in zoom-in duration-200">
+            <div className="flex justify-between items-center p-4 border-b border-gray-100 bg-gray-50">
+              <h3 className="text-lg font-bold text-[#05469B] flex items-center gap-2">
+                <Camera size={20} /> Quét Mã QR Tài sản
+              </h3>
+              <button 
+                onClick={() => setIsScannerOpen(false)} 
+                className="text-gray-400 hover:text-red-500 rounded-full p-1 bg-white border border-gray-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 flex flex-col items-center justify-center bg-gray-950 text-white min-h-[320px]">
+              <div id="reader" className="w-full max-w-sm overflow-hidden rounded-lg border-2 border-[#05469B] bg-black"></div>
+              <p className="text-xs text-gray-400 mt-4 text-center">Vui lòng căn chỉnh mã QR nằm chính giữa khung ngắm của Camera.</p>
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button 
+                onClick={() => setIsScannerOpen(false)} 
+                className="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-bold transition-all shadow-xs"
+              >
+                Hủy bỏ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL IN TEM NHÃN TÀI SẢN --- */}
+      {isPrintModalOpen && printItemsList.length > 0 && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[90vh] sm:max-w-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-200">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 bg-gray-50 shrink-0">
+              <h3 className="text-lg font-bold text-[#05469B] flex items-center gap-2">
+                <Printer size={20} /> Xem trước & In Nhãn Tài Sản ({printItemsList.length} cái)
+              </h3>
+              <button 
+                onClick={() => setIsPrintModalOpen(false)} 
+                className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white border border-gray-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Print Preview Area */}
+            <div className="p-6 overflow-y-auto flex-1 bg-gray-100 flex flex-col items-center gap-6 custom-scrollbar">
+              
+              <div className="text-center text-xs text-gray-500 max-w-md">
+                Mẫu tem nhãn được thiết kế chuẩn kích thước **50mm x 20mm** để in trên giấy nhãn. Nhấp nút **In nhãn** phía dưới để thực hiện in.
+              </div>
+
+              {/* Tem nhãn được bọc trong một container để in */}
+              <div id="print-area" className="flex flex-col gap-6 items-center w-full">
+                {printItemsList.map((item, index) => {
+                  const unit = donViList.find(u => u.id === item.id_don_vi);
+                  const unitName = unit ? unit.ten_don_vi : 'THACO AUTO';
+                  const userDetail = getLatestUser(item.id);
+                  const ownerStr = userDetail.msnv !== '---' 
+                    ? `${userDetail.msnv} - ${userDetail.name}` 
+                    : userDetail.name;
+                  
+                  // Tạo link URL cho mã QR dạng rút gọn giúp mật độ QR thưa hơn, dễ quét hơn
+                  const qrUrl = `${window.location.origin}/${item.ma_tai_san}`;
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="relative bg-white border border-gray-300 p-2 select-none shadow-xs rounded flex flex-row items-stretch overflow-hidden box-border print:border-black print:shadow-none"
+                      style={{
+                        width: '50mm',
+                        height: '20mm',
+                        minWidth: '50mm',
+                        minHeight: '20mm',
+                        maxWidth: '50mm',
+                        maxHeight: '20mm',
+                        pageBreakAfter: index < printItemsList.length - 1 ? 'always' : 'auto'
+                      }}
+                    >
+                      {/* Cột trái: Đơn vị và QR Code */}
+                      <div className="w-[38%] flex flex-col items-center justify-between border-r border-dashed border-gray-200 pr-1.5 shrink-0 print:border-black">
+                        <span 
+                          className="text-[6.5px] font-black text-gray-800 uppercase tracking-tight text-center leading-none truncate w-full"
+                          title={unitName}
+                        >
+                          {unitName}
+                        </span>
+                        <div className="flex-1 flex items-center justify-center p-0.5 mt-0.5 overflow-hidden">
+                          <QRCodeSVG 
+                            value={qrUrl}
+                            size={46}
+                            level="M"
+                            bgColor="#ffffff"
+                            fgColor="#000000"
+                            includeMargin={false}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Cột phải: 5 dòng thông tin */}
+                      <div className="flex-1 flex flex-col justify-between pl-1.5 min-w-0 py-0.5 text-left font-sans text-black">
+                        {/* Dòng 1: Mã tài sản */}
+                        <div className="text-[7.5px] font-extrabold truncate leading-tight uppercase text-blue-900 print:text-black">
+                          MS: {item.ma_tai_san || 'CHƯA CẤP MÃ'}
+                        </div>
+                        {/* Dòng 2: Tên tài sản */}
+                        <div className="text-[7px] font-bold truncate leading-tight text-gray-900 print:text-black">
+                          {item.ten_thiet_bi}
+                        </div>
+                        {/* Dòng 3: Nhóm */}
+                        <div className="text-[6.5px] font-semibold text-gray-500 truncate leading-none mt-0.5 print:text-black">
+                          Nhóm: {item.nhom_thiet_bi || 'Khác'}
+                        </div>
+                        {/* Dòng 4: Số Seri */}
+                        <div className="text-[6.5px] font-medium text-gray-500 truncate leading-none mt-0.5 print:text-black">
+                          S/N: {item.so_seri || '---'}
+                        </div>
+                        {/* Dòng 5: MSNV - Tên CB-NV */}
+                        <div className="text-[6px] font-bold text-gray-800 truncate leading-none mt-0.5 print:text-black">
+                          SD: {ownerStr}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center shrink-0">
+              <div className="text-xs text-gray-500">
+                * Nhấn phím `Ctrl + P` hoặc nút **In nhãn** để in.
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsPrintModalOpen(false)} 
+                  className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-bold shadow-xs transition-colors"
+                >
+                  Đóng
+                </button>
+                <button 
+                  onClick={() => {
+                    // Tạo một stylesheet in tạm thời
+                    const style = document.createElement('style');
+                    style.innerHTML = `
+                      @media print {
+                        body * {
+                          visibility: hidden;
+                        }
+                        #print-area, #print-area * {
+                          visibility: visible;
+                        }
+                        #print-area {
+                          position: absolute;
+                          left: 0;
+                          top: 0;
+                          width: 50mm;
+                          margin: 0;
+                          padding: 0;
+                          display: flex !important;
+                          flex-direction: column !important;
+                          gap: 0 !important;
+                        }
+                        #print-area > div {
+                          margin: 0 !important;
+                          border: none !important;
+                          box-shadow: none !important;
+                        }
+                      }
+                    `;
+                    document.head.appendChild(style);
+                    window.print();
+                    // Dọn dẹp sau khi in
+                    setTimeout(() => {
+                      document.head.removeChild(style);
+                    }, 1000);
+                  }} 
+                  className="px-6 py-2.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2"
+                >
+                  <Printer size={16} /> In Nhãn
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* --- MODAL THÊM/SỬA TÀI SẢN --- */}
       {isTbModalOpen && (
@@ -899,19 +1335,52 @@ export default function EquipmentPage() {
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">Ngày ghi nhận *</label><input type="date" required name="ngay_ghi_nhan" value={nkFormData.ngay_ghi_nhan || ''} onChange={(e)=>setNkFormData((prev: any)=>({...prev, ngay_ghi_nhan: e.target.value}))} className="w-full p-2 border rounded-lg bg-[#FFFFF0] font-bold text-purple-900" /></div>
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">Loại sự kiện *</label><select required name="loai_nhat_ky" value={nkFormData.loai_nhat_ky || 'Cấp phát/Thu hồi'} onChange={(e)=>setNkFormData((prev: any)=>({...prev, loai_nhat_ky: e.target.value}))} className="w-full p-2 border rounded-lg bg-[#FFFFF0] font-bold text-indigo-700"><option value="Cấp phát/Thu hồi">Cấp phát / Thu hồi</option><option value="Sửa chữa/Bảo dưỡng">Sửa chữa / Bảo dưỡng</option><option value="Nâng cấp">Nâng cấp</option><option value="Kiểm kê">Kiểm kê</option><option value="Báo hỏng">Báo hỏng / Báo mất</option></select></div>
                   
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-gray-600 mb-1">Người nhận / Trách nhiệm (Gõ để tự điền MSNV)</label>
-                    <CustomAutocomplete
-                      name="ho_ten_nguoi_dung"
-                      value={nkFormData.ho_ten_nguoi_dung || ''}
-                      onChange={handleNkHoTenChange}
-                      suggestions={suggestHoTen}
-                      placeholder="Nhập tên nhân sự..."
-                      className="w-full p-2 border border-purple-200 rounded-lg bg-[#FFFFF0]"
-                    />
+                  <div className="col-span-2 flex flex-row gap-3">
+                    <div className="w-[35%] shrink-0">
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Mã số NV *</label>
+                      <CustomAutocomplete
+                        name="msnv_nguoi_dung"
+                        value={nkFormData.msnv_nguoi_dung || ''}
+                        onChange={handleNkMsnvChange}
+                        suggestions={suggestMsnv}
+                        placeholder="Mã số NV..."
+                        className="w-full p-2 border border-purple-200 rounded-lg bg-[#FFFFF0] font-mono text-center"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Họ và tên *</label>
+                      <input 
+                        type="text" 
+                        name="ho_ten_nguoi_dung" 
+                        value={nkFormData.ho_ten_nguoi_dung || ''} 
+                        onChange={(e)=>setNkFormData((prev: any)=>({...prev, ho_ten_nguoi_dung: e.target.value}))} 
+                        placeholder="Tên nhân sự..." 
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-white font-bold" 
+                      />
+                    </div>
                   </div>
-                  <div><label className="block text-xs font-bold text-gray-600 mb-1">Mã số NV</label><input type="text" name="msnv_nguoi_dung" value={nkFormData.msnv_nguoi_dung || ''} onChange={(e)=>setNkFormData((prev: any)=>({...prev, msnv_nguoi_dung: e.target.value}))} className="w-full p-2 border rounded-lg bg-gray-50" /></div>
-                  <div><label className="block text-xs font-bold text-gray-600 mb-1">Bộ phận công tác</label><input type="text" name="bp_quan_ly_su_dung" value={nkFormData.bp_quan_ly_su_dung || ''} onChange={(e)=>setNkFormData((prev: any)=>({...prev, bp_quan_ly_su_dung: e.target.value}))} className="w-full p-2 border rounded-lg bg-gray-50" /></div>
+                  <div className="col-span-2 flex flex-row gap-3">
+                    <div className="w-1/2">
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Bộ phận</label>
+                      <input 
+                        type="text" 
+                        value={nkFormBp} 
+                        onChange={(e)=>handleNkBpChange(e.target.value)} 
+                        placeholder="Bộ phận..." 
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-white" 
+                      />
+                    </div>
+                    <div className="w-1/2">
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Đơn vị</label>
+                      <input 
+                        type="text" 
+                        value={nkFormDv} 
+                        onChange={(e)=>handleNkDvChange(e.target.value)} 
+                        placeholder="Đơn vị..." 
+                        className="w-full p-2 border border-gray-200 rounded-lg bg-white" 
+                      />
+                    </div>
+                  </div>
                   
                   <div className="col-span-2 bg-orange-50/50 p-3 rounded-lg border border-orange-100">
                     <label className="block text-xs font-bold text-orange-800 mb-1">Tình trạng tài sản lúc ghi nhận</label>

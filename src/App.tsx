@@ -45,6 +45,29 @@ function AppContent() {
   // Tùy chỉnh: Đặt 'dashboard' làm trang mặc định hiển thị đầu tiên
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  // 🟢 XỬ LÝ DEEP LINK TỰ ĐỘNG CHUYỂN TAB & MỞ CHI TIẾT TÀI SẢN
+  useEffect(() => {
+    // 1. Kiểm tra tham số query ?tab=... hoặc ?qr=...
+    const params = new URLSearchParams(window.location.search);
+    const qrParam = params.get('qr');
+    const tabParam = params.get('tab');
+    
+    if (qrParam || tabParam === 'equipment') {
+      setActiveTab('equipments');
+      return;
+    }
+
+    // 2. Kiểm tra pathname trực tiếp (Ví dụ: /T24ATTS32120025)
+    const path = window.location.pathname.replace(/^\//, ''); // Bỏ dấu / ở đầu
+    if (path && path.length >= 5 && !['dashboard', 'personnel', 'firesafety', 'atvsld', 'vehicles', 'equipments', 'documents', 'policies', 'departments', 'accounts', 'logs'].includes(path.toLowerCase())) {
+      // Coi đây là Mã tài sản quét trực tiếp từ QR!
+      // Thiết lập lại URL thành dạng query để EquipmentPage xử lý đồng bộ
+      const newUrl = `${window.location.origin}/?tab=equipment&qr=${path}`;
+      window.history.replaceState({}, document.title, newUrl);
+      setActiveTab('equipments');
+    }
+  }, []);
+
   // LỚP 1: KIỂM TRA ĐĂNG NHẬP
   if (!user) {
     return <Login />;
