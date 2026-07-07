@@ -129,13 +129,22 @@ export default function EquipmentPage() {
 
   // Hàm xử lý khi quét được mã QR thành công
   const handleScannedCode = (code: string) => {
-    let assetCode = code;
-    // Hỗ trợ bóc tách tham số "qr" nếu quét bằng camera thường ra link URL đầy đủ
-    if (code.includes('?')) {
+    let assetCode = code.trim();
+    
+    // Hỗ trợ bóc tách mã tài sản nếu quét ra một đường link URL đầy đủ (HTTP hoặc HTTPS)
+    if (code.startsWith("http://") || code.startsWith("https://")) {
       try {
-        const matches = code.match(/[?&]qr=([^&]+)/);
-        if (matches && matches[1]) {
-          assetCode = matches[1];
+        const url = new URL(code);
+        // Cách 1: Bóc từ query parameter (?qr=...)
+        const qrParam = url.searchParams.get('qr');
+        if (qrParam) {
+          assetCode = qrParam;
+        } else {
+          // Cách 2: Lấy phần path cuối cùng (/T24ATTS32120025)
+          const segments = url.pathname.split('/').filter(Boolean);
+          if (segments.length > 0) {
+            assetCode = segments[segments.length - 1];
+          }
         }
       } catch (e) {
         console.error("Lỗi phân tích URL mã QR:", e);
