@@ -1,0 +1,16 @@
+{
+  "short_name": "QTVP & ASĐS",
+  "name": "Quản trị Văn phòng & An sinh Đời sống",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#f4f7f9",
+  "theme_color": "#05408A",
+  "display": "standalone",
+  "orientation": "portrait"
+}
