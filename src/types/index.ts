@@ -53,7 +53,7 @@ export interface Personnel {
   email: string;
   gioi_tinh: string;
   nam_sinh: string;
-  ngay_nhan_viec: string;
+  ngay_nhan_vien: string;
   id_don_vi: string;
   phan_loai: string;
   trinh_do_hoc_van: string;

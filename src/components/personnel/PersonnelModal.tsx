@@ -10,6 +10,7 @@ interface PersonnelModalProps {
   formData: any;
   submitting: boolean;
   donViList: DonVi[];
+  phanLoaiSuggestions?: string[];
   onClose: () => void;
   onSave: (e: React.FormEvent) => void;
   setFormData: (updater: (prev: any) => any) => void;
@@ -36,6 +37,7 @@ export default function PersonnelModal({
   formData,
   submitting,
   donViList,
+  phanLoaiSuggestions = [],
   onClose,
   onSave,
   setFormData,
@@ -110,6 +112,41 @@ export default function PersonnelModal({
     return formData.giay_phep_lai_xe ? formData.giay_phep_lai_xe.split(',').map((s: string) => s.trim()) : [];
   }, [formData.giay_phep_lai_xe]);
 
+  const normalizedKhoi = useMemo(() => {
+    const val = String(formData.khoi || '').trim();
+    const lower = val.toLowerCase();
+    if (lower.includes('văn phòng') || lower.includes('vp')) return 'Văn phòng';
+    if (lower.includes('kinh doanh') || lower.includes('kd')) return 'Kinh doanh';
+    if (lower.includes('dịch vụ') || lower.includes('dv')) return 'Dịch vụ';
+    return val || 'Văn phòng';
+  }, [formData.khoi]);
+
+  const khoiOptions = useMemo(() => {
+    const base = ['Văn phòng', 'Kinh doanh', 'Dịch vụ'];
+    if (normalizedKhoi && !base.includes(normalizedKhoi)) {
+      base.push(normalizedKhoi);
+    }
+    return base;
+  }, [normalizedKhoi]);
+
+  const phanLoaiOptions = useMemo(() => {
+    const base = ['Lãnh đạo', 'PT KD Xe', 'PT KD DVPT', 'PT DVHT 1', 'PT DVHT 2', 'Hành chính NS', 'Nhân sự hỗ trợ'];
+    const current = String(formData.phan_loai || '').trim();
+    if (current && !base.includes(current)) {
+      base.push(current);
+    }
+    return base;
+  }, [formData.phan_loai]);
+
+  const nhomOptions = useMemo(() => {
+    const base = ['Nhóm 1', 'Nhóm 2', 'Nhóm 3', 'Nhóm 4', 'Nhóm 6'];
+    const current = String(formData.nhom_doi_tuong || '').trim();
+    if (current && !base.includes(current)) {
+      base.push(current);
+    }
+    return base;
+  }, [formData.nhom_doi_tuong]);
+
   if (!isOpen) return null;
 
   return (
@@ -149,12 +186,28 @@ export default function PersonnelModal({
                   </select>
                 </div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận làm việc</label><input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Hành chính, Kỹ thuật..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label><select name="khoi" value={formData.khoi || 'Văn phòng'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Văn phòng">Khối Văn phòng</option><option value="Kinh doanh">Khối Kinh doanh</option><option value="Dịch vụ">Khối Dịch vụ</option></select></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label><select name="khoi" value={normalizedKhoi} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">{khoiOptions.map(opt => <option key={opt} value={opt}>{opt.startsWith('Khối') ? opt : `Khối ${opt}`}</option>)}</select></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức danh nghiệp vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Nhân viên, Kỹ thuật viên..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Phân loại nhân sự</label><select name="phan_loai" value={formData.phan_loai || 'Nhân sự hỗ trợ'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Lãnh đạo">Lãnh đạo</option><option value="PT KD Xe">PT KD Xe</option><option value="PT KD DVPT">PT KD DVPT</option><option value="PT DVHT 1">PT DVHT 1</option><option value="PT DVHT 2">PT DVHT 2</option><option value="Hành chính NS">Hành chính NS</option><option value="Nhân sự hỗ trợ">Nhân sự hỗ trợ</option></select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Nhóm đối tượng ATVSLĐ *</label><select required name="nhom_doi_tuong" value={formData.nhom_doi_tuong || 'Nhóm 4'} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800"><option value="Nhóm 1">Nhóm 1 (Ban Giám Đốc)</option><option value="Nhóm 2">Nhóm 2 (Cán bộ An toàn)</option><option value="Nhóm 3">Nhóm 3 (Lao động nghiêm ngặt)</option><option value="Nhóm 4">Nhóm 4 (Văn phòng, Kinh doanh...)</option><option value="Nhóm 6">Nhóm 6 (Vệ sinh viên)</option></select></div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại nhân sự</label>
+                  <input 
+                    type="text" 
+                    name="phan_loai" 
+                    list="phan-loai-suggestions"
+                    value={formData.phan_loai || ''} 
+                    onChange={handleInputChange} 
+                    className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" 
+                    placeholder="Nhập hoặc chọn phân loại..."
+                  />
+                  <datalist id="phan-loai-suggestions">
+                    {phanLoaiSuggestions.map(opt => (
+                      <option key={opt} value={opt} />
+                    ))}
+                  </datalist>
+                </div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Nhóm đối tượng ATVSLĐ *</label><select required name="nhom_doi_tuong" value={formData.nhom_doi_tuong || 'Nhóm 4'} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800">{nhomOptions.map(opt => { let label = opt; if (opt === 'Nhóm 1') label = 'Nhóm 1 (Ban Giám Đốc)'; else if (opt === 'Nhóm 2') label = 'Nhóm 2 (Cán bộ An toàn)'; else if (opt === 'Nhóm 3') label = 'Nhóm 3 (Lao động nghiêm ngặt)'; else if (opt === 'Nhóm 4') label = 'Nhóm 4 (Văn phòng, Kinh doanh...)'; else if (opt === 'Nhóm 6') label = 'Nhóm 6 (Vệ sinh viên)'; return <option key={opt} value={opt}>{label}</option>; })}</select></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label><input type="text" name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Đại học, Cao đẳng..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc *</label><input type="date" required name="ngay_nhan_viec" value={formData.ngay_nhan_viec ? formData.ngay_nhan_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc *</label><input type="date" required name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm làm việc</label><input type="text" name="dia_diem_lam_viec" value={formData.dia_diem_lam_viec || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Showroom Bình Dương..." /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label><input type="text" name="ngach_luong" value={formData.ngach_luong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Ví dụ: Chuyên viên" /></div>

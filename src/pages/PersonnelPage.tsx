@@ -69,6 +69,13 @@ export default function PersonnelPage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
+  const phanLoaiSuggestions = useMemo(() => {
+    const list = data.map(p => String(p.phan_loai || '').trim()).filter(Boolean);
+    return Array.from(new Set(list)).sort();
+  }, [data]);
+
+
+
   const [isOffboardOpen, setIsOffboardOpen] = useState(false);
   const [personnelToOffboard, setPersonnelToOffboard] = useState<any | null>(null);
   const [unreturnedAssets, setUnreturnedAssets] = useState<any[]>([]);
@@ -300,6 +307,167 @@ export default function PersonnelPage() {
       return timeA - timeB; 
     });
   }, [data, personnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, selectedUnitSubordinates, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
+
+  const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<string[]>([]);
+
+  const showSelectCheckboxes = useMemo(() => {
+    return showAdvancedFilters && (
+      filterPhongBan !== '' || 
+      filterKhoi !== '' || 
+      filterChucVu !== '' || 
+      filterPhanLoai !== ''
+    );
+  }, [showAdvancedFilters, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
+
+  useEffect(() => {
+    if (!showSelectCheckboxes) {
+      setSelectedPersonnelIds([]);
+    }
+  }, [showSelectCheckboxes]);
+
+  const isAllSelected = useMemo(() => {
+    if (filteredPersonnel.length === 0) return false;
+    return filteredPersonnel.every(p => selectedPersonnelIds.includes(p.id));
+  }, [filteredPersonnel, selectedPersonnelIds]);
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const filteredIds = filteredPersonnel.map(p => p.id);
+      setSelectedPersonnelIds(prev => {
+        const union = new Set([...prev, ...filteredIds]);
+        return Array.from(union);
+      });
+    } else {
+      const filteredIds = filteredPersonnel.map(p => p.id);
+      setSelectedPersonnelIds(prev => prev.filter(id => !filteredIds.includes(id)));
+    }
+  };
+
+  const handleSelectRow = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedPersonnelIds(prev => [...prev, id]);
+    } else {
+      setSelectedPersonnelIds(prev => prev.filter(x => x !== id));
+    }
+  };
+
+  const handleExportSelectedExcel = () => {
+    const selectedStaff = data.filter(p => selectedPersonnelIds.includes(p.id));
+    if (selectedStaff.length === 0) return;
+
+    let rowsHTML = '';
+    selectedStaff.forEach((p, idx) => {
+      const dvText = donViMap[String(p.id_don_vi)] || p.id_don_vi || '---';
+      const formatVal = (val: any) => val ? String(val).trim() : '---';
+      const formatDate = (val: any) => val ? new Date(val).toLocaleDateString('vi-VN') : '---';
+      const formatBool = (val: any) => (val === true || String(val).toLowerCase() === 'true' || String(val) === 'có') ? 'Có' : 'Không';
+      const thuNhapText = p.thu_nhap ? Number(p.thu_nhap).toLocaleString('vi-VN') : '---';
+
+      rowsHTML += `
+        <tr>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${idx + 1}</td>
+          <td style="mso-number-format:'\\@'; border: 1px solid #000000; padding: 5px;">${formatVal(p.ma_so_nhan_vien)}</td>
+          <td style="font-weight: bold; color: #002060; border: 1px solid #000000; padding: 5px;">${formatVal(p.ho_ten)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.gioi_tinh)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.nam_sinh ? formatDate(p.nam_sinh) : '---'}</td>
+          <td style="mso-number-format:'\\@'; text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.sdt_cong_ty)}</td>
+          <td style="mso-number-format:'\\@'; text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.sdt_ca_nhan)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.email)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(dvText)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.phong_ban)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.khoi)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.chuc_vu)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.phan_loai)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.ngach_luong)}</td>
+          <td style="text-align: right; mso-number-format:'#\\,##0'; border: 1px solid #000000; padding: 5px;">${thuNhapText}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.ngay_nhan_vien ? formatDate(p.ngay_nhan_vien) : '---'}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.ngay_nghi_viec ? formatDate(p.ngay_nghi_viec) : '---'}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.trang_thai)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.nhom_doi_tuong)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.huan_luyen_tu ? formatDate(p.huan_luyen_tu) : '---'}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.huan_luyen_den ? formatDate(p.huan_luyen_den) : '---'}</td>
+          <td style="text-align: center; font-weight: bold; color: #b91c1c; border: 1px solid #000000; padding: 5px;">${p.gia_tri_den ? formatDate(p.gia_tri_den) : '---'}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.chung_nhan)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_atvsld)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_anbv)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_pccc)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_cnch)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_so_cap_cuu)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_cpr)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_vo_thuat)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.giay_phep_lai_xe)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_attp)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_pha_che)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_ngoai_ngu)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatBool(p.cc_tin_hoc)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.dia_diem_lam_viec)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.mo_to_ngoai_hinh)}</td>
+          <td style="border: 1px solid #000000; padding: 5px;">${formatVal(p.ghi_chu)}</td>
+        </tr>
+      `;
+    });
+
+    const headerHTML = `
+      <tr class="header" style="background-color: #d9e1f2; font-weight: bold; text-align: center;">
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">STT</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Mã số nhân viên</th>
+        <th rowspan="2" style="width: 180px; border: 1px solid #000000; padding: 5px;">Họ và tên</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Giới tính</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Năm sinh</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">SĐT công ty</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">SĐT cá nhân</th>
+        <th rowspan="2" style="width: 200px; border: 1px solid #000000; padding: 5px;">Email</th>
+        <th rowspan="2" style="width: 250px; border: 1px solid #000000; padding: 5px;">Đơn vị công tác</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Bộ phận làm việc</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Khối trực thuộc</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Chức danh nghiệp vụ</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Phân loại nhân sự</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Ngạch lương</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Thu nhập (Lương đóng BH)</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Ngày nhận việc</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Ngày nghỉ việc</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Trạng thái làm việc</th>
+        <th colspan="5" style="border: 1px solid #000000; padding: 5px;">Thông tin chứng nhận ATVSLĐ</th>
+        <th colspan="12" style="border: 1px solid #000000; padding: 5px;">Danh sách chứng chỉ bằng cấp</th>
+        <th rowspan="2" style="border: 1px solid #000000; padding: 5px;">Địa điểm làm việc</th>
+        <th rowspan="2" style="width: 200px; border: 1px solid #000000; padding: 5px;">Mô tả ngoại hình</th>
+        <th rowspan="2" style="width: 200px; border: 1px solid #000000; padding: 5px;">Ghi chú</th>
+      </tr>
+      <tr class="header" style="background-color: #d9e1f2; font-weight: bold; text-align: center;">
+        <th style="border: 1px solid #000000; padding: 5px;">Nhóm đối tượng</th>
+        <th style="border: 1px solid #000000; padding: 5px;">Huấn luyện từ</th>
+        <th style="border: 1px solid #000000; padding: 5px;">Huấn luyện đến</th>
+        <th style="border: 1px solid #000000; padding: 5px;">Giá trị đến ngày</th>
+        <th style="border: 1px solid #000000; padding: 5px;">Loại chứng nhận</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC ATVSLĐ</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC ANBV</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC PCCC</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC CNCH</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC Sơ cấp cứu</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC CPR</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC Võ thuật</th>
+        <th style="border: 1px solid #000000; padding: 5px;">GPLX</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC ATTP</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC Pha chế</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC Ngoại ngữ</th>
+        <th style="border: 1px solid #000000; padding: 5px;">CC Tin học</th>
+      </tr>
+    `;
+
+    const tableHTML = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><style>table { border-collapse: collapse; font-family: 'Times New Roman', serif; font-size: 11pt; } th, td { border: 1px solid #000000; padding: 5px; vertical-align: middle; }</style></head><body><table><thead>${headerHTML}</thead><tbody>${rowsHTML}</tbody></table></body></html>`;
+
+    const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Danh_Sach_Nhan_Su_Export_${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Đã xuất dữ liệu của ${selectedStaff.length} nhân sự thành công!`);
+  };
 
   const selectedUnitName = useMemo(() => {
     if (!selectedUnitFilter) return 'Tất cả Đơn vị';
@@ -987,7 +1155,18 @@ export default function PersonnelPage() {
             )}
             <div>
               <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
-              <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredPersonnel.length} nhân sự)</p>
+              <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span>Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredPersonnel.length} nhân sự)</span>
+                {filteredPersonnel.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={() => handleSelectAll(!isAllSelected)}
+                    className="text-xs text-[#05469B] hover:text-[#05469B]/80 font-extrabold underline transition-colors"
+                  >
+                    {isAllSelected ? '✕ Hủy chọn tất cả' : '✓ Chọn tất cả đã lọc'}
+                  </button>
+                )}
+              </p>
             </div>
           </div>
           
@@ -1297,15 +1476,46 @@ export default function PersonnelPage() {
         {activeTab === 'info' && (
           <div className={`flex flex-col flex-1 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
             
+            {selectedPersonnelIds.length > 0 && (
+              <div className="mb-3 px-4 py-3 bg-[#f0fdf4] border border-emerald-200 rounded-xl flex items-center justify-between shadow-sm animate-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center gap-2.5 text-[12.5px] font-bold text-emerald-800">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
+                  <span>Đã chọn <span className="underline font-black text-emerald-700">{selectedPersonnelIds.length}</span> nhân sự từ danh sách</span>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleExportSelectedExcel} 
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <FileSpreadsheet size={13} /> Xuất Excel (Full thông tin)
+                  </button>
+                  <button 
+                    onClick={() => setSelectedPersonnelIds([])} 
+                    className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-[11px] rounded-lg transition-colors"
+                  >
+                    Hủy chọn
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* VIEW TRÊN PC: BẢNG DỮ LIỆU CHÍNH */}
             <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full flex-1 overflow-x-auto custom-scrollbar">
               <table className="w-full min-w-[900px] table-fixed text-left border-collapse text-[11.5px]">
                 <thead className="sticky top-0 bg-[#f8fafc] z-10 text-[11.5px]">
                   <tr className="border-b border-gray-200 font-bold text-gray-600 uppercase tracking-wider">
-                    <th className="py-2.5 px-3 w-[9%] whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
+                    <th className="py-2.5 px-3 w-[4%] text-center bg-[#f8fafc]">
+                      <input 
+                        type="checkbox" 
+                        checked={isAllSelected} 
+                        onChange={(e) => handleSelectAll(e.target.checked)} 
+                        className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] cursor-pointer" 
+                      />
+                    </th>
+                    <th className="py-2.5 px-3 w-[8%] whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
                     <th className="py-2.5 px-3 w-[18%] whitespace-nowrap bg-[#f8fafc]">Họ Tên / Trạng thái</th>
-                    <th className="py-2.5 px-3 w-[24%] bg-[#f8fafc]">Chức vụ &amp; Bộ phận</th>
-                    <th className="py-2.5 px-3 w-[13%] bg-[#f8fafc]">Đơn Vị</th>
+                    <th className="py-2.5 px-3 w-[22%] bg-[#f8fafc]">Chức vụ &amp; Bộ phận</th>
+                    <th className="py-2.5 px-3 w-[12%] bg-[#f8fafc]">Đơn Vị</th>
                     <th className="py-2.5 px-3 w-[14%] whitespace-nowrap bg-[#f8fafc]">Điện thoại</th>
                     <th className="py-2.5 px-3 w-[10%] whitespace-nowrap bg-[#f8fafc]">Thâm niên</th>
                     <th className="py-2.5 px-3 text-center w-[12%] whitespace-nowrap bg-[#f8fafc]">Thao tác</th>
@@ -1314,6 +1524,14 @@ export default function PersonnelPage() {
                 <tbody className="divide-y divide-gray-200">
                   {paginatedPersonnel.map((item: any) => (
                     <tr key={item.id} className={`hover:bg-blue-50/50 transition-colors group ${item.trang_thai === 'Đã nghỉ việc' ? 'opacity-60 bg-gray-50' : ''}`}>
+                      <td className="py-2.5 px-3 text-center align-middle">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedPersonnelIds.includes(item.id)} 
+                          onChange={(e) => handleSelectRow(item.id, e.target.checked)} 
+                          className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] cursor-pointer" 
+                        />
+                      </td>
                       <td className="py-2.5 px-3 font-semibold text-gray-800 whitespace-nowrap text-[11px] align-middle text-left">{item.ma_so_nhan_vien}</td>
                       <td className="py-2.5 px-3 align-middle text-left">
                         <div className="flex items-center gap-2.5">
@@ -1338,7 +1556,7 @@ export default function PersonnelPage() {
                               )}
                               {item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có' && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-2xs truncate max-w-[140px]" title={`Khối: ${item.khoi}`}>
-                                  Khối: {item.khoi}
+                                  {String(item.khoi).startsWith('Khối') ? item.khoi : `Khối: ${item.khoi}`}
                                 </span>
                               )}
                             </div>
@@ -1394,6 +1612,12 @@ export default function PersonnelPage() {
                     >
                       {/* Header Card: Avatar + Name + ID + Status */}
                       <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedPersonnelIds.includes(item.id)} 
+                          onChange={(e) => handleSelectRow(item.id, e.target.checked)} 
+                          className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] shrink-0 cursor-pointer" 
+                        />
                         <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
                           {item.hinh_anh ? <img src={getDirectImageLink(item.hinh_anh)} alt="" className="w-full h-full object-cover" /> : <UserIcon size={16} className="text-gray-400" />}
                         </div>
@@ -1424,7 +1648,7 @@ export default function PersonnelPage() {
                               )}
                               {item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có' && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                  Khối: {item.khoi}
+                                  {String(item.khoi).startsWith('Khối') ? item.khoi : `Khối: ${item.khoi}`}
                                 </span>
                               )}
                             </div>
@@ -2155,6 +2379,7 @@ export default function PersonnelPage() {
         formData={formData}
         submitting={submitting}
         donViList={donViList}
+        phanLoaiSuggestions={phanLoaiSuggestions}
         onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
         onSave={handleSave}
         setFormData={(updater) => setModal(prev => ({ ...prev, formData: updater(prev.formData) }))}
