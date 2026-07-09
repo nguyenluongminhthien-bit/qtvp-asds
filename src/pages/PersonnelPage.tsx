@@ -311,13 +311,8 @@ export default function PersonnelPage() {
   const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<string[]>([]);
 
   const showSelectCheckboxes = useMemo(() => {
-    return showAdvancedFilters && (
-      filterPhongBan !== '' || 
-      filterKhoi !== '' || 
-      filterChucVu !== '' || 
-      filterPhanLoai !== ''
-    );
-  }, [showAdvancedFilters, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
+    return showAdvancedFilters;
+  }, [showAdvancedFilters]);
 
   useEffect(() => {
     if (!showSelectCheckboxes) {
@@ -1157,7 +1152,7 @@ export default function PersonnelPage() {
               <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
               <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredPersonnel.length} nhân sự)</span>
-                {filteredPersonnel.length > 0 && (
+                {filteredPersonnel.length > 0 && showSelectCheckboxes && (
                   <button 
                     type="button"
                     onClick={() => handleSelectAll(!isAllSelected)}
@@ -1504,14 +1499,16 @@ export default function PersonnelPage() {
               <table className="w-full min-w-[900px] table-fixed text-left border-collapse text-[11.5px]">
                 <thead className="sticky top-0 bg-[#f8fafc] z-10 text-[11.5px]">
                   <tr className="border-b border-gray-200 font-bold text-gray-600 uppercase tracking-wider">
-                    <th className="py-2.5 px-3 w-[4%] text-center bg-[#f8fafc]">
-                      <input 
-                        type="checkbox" 
-                        checked={isAllSelected} 
-                        onChange={(e) => handleSelectAll(e.target.checked)} 
-                        className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] cursor-pointer" 
-                      />
-                    </th>
+                    {showSelectCheckboxes && (
+                      <th className="py-2.5 px-3 w-[4%] text-center bg-[#f8fafc]">
+                        <input 
+                          type="checkbox" 
+                          checked={isAllSelected} 
+                          onChange={(e) => handleSelectAll(e.target.checked)} 
+                          className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] cursor-pointer" 
+                        />
+                      </th>
+                    )}
                     <th className="py-2.5 px-3 w-[8%] whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
                     <th className="py-2.5 px-3 w-[18%] whitespace-nowrap bg-[#f8fafc]">Họ Tên / Trạng thái</th>
                     <th className="py-2.5 px-3 w-[22%] bg-[#f8fafc]">Chức vụ &amp; Bộ phận</th>
@@ -1524,14 +1521,16 @@ export default function PersonnelPage() {
                 <tbody className="divide-y divide-gray-200">
                   {paginatedPersonnel.map((item: any) => (
                     <tr key={item.id} className={`hover:bg-blue-50/50 transition-colors group ${item.trang_thai === 'Đã nghỉ việc' ? 'opacity-60 bg-gray-50' : ''}`}>
-                      <td className="py-2.5 px-3 text-center align-middle">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedPersonnelIds.includes(item.id)} 
-                          onChange={(e) => handleSelectRow(item.id, e.target.checked)} 
-                          className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] cursor-pointer" 
-                        />
-                      </td>
+                      {showSelectCheckboxes && (
+                        <td className="py-2.5 px-3 text-center align-middle">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedPersonnelIds.includes(item.id)} 
+                            onChange={(e) => handleSelectRow(item.id, e.target.checked)} 
+                            className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] cursor-pointer" 
+                          />
+                        </td>
+                      )}
                       <td className="py-2.5 px-3 font-semibold text-gray-800 whitespace-nowrap text-[11px] align-middle text-left">{item.ma_so_nhan_vien}</td>
                       <td className="py-2.5 px-3 align-middle text-left">
                         <div className="flex items-center gap-2.5">
@@ -1612,12 +1611,14 @@ export default function PersonnelPage() {
                     >
                       {/* Header Card: Avatar + Name + ID + Status */}
                       <div className="flex items-center gap-3 pb-2.5 border-b border-gray-100">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedPersonnelIds.includes(item.id)} 
-                          onChange={(e) => handleSelectRow(item.id, e.target.checked)} 
-                          className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] shrink-0 cursor-pointer" 
-                        />
+                        {showSelectCheckboxes && (
+                          <input 
+                            type="checkbox" 
+                            checked={selectedPersonnelIds.includes(item.id)} 
+                            onChange={(e) => handleSelectRow(item.id, e.target.checked)} 
+                            className="w-4 h-4 text-[#05469B] rounded border-gray-300 focus:ring-[#05469B] shrink-0 cursor-pointer" 
+                          />
+                        )}
                         <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
                           {item.hinh_anh ? <img src={getDirectImageLink(item.hinh_anh)} alt="" className="w-full h-full object-cover" /> : <UserIcon size={16} className="text-gray-400" />}
                         </div>
