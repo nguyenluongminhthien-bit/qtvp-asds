@@ -10,6 +10,7 @@ export async function writeLog(hanhDong: string, chiTiet: string): Promise<void>
       id: `LOG${Date.now()}${Math.floor(Math.random() * 1000)}`,
       thoi_gian: new Date().toISOString(), 
       id_user: currentUser?.id || null, 
+      ho_ten: currentUser?.ho_ten || null,
       hanh_dong: hanhDong,
       chi_tiet: chiTiet
     };
@@ -49,6 +50,7 @@ export async function writeLog(hanhDong: string, chiTiet: string): Promise<void>
         id: `LOG${Date.now()}${Math.floor(Math.random() * 1000)}`,
         thoi_gian: new Date().toISOString(), 
         id_user: currentUser?.id || null, 
+        ho_ten: currentUser?.ho_ten || null,
         hanh_dong: hanhDong,
         chi_tiet: chiTiet,
         id_don_vi: currentUser?.id_don_vi && currentUser.id_don_vi !== 'ALL' ? currentUser.id_don_vi : null

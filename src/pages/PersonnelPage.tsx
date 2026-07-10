@@ -276,16 +276,20 @@ export default function PersonnelPage() {
     }
 
     if (filterPhongBan) {
-      result = result.filter(item => String(item.phong_ban || '').trim() === filterPhongBan);
+      const lowerVal = filterPhongBan.toLowerCase().trim();
+      result = result.filter(item => String(item.phong_ban || '').toLowerCase().includes(lowerVal));
     }
     if (filterKhoi) {
-      result = result.filter(item => String(item.khoi || '').trim() === filterKhoi);
+      const lowerVal = filterKhoi.toLowerCase().trim();
+      result = result.filter(item => String(item.khoi || '').toLowerCase().includes(lowerVal));
     }
     if (filterChucVu) {
-      result = result.filter(item => String(item.chuc_vu || '').trim() === filterChucVu);
+      const lowerVal = filterChucVu.toLowerCase().trim();
+      result = result.filter(item => String(item.chuc_vu || '').toLowerCase().includes(lowerVal));
     }
     if (filterPhanLoai) {
-      result = result.filter(item => String(item.phan_loai || '').trim() === filterPhanLoai);
+      const lowerVal = filterPhanLoai.toLowerCase().trim();
+      result = result.filter(item => String(item.phan_loai || '').toLowerCase().includes(lowerVal));
     }
 
     const phanLoaiOrder: Record<string, number> = {
@@ -311,8 +315,13 @@ export default function PersonnelPage() {
   const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<string[]>([]);
 
   const showSelectCheckboxes = useMemo(() => {
-    return showAdvancedFilters;
-  }, [showAdvancedFilters]);
+    return showAdvancedFilters && (
+      filterPhongBan !== '' || 
+      filterKhoi !== '' || 
+      filterChucVu !== '' || 
+      filterPhanLoai !== ''
+    );
+  }, [showAdvancedFilters, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
 
   useEffect(() => {
     if (!showSelectCheckboxes) {
@@ -1152,7 +1161,7 @@ export default function PersonnelPage() {
               <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
               <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredPersonnel.length} nhân sự)</span>
-                {filteredPersonnel.length > 0 && showSelectCheckboxes && (
+                {filteredPersonnel.length > 0 && (
                   <button 
                     type="button"
                     onClick={() => handleSelectAll(!isAllSelected)}
@@ -1389,16 +1398,30 @@ export default function PersonnelPage() {
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
                   <Building2 size={13} className="text-blue-500" /> Bộ phận ({availableFilterOptions.phongBanList.length})
                 </label>
-                <select
-                  value={filterPhongBan}
-                  onChange={(e) => setFilterPhongBan(e.target.value)}
-                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                >
-                  <option value="">-- Tất cả Bộ phận --</option>
-                  {availableFilterOptions.phongBanList.map((item, idx) => (
-                    <option key={idx} value={item}>{item}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={filterPhongBan}
+                    onChange={(e) => setFilterPhongBan(e.target.value)}
+                    list="phong-ban-filter-list"
+                    placeholder="Gõ hoặc chọn Bộ phận..."
+                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                  />
+                  <datalist id="phong-ban-filter-list">
+                    {availableFilterOptions.phongBanList.map((item, idx) => (
+                      <option key={idx} value={item} />
+                    ))}
+                  </datalist>
+                  {filterPhongBan && (
+                    <button 
+                      type="button" 
+                      onClick={() => setFilterPhongBan('')} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Lọc theo Khối */}
@@ -1406,16 +1429,30 @@ export default function PersonnelPage() {
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
                   <Layers size={13} className="text-purple-500" /> Khối ({availableFilterOptions.khoiList.length})
                 </label>
-                <select
-                  value={filterKhoi}
-                  onChange={(e) => setFilterKhoi(e.target.value)}
-                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                >
-                  <option value="">-- Tất cả Khối --</option>
-                  {availableFilterOptions.khoiList.map((item, idx) => (
-                    <option key={idx} value={item}>{item}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={filterKhoi}
+                    onChange={(e) => setFilterKhoi(e.target.value)}
+                    list="khoi-filter-list"
+                    placeholder="Gõ hoặc chọn Khối..."
+                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                  />
+                  <datalist id="khoi-filter-list">
+                    {availableFilterOptions.khoiList.map((item, idx) => (
+                      <option key={idx} value={item} />
+                    ))}
+                  </datalist>
+                  {filterKhoi && (
+                    <button 
+                      type="button" 
+                      onClick={() => setFilterKhoi('')} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Lọc theo Chức vụ */}
@@ -1423,16 +1460,30 @@ export default function PersonnelPage() {
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
                   <Briefcase size={13} className="text-orange-500" /> Chức vụ ({availableFilterOptions.chucVuList.length})
                 </label>
-                <select
-                  value={filterChucVu}
-                  onChange={(e) => setFilterChucVu(e.target.value)}
-                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                >
-                  <option value="">-- Tất cả Chức vụ --</option>
-                  {availableFilterOptions.chucVuList.map((item, idx) => (
-                    <option key={idx} value={item}>{item}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={filterChucVu}
+                    onChange={(e) => setFilterChucVu(e.target.value)}
+                    list="chuc-vu-filter-list"
+                    placeholder="Gõ hoặc chọn Chức vụ..."
+                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                  />
+                  <datalist id="chuc-vu-filter-list">
+                    {availableFilterOptions.chucVuList.map((item, idx) => (
+                      <option key={idx} value={item} />
+                    ))}
+                  </datalist>
+                  {filterChucVu && (
+                    <button 
+                      type="button" 
+                      onClick={() => setFilterChucVu('')} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Lọc theo Phân loại */}
@@ -1440,16 +1491,30 @@ export default function PersonnelPage() {
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
                   <Tag size={13} className="text-emerald-500" /> Phân loại ({availableFilterOptions.phanLoaiList.length})
                 </label>
-                <select
-                  value={filterPhanLoai}
-                  onChange={(e) => setFilterPhanLoai(e.target.value)}
-                  className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                >
-                  <option value="">-- Tất cả Phân loại --</option>
-                  {availableFilterOptions.phanLoaiList.map((item, idx) => (
-                    <option key={idx} value={item}>{item}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={filterPhanLoai}
+                    onChange={(e) => setFilterPhanLoai(e.target.value)}
+                    list="phan-loai-filter-list"
+                    placeholder="Gõ hoặc chọn Phân loại..."
+                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                  />
+                  <datalist id="phan-loai-filter-list">
+                    {availableFilterOptions.phanLoaiList.map((item, idx) => (
+                      <option key={idx} value={item} />
+                    ))}
+                  </datalist>
+                  {filterPhanLoai && (
+                    <button 
+                      type="button" 
+                      onClick={() => setFilterPhanLoai('')} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1509,10 +1574,10 @@ export default function PersonnelPage() {
                         />
                       </th>
                     )}
-                    <th className="py-2.5 px-3 w-[8%] whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
+                    <th className={`py-2.5 px-3 ${showSelectCheckboxes ? 'w-[8%]' : 'w-[9%]'} whitespace-nowrap bg-[#f8fafc]`}>Mã NV</th>
                     <th className="py-2.5 px-3 w-[18%] whitespace-nowrap bg-[#f8fafc]">Họ Tên / Trạng thái</th>
-                    <th className="py-2.5 px-3 w-[22%] bg-[#f8fafc]">Chức vụ &amp; Bộ phận</th>
-                    <th className="py-2.5 px-3 w-[12%] bg-[#f8fafc]">Đơn Vị</th>
+                    <th className={`py-2.5 px-3 ${showSelectCheckboxes ? 'w-[22%]' : 'w-[24%]'} bg-[#f8fafc]`}>Chức vụ &amp; Bộ phận</th>
+                    <th className={`py-2.5 px-3 ${showSelectCheckboxes ? 'w-[12%]' : 'w-[13%]'} bg-[#f8fafc]`}>Đơn Vị</th>
                     <th className="py-2.5 px-3 w-[14%] whitespace-nowrap bg-[#f8fafc]">Điện thoại</th>
                     <th className="py-2.5 px-3 w-[10%] whitespace-nowrap bg-[#f8fafc]">Thâm niên</th>
                     <th className="py-2.5 px-3 text-center w-[12%] whitespace-nowrap bg-[#f8fafc]">Thao tác</th>

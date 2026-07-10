@@ -41,9 +41,60 @@ function TabContainer({ active, children }: TabContainerProps) {
 
 function AppContent() {
   const { user } = useAuth();
+
+  const checkPermission = (moduleId: string) => {
+    if (!user) return false;
+    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
+      return true;
+    }
+    return String(user.quyen_truy_cap || '').includes(moduleId);
+  };
   
   // Tùy chỉnh: Đặt 'dashboard' làm trang mặc định hiển thị đầu tiên
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  // 🟢 TỰ ĐỘNG CHUYỂN TAB NẾU KHÔNG CÓ QUYỀN TRUY CẬP TAB HIỆN TẠI (Ví dụ: Dashboard)
+  useEffect(() => {
+    if (!user) return;
+
+    const canAccess = (tab: string) => {
+      if (tab === 'dashboard') return checkPermission('TongQuan');
+      if (tab === 'personnel') return checkPermission('NhanSu');
+      if (tab === 'firesafety') return checkPermission('PCCC');
+      if (tab === 'atvsld') return checkPermission('ATVSLD');
+      if (tab === 'vehicles') return checkPermission('Xe');
+      if (tab === 'equipments') return checkPermission('ThietBi');
+      if (tab === 'documents') return checkPermission('VanBan');
+      if (tab === 'policies') return checkPermission('QuyDinh');
+      if (tab === 'departments') return checkPermission('CongTy');
+      if (tab === 'accounts') return String(user?.quyen).toUpperCase() === 'ADMIN';
+      if (tab === 'logs') return String(user?.quyen).toUpperCase() === 'ADMIN';
+      return false;
+    };
+
+    if (!canAccess(activeTab)) {
+      const order = [
+        { tab: 'dashboard', key: 'TongQuan' },
+        { tab: 'departments', key: 'CongTy' },
+        { tab: 'personnel', key: 'NhanSu' },
+        { tab: 'firesafety', key: 'PCCC' },
+        { tab: 'atvsld', key: 'ATVSLD' },
+        { tab: 'vehicles', key: 'Xe' },
+        { tab: 'equipments', key: 'ThietBi' },
+        { tab: 'documents', key: 'VanBan' },
+        { tab: 'policies', key: 'QuyDinh' }
+      ];
+
+      const allowedTab = order.find(item => checkPermission(item.key));
+      if (allowedTab) {
+        setActiveTab(allowedTab.tab);
+      } else if (String(user?.quyen).toUpperCase() === 'ADMIN') {
+        setActiveTab('accounts');
+      } else {
+        setActiveTab('');
+      }
+    }
+  }, [user, activeTab]);
 
   // 🟢 XỬ LÝ DEEP LINK TỰ ĐỘNG CHUYỂN TAB & MỞ CHI TIẾT TÀI SẢN
   useEffect(() => {
@@ -74,13 +125,6 @@ function AppContent() {
   }
 
   // LỚP 2: HIỂN THỊ GIAO DIỆN CHÍNH (Đã đăng nhập)
-  const checkPermission = (moduleId: string) => {
-    if (!user) return false;
-    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
-      return true;
-    }
-    return String(user.quyen_truy_cap || '').includes(moduleId);
-  };
 
   return (
     <div className="flex h-screen w-full bg-gray-100 overflow-hidden font-sans">
@@ -92,9 +136,11 @@ function AppContent() {
       <main className="flex-1 min-w-0 max-w-full h-full overflow-hidden bg-[#f4f7f9] relative">
         
         {/* TUYỆT CHIÊU GIỮ CACHE */}
-        <TabContainer active={activeTab === 'dashboard'}>
-          <DashboardPage />
-        </TabContainer>
+        {checkPermission('TongQuan') && (
+          <TabContainer active={activeTab === 'dashboard'}>
+            <DashboardPage />
+          </TabContainer>
+        )}
         
         {checkPermission('NhanSu') && (
           <TabContainer active={activeTab === 'personnel'}>

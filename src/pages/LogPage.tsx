@@ -5,14 +5,19 @@ import { SysLog } from '../types';
 
 export default function LogPage() {
   const [logs, setLogs] = useState<SysLog[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const fetchLogs = async () => {
+    const fetchLogsAndUsers = async () => {
       try {
-        const rawLogs = await apiService.getLogs();
+        const [rawLogs, rawUsers] = await Promise.all([
+          apiService.getLogs(),
+          apiService.getUsers()
+        ]);
+        setUsers(rawUsers);
         
         // Hàm parse Date an toàn (Hỗ trợ nhiều định dạng từ DB)
         const parseSafeDate = (dateStr: string) => {
@@ -31,18 +36,30 @@ export default function LogPage() {
         setLoading(false);
       }
     };
-    fetchLogs();
+    fetchLogsAndUsers();
   }, []);
+
+  const userMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    users.forEach(u => {
+      map[u.id] = u.ho_ten;
+    });
+    return map;
+  }, [users]);
 
   const filteredLogs = useMemo(() => {
     if (!searchTerm) return logs;
     const lower = searchTerm.toLowerCase();
-    return logs.filter(log => 
-      log.id_user?.toLowerCase().includes(lower) || 
-      log.hanh_dong?.toLowerCase().includes(lower) ||
-      log.chi_tiet?.toLowerCase().includes(lower)
-    );
-  }, [logs, searchTerm]);
+    return logs.filter(log => {
+      const userFullName = log.ho_ten || userMap[log.id_user] || '';
+      return (
+        log.id_user?.toLowerCase().includes(lower) || 
+        userFullName.toLowerCase().includes(lower) ||
+        log.hanh_dong?.toLowerCase().includes(lower) ||
+        log.chi_tiet?.toLowerCase().includes(lower)
+      );
+    });
+  }, [logs, searchTerm, userMap]);
 
   const getActionColor = (action: string) => {
     const act = action?.toUpperCase();
@@ -91,13 +108,14 @@ export default function LogPage() {
               <tr className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                 <th className="p-4 w-48"><div className="flex items-center gap-1.5"><Clock size={14}/> Thời gian</div></th>
                 <th className="p-4 w-48"><div className="flex items-center gap-1.5"><User size={14}/> Tài khoản</div></th>
+                <th className="p-4 w-48"><div className="flex items-center gap-1.5"><User size={14}/> Họ tên</div></th>
                 <th className="p-4 w-36"><div className="flex items-center gap-1.5"><Activity size={14}/> Hành động</div></th>
                 <th className="p-4"><div className="flex items-center gap-1.5"><ClipboardList size={14}/> Chi tiết cập nhật</div></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? (<tr><td colSpan={4} className="p-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-[#05469B] mb-2"/> Đang tải log...</td></tr>) 
-              : filteredLogs.length === 0 ? (<tr><td colSpan={4} className="p-12 text-center text-gray-400"><ClipboardList size={40} className="mx-auto mb-3 opacity-50"/> Không có nhật ký nào.</td></tr>) 
+              {loading ? (<tr><td colSpan={5} className="p-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-[#05469B] mb-2"/> Đang tải log...</td></tr>) 
+              : filteredLogs.length === 0 ? (<tr><td colSpan={5} className="p-12 text-center text-gray-400"><ClipboardList size={40} className="mx-auto mb-3 opacity-50"/> Không có nhật ký nào.</td></tr>) 
               : filteredLogs.map((log, idx) => {
                 
                 const { dateStr, timeStr } = formatLogTime(log.thoi_gian);
@@ -109,6 +127,7 @@ export default function LogPage() {
                       {dateStr && <span className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5"><Calendar size={10}/> {dateStr}</span>}
                     </td>
                     <td className="p-4 font-bold text-[#05469B] text-sm">{log.id_user}</td>
+                    <td className="p-4 font-bold text-gray-800 text-sm">{log.ho_ten || userMap[log.id_user] || '---'}</td>
                     <td className="p-4">
                       <span className={`px-2 py-1 border rounded text-[10px] font-black tracking-wider uppercase ${getActionColor(log.hanh_dong)}`}>
                         {log.hanh_dong}

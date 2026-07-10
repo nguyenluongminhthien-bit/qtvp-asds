@@ -12,6 +12,7 @@ export interface SysLog {
   id: string;
   thoi_gian: string;
   id_user: string;
+  ho_ten?: string;
   hanh_dong: string;
   chi_tiet: string;
   id_don_vi: string;

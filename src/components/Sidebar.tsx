@@ -124,22 +124,24 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       {/* DANH SÁCH MENU */}
       <nav className={`flex-1 py-6 space-y-6 overflow-y-auto custom-scrollbar ${isCollapsed ? 'px-2' : 'px-3'}`}>
         
-        {/* Nhóm 1: Bảng điều khiển (Ai cũng xem được) */}
-        <div>
-          {!isCollapsed && <p className="px-3 text-[10px] font-bold text-blue-300/80 uppercase tracking-widest mb-2 animate-in fade-in">Bảng điều khiển</p>}
-          <div className="space-y-1">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              title="Tổng quan"
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                activeTab === 'dashboard' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              <LayoutDashboard size={18} />
-              {!isCollapsed && <span className="text-sm">Tổng quan</span>}
-            </button>
+        {/* Nhóm 1: Bảng điều khiển (Chỉ hiện khi được phân quyền) */}
+        {checkPermission('TongQuan') && (
+          <div>
+            {!isCollapsed && <p className="px-3 text-[10px] font-bold text-blue-300/80 uppercase tracking-widest mb-2 animate-in fade-in">Bảng điều khiển</p>}
+            <div className="space-y-1">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                title="Tổng quan"
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                  activeTab === 'dashboard' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <LayoutDashboard size={18} />
+                {!isCollapsed && <span className="text-sm">Tổng quan</span>}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Nhóm 2: Quản lý hoạt động (ĐÃ BỌC ĐIỀU KIỆN PHÂN QUYỀN) */}
         <div>
