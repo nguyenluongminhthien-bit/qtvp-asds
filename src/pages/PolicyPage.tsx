@@ -8,7 +8,7 @@ import { apiService } from '../services/api';
 import { VB_TB } from '../types'; 
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../utils/toast';
-import { toUnaccented } from '../utils/formatters';
+import { toUnaccented, stripAccents } from '../utils/formatters';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 
 
@@ -105,12 +105,12 @@ export default function PolicyPage() {
     }
     
     if (searchTerm) {
-      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
+      const cleanSearch = stripAccents(searchTerm);
       result = result.filter(item => 
-        toUnaccented(item.so_hieu || '').toLowerCase().includes(cleanSearch) || 
-        toUnaccented(item.tieu_de || '').toLowerCase().includes(cleanSearch) ||
-        toUnaccented(item.nghiep_vu || '').toLowerCase().includes(cleanSearch) ||
-        toUnaccented(item.phan_loai || '').toLowerCase().includes(cleanSearch)
+        stripAccents(item.so_hieu || '').includes(cleanSearch) || 
+        stripAccents(item.tieu_de || '').includes(cleanSearch) ||
+        stripAccents(item.nghiep_vu || '').includes(cleanSearch) ||
+        stripAccents(item.phan_loai || '').includes(cleanSearch)
       );
     }
     return result;

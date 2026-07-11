@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo } from 'react';
-import { X, Loader2, Save, Image as ImageIcon, ShieldCheck, Car } from 'lucide-react';
+import { X, Loader2, Save, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import { DonVi } from '../../types';
 import { formatPhoneNumber } from '../../utils/formatters';
 import { buildHierarchicalOptions, getUnitEmoji } from '../../utils/hierarchy';
+import { CERTIFICATES } from '../../constants/certificates';
 
 interface PersonnelModalProps {
   isOpen: boolean;
@@ -15,21 +16,6 @@ interface PersonnelModalProps {
   onSave: (e: React.FormEvent) => void;
   setFormData: (updater: (prev: any) => any) => void;
 }
-
-const CERTIFICATES = [
-  { id: 'cc_atvsld', label: 'ATVSLĐ', icon: ShieldCheck },
-  { id: 'cc_anbv', label: 'ANBV', icon: ShieldCheck },
-  { id: 'cc_pccc', label: 'PCCC', icon: ShieldCheck }, // PCCC icon fallback
-  { id: 'cc_cnch', label: 'CNCH', icon: ShieldCheck }, // CNCH icon fallback
-  { id: 'cc_so_cap_cuu', label: 'Sơ cấp cứu', icon: ShieldCheck },
-  { id: 'cc_cpr', label: 'CPR', icon: ShieldCheck },
-  { id: 'cc_vo_thuat', label: 'Võ thuật', icon: ShieldCheck },
-  { id: 'giay_phep_lai_xe', label: 'GPLX', icon: Car },
-  { id: 'cc_attp', label: 'ATTP', icon: ShieldCheck },
-  { id: 'cc_pha_che', label: 'Pha chế', icon: ShieldCheck },
-  { id: 'cc_ngoai_ngu', label: 'Ngoại ngữ', icon: ShieldCheck },
-  { id: 'cc_tin_hoc', label: 'Tin học', icon: ShieldCheck }
-];
 
 export default function PersonnelModal({
   isOpen,

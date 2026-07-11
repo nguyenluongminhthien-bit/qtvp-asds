@@ -10,22 +10,15 @@ import {
 import { apiService } from '../services/api';
 import { Personnel, DonVi, ThietBi } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy';
+import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits, getAllSubordinateIds } from '../utils/hierarchy';
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
-import { formatPhoneNumber, getDirectImageLink, formatCurrencySpace as formatCurrency, toUnaccented } from '../utils/formatters';
+import { formatPhoneNumber, getDirectImageLink, formatCurrencySpace as formatCurrency, toUnaccented, stripAccents } from '../utils/formatters';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import PersonnelModal from '../components/personnel/PersonnelModal';
-
-const CERTIFICATES = [
-  { id: 'cc_atvsld', label: 'ATVSLĐ', icon: ShieldCheck }, { id: 'cc_anbv', label: 'ANBV', icon: ShieldCheck },
-  { id: 'cc_pccc', label: 'PCCC', icon: Flame }, { id: 'cc_cnch', label: 'CNCH', icon: LifeBuoy },
-  { id: 'cc_so_cap_cuu', label: 'Sơ cấp cứu', icon: Heart }, { id: 'cc_cpr', label: 'CPR', icon: Activity },
-  { id: 'cc_vo_thuat', label: 'Võ thuật', icon: Dumbbell }, { id: 'giay_phep_lai_xe', label: 'GPLX', icon: Car },
-  { id: 'cc_attp', label: 'ATTP', icon: Utensils }, { id: 'cc_pha_che', label: 'Pha chế', icon: Coffee },
-  { id: 'cc_ngoai_ngu', label: 'Ngoại ngữ', icon: Languages }, { id: 'cc_tin_hoc', label: 'Tin học', icon: Monitor }
-];
+import { CERTIFICATES } from '../constants/certificates';
 
 const extractStartDateFromMaNV = (maNV: string) => {
   if (!maNV || maNV.length < 4) return null;
@@ -134,17 +127,7 @@ export default function PersonnelPage() {
     return parts.reverse().join(' ➜ ');
   };
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
-    if (userIdDonVi === 'ALL' || String(user.quyen).toLowerCase() === 'admin') return donViList.map(dv => dv.id);
-    
-    const level1 = [userIdDonVi];
-    const level2 = donViList.filter(dv => level1.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const level3 = donViList.filter(dv => level2.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const allAllowed = [...level1, ...level2, ...level3];
-    return donViList.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
-  }, [user, donViList]);
+  const allowedDonViIds = useAllowedUnits(donViList);
 
   const calculateSeniority = (startDate: string, trangThai: string, endDate: string) => {
     if (!startDate) return 'Chưa có';
@@ -199,12 +182,7 @@ export default function PersonnelPage() {
     return groupParentUnits(parentUnits);
   }, [parentUnits]);
 
-  const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
-    const subordinates = allUnits.filter(u => u.cap_quan_ly === unitId);
-    let ids = subordinates.map(u => u.id);
-    subordinates.forEach(sub => { ids = [...ids, ...getAllSubordinateIds(sub.id, allUnits)]; });
-    return ids;
-  };
+
 
   const selectedUnitSubordinates = useMemo(() => {
     if (!selectedUnitFilter) return [];
@@ -265,31 +243,31 @@ export default function PersonnelPage() {
     if (selectedUnitFilter) result = result.filter(item => selectedUnitSubordinates.includes(item.id_don_vi));
     
     if (personnelSearchTerm) {
-      const lower = personnelSearchTerm.toLowerCase();
+      const cleanSearch = stripAccents(personnelSearchTerm);
       result = result.filter(item => 
-        String(item.ma_so_nhan_vien || '').toLowerCase().includes(lower) || 
-        String(item.ho_ten || '').toLowerCase().includes(lower) || 
-        String(donViMap[String(item.id_don_vi)] || '').toLowerCase().includes(lower) ||
-        String(item.chuc_vu || '').toLowerCase().includes(lower) ||
-        String(item.phong_ban || '').toLowerCase().includes(lower) 
+        stripAccents(item.ma_so_nhan_vien || '').includes(cleanSearch) || 
+        stripAccents(item.ho_ten || '').includes(cleanSearch) || 
+        stripAccents(donViMap[String(item.id_don_vi)] || '').includes(cleanSearch) ||
+        stripAccents(item.chuc_vu || '').includes(cleanSearch) ||
+        stripAccents(item.phong_ban || '').includes(cleanSearch) 
       );
     }
 
     if (filterPhongBan) {
-      const lowerVal = filterPhongBan.toLowerCase().trim();
-      result = result.filter(item => String(item.phong_ban || '').toLowerCase().includes(lowerVal));
+      const cleanVal = stripAccents(filterPhongBan);
+      result = result.filter(item => stripAccents(item.phong_ban || '').includes(cleanVal));
     }
     if (filterKhoi) {
-      const lowerVal = filterKhoi.toLowerCase().trim();
-      result = result.filter(item => String(item.khoi || '').toLowerCase().includes(lowerVal));
+      const cleanVal = stripAccents(filterKhoi);
+      result = result.filter(item => stripAccents(item.khoi || '').includes(cleanVal));
     }
     if (filterChucVu) {
-      const lowerVal = filterChucVu.toLowerCase().trim();
-      result = result.filter(item => String(item.chuc_vu || '').toLowerCase().includes(lowerVal));
+      const cleanVal = stripAccents(filterChucVu);
+      result = result.filter(item => stripAccents(item.chuc_vu || '').includes(cleanVal));
     }
     if (filterPhanLoai) {
-      const lowerVal = filterPhanLoai.toLowerCase().trim();
-      result = result.filter(item => String(item.phan_loai || '').toLowerCase().includes(lowerVal));
+      const cleanVal = stripAccents(filterPhanLoai);
+      result = result.filter(item => stripAccents(item.phan_loai || '').includes(cleanVal));
     }
 
     const phanLoaiOrder: Record<string, number> = {

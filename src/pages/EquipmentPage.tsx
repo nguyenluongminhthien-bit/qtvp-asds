@@ -8,14 +8,15 @@ import {
 import { apiService } from '../services/api';
 import { DonVi, ThietBi, NhatKyThietBi, Personnel } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy';
-import { formatCurrency, toUnaccented } from '../utils/formatters';
+import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits, getAllSubordinateIds } from '../utils/hierarchy';
+import { formatCurrency, toUnaccented, stripAccents } from '../utils/formatters';
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 import ExpiryBadge from '../components/ExpiryBadge';
 import ExpiryAlert from '../components/ExpiryAlert';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import CustomAutocomplete from '../components/ui/CustomAutocomplete';
 // @ts-ignore
 import { QRCodeSVG } from 'qrcode.react';
@@ -48,12 +49,7 @@ const isFurniture = (nhom: string) => {
   return ['bàn', 'ghế', 'tủ', 'kệ', 'nội thất', 'sofa', 'giường', 'quầy', 'bảng', 'màn chiếu'].some(kw => lower.includes(kw));
 };
 
-const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
-  const subs = allUnits.filter(u => u.cap_quan_ly === unitId);
-  let ids = subs.map(u => u.id);
-  subs.forEach(s => { ids = [...ids, ...getAllSubordinateIds(s.id, allUnits)]; });
-  return ids;
-};
+
 
 export default function EquipmentPage() {
   const { user } = useAuth();
@@ -257,17 +253,7 @@ export default function EquipmentPage() {
     return map;
   }, [donViList]);
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
-    if (userIdDonVi === 'ALL' || String(user.quyen).toLowerCase() === 'admin') return donViList.map(dv => dv.id);
-    
-    const level1 = [userIdDonVi];
-    const level2 = donViList.filter(dv => level1.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const level3 = donViList.filter(dv => level2.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const allAllowed = [...level1, ...level2, ...level3];
-    return donViList.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
-  }, [user, donViList]);
+  const allowedDonViIds = useAllowedUnits(donViList);
 
   const filteredTBs = useMemo(() => {
     let result = tbData.filter(item => allowedDonViIds.includes(item.id_don_vi));
@@ -276,13 +262,13 @@ export default function EquipmentPage() {
       result = result.filter(item => validIds.includes(item.id_don_vi));
     }
     if (searchTerm) {
-      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
+      const cleanSearch = stripAccents(searchTerm);
       result = result.filter(item => 
-        toUnaccented(item.ma_tai_san || '').toLowerCase().includes(cleanSearch) || 
-        toUnaccented(item.ten_thiet_bi || '').toLowerCase().includes(cleanSearch) ||
-        toUnaccented(item.nhom_thiet_bi || '').toLowerCase().includes(cleanSearch) ||
-        toUnaccented(item.vi_tri_bo_tri || '').toLowerCase().includes(cleanSearch) ||
-        toUnaccented(item.tai_san_thuoc || '').toLowerCase().includes(cleanSearch)
+        stripAccents(item.ma_tai_san || '').includes(cleanSearch) || 
+        stripAccents(item.ten_thiet_bi || '').includes(cleanSearch) ||
+        stripAccents(item.nhom_thiet_bi || '').includes(cleanSearch) ||
+        stripAccents(item.vi_tri_bo_tri || '').includes(cleanSearch) ||
+        stripAccents(item.tai_san_thuoc || '').includes(cleanSearch)
       );
     }
     return result;

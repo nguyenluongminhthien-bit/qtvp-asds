@@ -6,6 +6,7 @@ import { getUnitEmoji } from '../utils/hierarchy';
 import { formatCurrency, parseDateStrict } from '../utils/formatters';
 import { DashboardSkeleton } from '../components/SkeletonLoader';
 import ExpiryAlert from '../components/ExpiryAlert';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 
 import { 
@@ -17,6 +18,9 @@ import {
 
 import { buildHierarchicalOptions, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy'; 
 import DashboardCustomizerModal, { WidgetConfig } from '../components/dashboard/DashboardCustomizerModal'; 
+import PersonnelDoughnutChart from '../components/dashboard/PersonnelDoughnutChart';
+import ExpiryAlertPanel from '../components/dashboard/ExpiryAlertPanel';
+import KpiSection from '../components/dashboard/KpiSection';
 
 // 🟢 2. THUẬT TOÁN TỰ ĐỘNG CỘNG THÁNG VÀO NGÀY BẮT ĐẦU
 const extractDateAndAddDuration = (durationRaw: any, startDateRaw: any): Date | null => {
@@ -41,106 +45,7 @@ const extractDateAndAddDuration = (durationRaw: any, startDateRaw: any): Date | 
   return baseDate;
 };
 
-// 🟢 BIỂU ĐỒ 1: CƠ CẤU NHÂN SỰ (INTERACTIVE DOUGHNUT CHART)
-function PersonnelDoughnutChart({ data }: { data: { name: string; count: number }[] }) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const total = useMemo(() => data.reduce((sum, item) => sum + item.count, 0), [data]);
 
-  const chartSegments = useMemo(() => {
-    let accumulatedPercent = 0;
-    const R = 85;
-    const C = 2 * Math.PI * R; // 534.07
-    const colors = ['#05469B', '#008080', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
-
-    return data.map((item, idx) => {
-      const percent = total > 0 ? item.count / total : 0;
-      const strokeDasharray = `${(percent * C).toFixed(2)} ${C.toFixed(2)}`;
-      const strokeDashoffset = (-accumulatedPercent * C).toFixed(2);
-      accumulatedPercent += percent;
-
-      return {
-        ...item,
-        percent,
-        color: colors[idx % colors.length],
-        strokeDasharray,
-        strokeDashoffset,
-      };
-    });
-  }, [data, total]);
-
-  const activeItem = activeIndex !== null ? chartSegments[activeIndex] : null;
-
-  return (
-    <div className="flex flex-col items-center justify-between w-full h-full py-1 min-h-0">
-      {/* VÙNG BIỂU ĐỒ TRÒN TO & DÀY HƠN */}
-      <div className="relative w-[230px] h-[230px] sm:w-[250px] sm:h-[250px] shrink-0 flex items-center justify-center my-auto">
-        <svg width="100%" height="100%" viewBox="0 0 220 220" className="transform -rotate-90 max-w-[240px] max-h-[240px]">
-          <circle cx="110" cy="110" r="85" fill="transparent" stroke="#f8fafc" className="dark:stroke-slate-700/50" strokeWidth="30" />
-          {chartSegments.map((seg, idx) => (
-            <circle
-              key={idx}
-              cx="110"
-              cy="110"
-              r="85"
-              fill="transparent"
-              stroke={seg.color}
-              strokeWidth={activeIndex === idx ? 36 : 30}
-              strokeDasharray={seg.strokeDasharray}
-              strokeDashoffset={seg.strokeDashoffset}
-              strokeLinecap="round"
-              className="transition-all duration-300 cursor-pointer origin-center"
-              onMouseEnter={() => setActiveIndex(idx)}
-              onMouseLeave={() => setActiveIndex(null)}
-              style={{
-                transform: activeIndex === idx ? 'scale(1.02)' : 'scale(1)',
-                filter: activeIndex === idx ? 'drop-shadow(0px 3px 6px rgba(5,70,155,0.3))' : 'none'
-              }}
-            />
-          ))}
-        </svg>
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-3 pointer-events-none select-none">
-          {activeItem ? (
-            <>
-              <p className="text-[11px] font-black text-gray-400 dark:text-slate-400 uppercase tracking-wider truncate max-w-[110px]">{activeItem.name}</p>
-              <p className="text-xl sm:text-2xl font-black text-gray-800 dark:text-white leading-tight my-1">{activeItem.count} NS</p>
-              <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md shadow-sm border border-emerald-100 dark:border-emerald-800">{(activeItem.percent * 100).toFixed(1)}%</p>
-            </>
-          ) : (
-            <>
-              <p className="text-[11px] font-black text-gray-400 dark:text-slate-400 uppercase tracking-wider">Tổng nhân sự</p>
-              <p className="text-2xl sm:text-3xl font-black text-[#05469B] dark:text-blue-400 leading-tight my-1">{total}</p>
-              <p className="text-[11px] font-bold text-gray-500 dark:text-slate-400">Người</p>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* VÙNG CHÚ THÍCH BÊN DƯỚI: 2 DÒNG CÓ THANH CUỘN NHỎ */}
-      <div className="w-full mt-2 shrink-0 overflow-y-auto max-h-[78px] custom-scrollbar pr-1.5">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-          {chartSegments.map((seg, idx) => (
-            <div 
-              key={idx} 
-              className={`flex items-center justify-between p-1.5 px-2 rounded-xl border border-gray-100 dark:border-slate-700/60 transition-all cursor-pointer ${activeIndex === idx ? 'bg-blue-50 dark:bg-slate-700 shadow-sm scale-[1.01] border-blue-200 dark:border-blue-700' : 'hover:bg-gray-50 dark:hover:bg-slate-700/40 bg-gray-50/50 dark:bg-slate-800/50'}`}
-              onMouseEnter={() => setActiveIndex(idx)}
-              onMouseLeave={() => setActiveIndex(null)}
-            >
-              <div className="flex items-center gap-1.5 truncate pr-1">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: seg.color }}></span>
-                <span className="text-[11px] font-bold text-gray-700 dark:text-slate-300 truncate" title={seg.name}>{seg.name}</span>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[11px] font-black text-gray-800 dark:text-white">{seg.count}</span>
-                <span className="text-[9px] font-bold text-gray-500 dark:text-slate-400 bg-white dark:bg-slate-700 px-1 py-0.5 rounded shadow-2xs border border-gray-100 dark:border-slate-600">{(seg.percent * 100).toFixed(0)}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // 🟢 BIỂU ĐỒ 2: THỐNG KÊ VĂN BẢN BAN HÀNH (INTERACTIVE HORIZONTAL BAR CHART)
 function DocumentBarChart({ data, maxCount }: { data: { name: string; count: number }[]; maxCount: number }) {
@@ -464,14 +369,7 @@ export default function DashboardPage() {
     return !status.includes('đại lý') && !status.includes('dự án') && !status.includes('đầu tư mới');
   };
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    if (user.id_don_vi === 'ALL') return donViList.map(dv => dv.id);
-    const level1 = [user.id_don_vi];
-    const level2 = donViList.filter(dv => level1.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const level3 = donViList.filter(dv => level2.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    return [...level1, ...level2, ...level3];
-  }, [user, donViList]);
+  const allowedDonViIds = useAllowedUnits(donViList);
 
   const filteredUnits = useMemo(() => {
     let baseUnits = donViList.filter(dv => allowedDonViIds.includes(dv.id));
@@ -1440,279 +1338,25 @@ export default function DashboardPage() {
             )}
 
             {/* 🟢 TRUNG TÂM THÔNG BÁO (NOTIFICATION HUB) */}
-            <div className="flex flex-col mb-4">
-              {/* Thanh ngang Bấm để bật/tắt bảng chi tiết */}
-              <button 
-                onClick={() => setIsNotifHubOpen(!isNotifHubOpen)}
-                className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all hover:shadow-md cursor-pointer ${
-                  expiredCount > 0 
-                    ? 'bg-gradient-to-r from-red-50 to-rose-50 border-red-200 text-red-900 shadow-sm' 
-                    : warningCount > 0
-                      ? 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900 shadow-sm'
-                      : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-900 shadow-sm'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shadow-sm shrink-0 ${
-                    expiredCount > 0 
-                      ? 'bg-red-500 text-white animate-pulse shadow-red-200' 
-                      : warningCount > 0 
-                        ? 'bg-amber-500 text-white animate-bounce shadow-amber-200' 
-                        : 'bg-[#05469B] text-white shadow-blue-200'
-                  }`}>
-                    <BellRing size={18} />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="font-bold text-xs sm:text-sm flex items-center gap-2">
-                      Trung tâm Thông báo
-                      {expiredCount > 0 && (
-                        <span className="px-2 py-0.5 rounded bg-red-600 text-white text-[9px] font-black uppercase tracking-wider animate-bounce">
-                          Phát hiện hạng mục quá hạn!
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-[11px] font-medium opacity-85 mt-0.5">
-                      {expiredCount > 0 ? `Có ${expiredCount} hạng mục quá hạn cần xử lý gấp. ` : ''}
-                      {warningCount > 0 ? `Có ${warningCount} hạng mục sắp đến hạn trong 30 ngày tới. ` : ''}
-                      {expiredCount === 0 && warningCount === 0 ? 'Hệ thống vận hành an toàn, không có cảnh báo mới.' : ''}
-                      {" "}<span className="underline font-bold">Nhấp vào đây để {isNotifHubOpen ? 'thu gọn' : 'xem chi tiết và phân loại'}</span>.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="hidden sm:flex gap-1.5">
-                    {expiredCount > 0 && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-red-100 border border-red-200 text-red-700 text-[10px] font-black">
-                        {expiredCount} Quá hạn
-                      </span>
-                    )}
-                    {warningCount > 0 && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-700 text-[10px] font-black">
-                        {warningCount} Sắp đến hạn
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-gray-400">
-                    {isNotifHubOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                  </div>
-                </div>
-              </button>
-
-              {/* Bảng chi tiết xuất hiện khi mở */}
-              {isNotifHubOpen && (
-                <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-lg mt-3 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex flex-wrap gap-2 mb-4 border-b border-gray-100 pb-3">
-                    {[
-                      { id: 'all', label: 'Tất cả', count: notifications.length },
-                      { id: 'vehicle', label: '🚗 Đội xe', count: notifications.filter(n => n.category === 'vehicle').length },
-                      { id: 'equipment', label: '💻 Thiết bị', count: notifications.filter(n => n.category === 'equipment').length },
-                      { id: 'personnel_cert', label: '🛡️ Chứng chỉ & HĐ', count: notifications.filter(n => n.category === 'personnel_cert').length },
-                      { id: 'personnel_event', label: '🎂 Sinh nhật', count: notifications.filter(n => n.category === 'personnel_event').length },
-                    ].map(tab => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveNotifTab(tab.id as any)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
-                          activeNotifTab === tab.id
-                            ? 'bg-[#05469B] text-white border-transparent shadow-sm'
-                            : 'bg-white hover:bg-gray-50 text-gray-600 border-gray-200'
-                        }`}
-                      >
-                        <span>{tab.label}</span>
-                        {tab.count > 0 && (
-                          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
-                            activeNotifTab === tab.id
-                              ? 'bg-white/20 text-white'
-                              : tab.id === 'personnel_event'
-                              ? 'bg-pink-100 text-pink-700 border border-pink-200'
-                              : 'bg-red-50 text-red-600 border border-red-100'
-                          }`}>
-                            {tab.count}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-
-                  {filteredNotifications.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-                      <ShieldCheck size={36} className="mx-auto mb-2 text-emerald-500 opacity-60" />
-                      <p className="text-xs font-semibold">Hiện tại không có thông báo hay sự kiện nào sắp tới.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto custom-scrollbar pr-1">
-                      {filteredNotifications.map(notif => {
-                        const isBirthday = notif.category === 'personnel_event';
-                        
-                        if (isBirthday) {
-                          let cardStyle = '';
-                          let badgeStyle = '';
-                          let badgeText = '';
-
-                          if (notif.isPassed) {
-                            cardStyle = 'bg-gray-50/80 border-gray-200 border-l-4 border-l-gray-400 opacity-55 grayscale-[35%]';
-                            badgeStyle = 'bg-gray-200 text-gray-600';
-                            badgeText = 'Đã qua';
-                          } else if (notif.isToday) {
-                            cardStyle = 'bg-pink-50/40 border-pink-300 border-l-4 border-l-rose-500 ring-1 ring-pink-400/30';
-                            badgeStyle = 'bg-rose-500 text-white animate-bounce';
-                            badgeText = 'Hôm nay 🎉';
-                          } else {
-                            cardStyle = 'bg-pink-50/20 border-pink-200 border-l-4 border-l-pink-500';
-                            badgeStyle = 'bg-pink-100 text-pink-700';
-                            badgeText = 'Sinh nhật';
-                          }
-
-                          return (
-                            <div
-                              key={notif.id}
-                              className={`p-2.5 rounded-xl border flex flex-col justify-between transition-all hover:-translate-y-0.5 hover:shadow-sm ${cardStyle}`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${badgeStyle}`}>
-                                  {badgeText}
-                                </span>
-                                <div className="text-right shrink-0 flex items-center gap-1.5">
-                                  <span className="text-xs font-black text-gray-700">{notif.dateStr}</span>
-                                  {notif.isPassed ? (
-                                    <span className="text-[9px] font-black text-gray-400 font-mono">Đã qua</span>
-                                  ) : notif.isToday ? (
-                                    <span className="text-[9px] font-black text-rose-600 font-mono">HÔM NAY</span>
-                                  ) : (
-                                    <span className="text-[9px] font-black text-pink-600">Còn {notif.daysLeft} ngày</span>
-                                  )}
-                                </div>
-                              </div>
-                              <p className="text-xs text-gray-800 font-semibold mt-1.5 truncate">{notif.detail}</p>
-                            </div>
-                          );
-                        }
-
-                        let cardStyle = '';
-                        let badgeStyle = '';
-                        let badgeText = '';
-                        if (notif.type === 'expired') {
-                          cardStyle = 'bg-red-50/30 border-red-200 border-l-4 border-l-red-500';
-                          badgeStyle = 'bg-red-100 text-red-700';
-                          badgeText = 'Quá hạn';
-                        } else {
-                          cardStyle = 'bg-amber-50/20 border-amber-200 border-l-4 border-l-amber-500';
-                          badgeStyle = 'bg-amber-100 text-amber-700';
-                          badgeText = 'Sắp đến hạn';
-                        }
-
-                        return (
-                          <div
-                            key={notif.id}
-                            className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all hover:-translate-y-0.5 hover:shadow-sm ${cardStyle}`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${badgeStyle}`}>
-                                  {badgeText}
-                                </span>
-                                <h4 className="font-bold text-gray-800 text-xs mt-1.5">{notif.title}</h4>
-                                <p className="text-xs text-gray-500 font-medium mt-0.5">{notif.detail}</p>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <p className="text-xs font-black text-gray-700">{notif.dateStr}</p>
-                                {notif.daysLeft < 0 ? (
-                                  <p className="text-[9px] font-black text-red-600 mt-0.5 font-mono">Trễ {Math.abs(notif.daysLeft)} ngày</p>
-                                ) : notif.daysLeft === 0 ? (
-                                  <p className="text-[9px] font-black text-amber-600 mt-0.5 font-mono">HÔM NAY</p>
-                                ) : (
-                                  <p className="text-[9px] font-black text-emerald-600 mt-0.5 font-mono">Còn {notif.daysLeft} ngày</p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="mt-2 border-t border-gray-100/50 pt-1.5 flex justify-between items-center text-[10px] font-semibold text-gray-400">
-                              <span>{notif.category === 'vehicle' ? '🚗 Xe cộ' : notif.category === 'equipment' ? '💻 Thiết bị' : '🛡️ Chứng chỉ & HĐ'}</span>
-                              <span className="truncate max-w-[150px]">{notif.unitName}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <ExpiryAlertPanel
+              isNotifHubOpen={isNotifHubOpen}
+              setIsNotifHubOpen={setIsNotifHubOpen}
+              expiredCount={expiredCount}
+              warningCount={warningCount}
+              activeNotifTab={activeNotifTab}
+              setActiveNotifTab={setActiveNotifTab}
+              notifications={notifications}
+              filteredNotifications={filteredNotifications}
+            />
 
             {/* 🟢 VÙNG 1: CARD SỐ LIỆU WIDGETS (GLASSMORPHISM STYLE) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-              
-              {/* Card 1: Phân hệ */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
-                <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Building2 size={14} className="text-[#05469B]" />Bộ máy Quản trị</p>
-                <div className="flex items-center justify-between px-2">
-                  <div className="text-center">
-                    <p className="text-2xl font-black text-[#05469B]">{vpdhUnits.length}</p>
-                    <p className="text-[10px] font-bold text-gray-400">VPĐH</p>
-                  </div>
-                  <div className="w-px h-8 bg-gray-100"></div>
-                  <div className="text-center">
-                    <p className="text-2xl font-black text-orange-500">{ctttNamUnits.length}</p>
-                    <p className="text-[10px] font-bold text-gray-400">PHÍA NAM</p>
-                  </div>
-                  <div className="w-px h-8 bg-gray-100"></div>
-                  <div className="text-center">
-                    <p className="text-2xl font-black text-emerald-600">{ctttBacUnits.length}</p>
-                    <p className="text-[10px] font-bold text-gray-400">PHÍA BẮC</p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Card 2: Showroom/Đại lý trực thuộc */}
-              <div className="bg-gradient-to-br from-indigo-50/50 to-white p-5 rounded-2xl border border-indigo-100/50 shadow-sm flex items-center gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100/30 flex items-center justify-center text-[#05469B] shrink-0 shadow-inner"><Building2 size={26}/></div>
-                <div>
-                  <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-1">Showroom / Trực thuộc</p>
-                  <p className="text-3xl font-black text-gray-800">{widgetStats.totalUnits}</p>
-                </div>
-                <div className="absolute -right-6 -bottom-6 opacity-[0.04] text-[#05469B] pointer-events-none"><Building2 size={120}/></div>
-              </div>
-
-              {/* Card 3 & 4: Tổng Nhân sự và nghiệp vụ */}
-              <div className="xl:col-span-2 bg-gradient-to-br from-emerald-50/50 to-white p-5 rounded-2xl border border-emerald-100/50 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between relative overflow-hidden gap-4 h-full">
-                
-                {/* Tổng số lượng bên trái */}
-                <div className="flex items-center gap-4.5 shrink-0 z-10 pl-2 border-r border-gray-100/80 pr-4 sm:pr-8 h-full">
-                  <div className="w-13 h-13 rounded-2xl bg-emerald-50 border border-emerald-100/30 flex items-center justify-center text-emerald-600 shrink-0 shadow-inner">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <div className="flex flex-col justify-center">
-                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-1">Tổng Nhân sự</p>
-                    <p className="text-3xl font-black text-gray-800 leading-none">{widgetStats.totalStaff}</p>
-                  </div>
-                </div>
-                
-                {/* Cơ cấu nghiệp vụ bên phải */}
-                <div className="flex-1 grid grid-cols-3 gap-3 z-10 h-full py-1">
-                  <div className="bg-white/80 rounded-2xl p-2 text-center border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all flex flex-col justify-between h-full cursor-help" title="Nhân sự Phụ trách Quản trị văn phòng & An sinh đời sống">
-                    <div className="h-7 flex items-center justify-center mb-1">
-                      <p className="text-[9px] font-black text-slate-500 uppercase leading-snug line-clamp-2">NS PT QTVP & ASĐS</p>
-                    </div>
-                    <p className="font-black text-[#05469B] text-xl leading-none">{staffRolesStats.dvht}</p>
-                  </div>
-                  
-                  <div className="bg-white/80 rounded-2xl p-2 text-center border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all flex flex-col justify-between h-full cursor-help" title="Nhân sự Bảo vệ, Đón tiếp Khách hàng">
-                    <div className="h-7 flex items-center justify-center mb-1">
-                      <p className="text-[9px] font-black text-slate-500 uppercase leading-snug line-clamp-2">NS BV, ĐTKH</p>
-                    </div>
-                    <p className="font-black text-[#05469B] text-xl leading-none">{staffRolesStats.bv}</p>
-                  </div>
-                  
-                  <div className="bg-white/80 rounded-2xl p-2 text-center border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all flex flex-col justify-between h-full cursor-help" title="Nhân sự Phục vụ Hành chính">
-                    <div className="h-7 flex items-center justify-center mb-1">
-                      <p className="text-[9px] font-black text-slate-500 uppercase leading-snug line-clamp-2">NS PVHC</p>
-                    </div>
-                    <p className="font-black text-[#05469B] text-xl leading-none">{staffRolesStats.pvhc}</p>
-                  </div>
-                </div>
-
-                <div className="absolute right-0 bottom-0 opacity-[0.02] pointer-events-none"><Users size={160}/></div>
-              </div>
-            </div>
+            <KpiSection
+              vpdhUnits={vpdhUnits}
+              ctttNamUnits={ctttNamUnits}
+              ctttBacUnits={ctttBacUnits}
+              widgetStats={widgetStats}
+              staffRolesStats={staffRolesStats}
+            />
 
             {/* VÙNG 1.5: QUY MÔ HỆ THỐNG THEO MIỀN */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

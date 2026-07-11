@@ -15,7 +15,7 @@ import {
 import { apiService } from '../services/api';
 import { DonVi, Personnel, AnNinh, PhapNhan, PhongHop, TS_Xe, ThietBi } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { formatCurrency, formatPhoneNumber, toUnaccented } from '../utils/formatters';
+import { formatCurrency, formatPhoneNumber, toUnaccented, stripAccents, normalizeDateToISO, safeGet } from '../utils/formatters';
 import PnModal from '../components/department/PnModal';
 import PhModal from '../components/department/PhModal';
 import PvhcModal from '../components/department/PvhcModal';
@@ -23,20 +23,15 @@ import AtvsldModal from '../components/department/AtvsldModal';
 import PcttModal from '../components/department/PcttModal';
 import SecurityModal from '../components/department/SecurityModal';
 import PcccModal from '../components/department/PcccModal';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import PersonnelCard from '../components/department/PersonnelCard';
-import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy'; 
+import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits, getAllSubordinateIds } from '../utils/hierarchy'; 
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 import { exportSecurityReport } from '../utils/exportExcel';
 
 // 🟢 [HÀM TIỆN ÍCH CHUNG]
-const safeGet = (obj: any, key: string) => {
-  if (!obj) return '';
-  if (obj[key] !== undefined) return obj[key];
-  const lowerKey = key.toLowerCase();
-  for (const k in obj) { if (k.toLowerCase() === lowerKey) return obj[k]; }
-  return '';
-};
+
 
 const getSecId = (sec: any) => safeGet(sec, 'id');
 const getPvhcId = (p: any) => safeGet(p, 'id');
@@ -44,16 +39,7 @@ const getPcccIdSafe = (item: any) => safeGet(item, 'id');
 const getTsPcccIdSafe = (item: any) => safeGet(item, 'id');
 const getUnitIdSafe = (item: any) => safeGet(item, 'id_don_vi');
 
-const normalizeDateToISO = (val: any) => {
-  if (!val) return '';
-  const str = String(val).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
-  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(str)) {
-    const parts = str.split(/[\/\-]/);
-    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-  }
-  return str;
-};
+
 
 const formatToVN = (isoStr: string) => {
   if (!isoStr) return '';
@@ -285,30 +271,19 @@ export default function DepartmentPage() {
   };
 
   useEffect(() => { loadData(); }, []);
-  const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
-    const subordinates = allUnits.filter(u => u.cap_quan_ly === unitId);
-    let ids = subordinates.map(u => u.id);
-    subordinates.forEach(sub => { ids = [...ids, ...getAllSubordinateIds(sub.id, allUnits)]; });
-    return ids;
-  };
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    if (user.id_don_vi === 'ALL') return data.map(dv => dv.id);
-    const subIds = getAllSubordinateIds(user.id_don_vi, data);
-    const allAllowed = [user.id_don_vi, ...subIds];
-    return data.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
-  }, [user, data]);
+
+  const allowedDonViIds = useAllowedUnits(data);
 
   const filteredData = useMemo(() => {
     let baseUnits = data.filter(item => allowedDonViIds.includes(item.id));
     if (!searchTerm) return baseUnits;
 
-    const lower = searchTerm.toLowerCase();
+    const cleanSearch = stripAccents(searchTerm);
     const matchedIds = new Set<string>();
 
     baseUnits.forEach(u => {
-      if (String(u.ten_don_vi || '').toLowerCase().includes(lower) || String(u.id || '').toLowerCase().includes(lower)) {
+      if (stripAccents(u.ten_don_vi || '').includes(cleanSearch) || stripAccents(u.id || '').includes(cleanSearch)) {
         matchedIds.add(u.id);
         let parentId = u.cap_quan_ly;
         while (parentId && parentId !== 'HO') {

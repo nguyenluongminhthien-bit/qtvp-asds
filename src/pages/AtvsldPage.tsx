@@ -11,10 +11,11 @@ import { toast } from '../utils/toast';
 import AtvsldModal from '../components/department/AtvsldModal';
 import { useAuth } from '../contexts/AuthContext';
 import { DonVi } from '../types';
-import { groupParentUnits, sortDonViByThuTu, getUnitEmoji } from '../utils/hierarchy';
+import { groupParentUnits, sortDonViByThuTu, getUnitEmoji, getAllSubordinateIds } from '../utils/hierarchy';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
-import { toUnaccented } from '../utils/formatters';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
+import { toUnaccented, stripAccents } from '../utils/formatters';
 
 // Hàm dò tìm Tên Vùng Miền (Dành cho chức năng Xuất Excel)
 const getRegionName = (unitId: string, allUnits: DonVi[]): string => {
@@ -32,12 +33,7 @@ const getRegionName = (unitId: string, allUnits: DonVi[]): string => {
   return 'VPĐH / Khác';
 };
 
-const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
-  const subs = allUnits.filter(u => u.cap_quan_ly === unitId);
-  let ids = subs.map(u => u.id);
-  subs.forEach(s => { ids = [...ids, ...getAllSubordinateIds(s.id, allUnits)]; });
-  return ids;
-};
+
 
 export default function AtvsldPage() {
   const { user } = useAuth(); 
@@ -96,17 +92,7 @@ export default function AtvsldPage() {
     return map;
   }, [donViData]);
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
-    if (userIdDonVi === 'ALL' || String(user.quyen).toLowerCase() === 'admin') return donViData.map(dv => dv.id);
-    
-    const level1 = [userIdDonVi];
-    const level2 = donViData.filter(dv => level1.includes(dv.cap_quan_ly || '')).map(dv => dv.id);
-    const level3 = donViData.filter(dv => level2.includes(dv.cap_quan_ly || '')).map(dv => dv.id);
-    const allAllowed = [...level1, ...level2, ...level3];
-    return donViData.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
-  }, [user, donViData]);
+  const allowedDonViIds = useAllowedUnits(donViData);
 
 
 
@@ -125,8 +111,8 @@ export default function AtvsldPage() {
       if (!allowedDonViIds.includes(item.id_don_vi)) return false;
       if (selectedUnitFilter && !selectedUnitSubordinates.includes(item.id_don_vi)) return false;
       const dvName = donViMap[item.id_don_vi] || '';
-      const searchStr = `${dvName} ${item.nguoi_phu_trach || ''} ${item.id_don_vi}`.toLowerCase();
-      return searchStr.includes(searchTerm.toLowerCase());
+      const searchStr = `${dvName} ${item.nguoi_phu_trach || ''} ${item.id_don_vi}`;
+      return stripAccents(searchStr).includes(stripAccents(searchTerm));
     });
   }, [atvsldData, donViMap, searchTerm, selectedUnitFilter, selectedUnitSubordinates, allowedDonViIds]);
 
@@ -237,10 +223,11 @@ export default function AtvsldPage() {
   // 2. Bộ lọc tìm kiếm và trạng thái
   const filteredSafetyList = useMemo(() => {
     return processedSafetyPersonnel.filter(p => {
+      const cleanSearch = stripAccents(safetySearchTerm);
       const matchSearch = safetySearchTerm === '' || 
-        p.ma_so_nhan_vien?.toLowerCase().includes(safetySearchTerm.toLowerCase()) ||
-        p.ho_ten?.toLowerCase().includes(safetySearchTerm.toLowerCase()) ||
-        p.chuc_vu?.toLowerCase().includes(safetySearchTerm.toLowerCase());
+        stripAccents(p.ma_so_nhan_vien || '').includes(cleanSearch) ||
+        stripAccents(p.ho_ten || '').includes(cleanSearch) ||
+        stripAccents(p.chuc_vu || '').includes(cleanSearch);
 
       const matchStatus = statusFilter === 'ALL' || p.trainingStatus === statusFilter;
       const matchNhom = nhomFilter === 'ALL' || String(p.nhom_doi_tuong) === nhomFilter;

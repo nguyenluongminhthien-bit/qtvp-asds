@@ -4,6 +4,7 @@ import { apiService } from '../services/api';
 import { User, DonVi } from '../types';
 import { buildHierarchicalOptions, getUnitEmoji } from '../utils/hierarchy';
 import { toast } from '../utils/toast';
+import { stripAccents } from '../utils/formatters';
 
 // 🟢 1. KHO DANH SÁCH MODULE (quyen_truy_cap)
 const MODULE_LIST = [
@@ -76,11 +77,11 @@ export default function AccountPage() {
 
   const filteredData = useMemo(() => {
     if (!searchTerm) return data;
-    const lower = searchTerm.toLowerCase();
+    const cleanSearch = stripAccents(searchTerm);
     return data.filter(item => 
-      item.user_name?.toLowerCase().includes(lower) || 
-      item.ho_ten?.toLowerCase().includes(lower) ||
-      item.id?.toLowerCase().includes(lower)
+      stripAccents(item.user_name || '').includes(cleanSearch) || 
+      stripAccents(item.ho_ten || '').includes(cleanSearch) ||
+      stripAccents(item.id || '').includes(cleanSearch)
     );
   }, [data, searchTerm]);
 

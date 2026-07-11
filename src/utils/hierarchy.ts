@@ -67,3 +67,13 @@ export const buildHierarchicalOptions = (units: DonVi[]) => {
   buildTree(roots, '');
   return result;
 };
+
+// 4. Hàm dùng chung đệ quy lấy toàn bộ danh sách ID đơn vị cấp dưới
+export const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
+  const subordinates = allUnits.filter(u => u.cap_quan_ly === unitId);
+  let ids = subordinates.map(u => u.id);
+  subordinates.forEach(sub => {
+    ids = [...ids, ...getAllSubordinateIds(sub.id, allUnits)];
+  });
+  return ids;
+};

@@ -55,3 +55,35 @@ export const toUnaccented = (str: any): string => {
     .replace(/\s+/g, " ")       // Thu gọn nhiều khoảng trắng liên tiếp
     .trim();                     // Cắt bỏ khoảng trắng ở đầu và cuối
 };
+
+export const stripAccents = (str: any): string => {
+  if (!str) return '';
+  return String(str)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .toLowerCase()
+    .trim();
+};
+
+export const normalizeDateToISO = (val: any): string => {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
+  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(str)) {
+    const parts = str.split(/[\/\-]/);
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  return str;
+};
+
+export const safeGet = (obj: any, key: string): any => {
+  if (!obj) return '';
+  if (obj[key] !== undefined) return obj[key];
+  const lowerKey = key.toLowerCase();
+  for (const k in obj) {
+    if (k.toLowerCase() === lowerKey) return obj[k];
+  }
+  return '';
+};

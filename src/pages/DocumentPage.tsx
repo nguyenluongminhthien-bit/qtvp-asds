@@ -7,13 +7,14 @@ import {
   PenTool, Hash, Briefcase, Layers, ExternalLink, Filter
 } from 'lucide-react';
 import { apiService } from '../services/api';
-import { DonVi, VB_TB } from '../types';
+import { DonVi, VB_TB, Personnel } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../utils/toast';
-import { toUnaccented } from '../utils/formatters';
+import { toUnaccented, stripAccents } from '../utils/formatters';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
 
 // HÀM KIỂM TRA VĂN BẢN MẬT
 const isMatDocument = (val: any) => {
@@ -161,6 +162,7 @@ export default function DocumentPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'update'>('create');
   const [formData, setFormData] = useState<any>({});
+  const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewData, setViewData] = useState<any | null>(null);
@@ -184,12 +186,14 @@ export default function DocumentPage() {
   const loadData = async () => {
     setLoading(true); setError(null);
     try {
-      const [dvResult, vbResult] = await Promise.all([
+      const [dvResult, vbResult, nsResult] = await Promise.all([
         apiService.getDonVi(),
-        apiService.getVanBan()
+        apiService.getVanBan(),
+        apiService.getPersonnel()
       ]);
       setDonViList(dvResult || []);
       setVbData(vbResult || []);
+      setPersonnelList(nsResult || []);
     } catch (err: any) { 
       setError(err.message || 'Lỗi tải dữ liệu Văn bản.'); 
     } finally { 
@@ -252,19 +256,11 @@ export default function DocumentPage() {
     };
   }, [vbData, blacklist]);
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
+  const suggestMsnv = useMemo(() => {
+    return Array.from(new Set(personnelList.map(p => p.ma_so_nhan_vien).filter(Boolean)));
+  }, [personnelList]);
 
-    if (userIdDonVi === 'ALL' || String(user.quyen).toLowerCase() === 'admin') return donViList.map(dv => dv.id);
-    
-    const level1 = [userIdDonVi];
-    const level2 = donViList.filter(dv => level1.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const level3 = donViList.filter(dv => level2.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const allAllowed = [...level1, ...level2, ...level3];
-    
-    return donViList.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
-  }, [user, donViList]);
+  const allowedDonViIds = useAllowedUnits(donViList);
 
   const filteredUnits = useMemo(() => {
     let baseUnits = donViList.filter(dv => allowedDonViIds.includes(dv.id));
@@ -379,11 +375,11 @@ export default function DocumentPage() {
       result = result.filter(item => item.ngay_ban_hanh && item.ngay_ban_hanh <= selectedDateTo);
     }
     if (searchTerm) {
-      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
+      const cleanSearch = stripAccents(searchTerm);
       result = result.filter(item => 
-        toUnaccented(item.so_hieu || '').toLowerCase().includes(cleanSearch) || 
-        toUnaccented(item.tieu_de || '').toLowerCase().includes(cleanSearch) ||
-        toUnaccented(item.nghiep_vu || '').toLowerCase().includes(cleanSearch)
+        stripAccents(item.so_hieu || '').includes(cleanSearch) || 
+        stripAccents(item.tieu_de || '').includes(cleanSearch) ||
+        stripAccents(item.nghiep_vu || '').includes(cleanSearch)
       );
     }
 
@@ -437,7 +433,8 @@ export default function DocumentPage() {
         ngay_ban_hanh: item.ngay_ban_hanh ? item.ngay_ban_hanh.split('T')[0] : '', 
         ngay_nhan: item.ngay_nhan ? item.ngay_nhan.split('T')[0] : '', 
         han_xu_ly: item.han_xu_ly ? item.han_xu_ly.split('T')[0] : '', 
-        mat: isMatDocument(item.mat) 
+        mat: isMatDocument(item.mat),
+        msnv_lay_so: item.msnv_lay_so || ''
       }); 
     } else {
       setFormData({
@@ -446,7 +443,8 @@ export default function DocumentPage() {
         tieu_de: '', noi_dung: '', link_vb: '', noi_goi_nhan: '', so_den: '', ngay_nhan: '', 
         bo_phan_xu_ly: '', han_xu_ly: '', trang_thai_xu_ly: 'Chờ xử lý',
         nguoi_ky: '', chuc_vu: '', nguoi_lay_so: '', bo_phan_lay_so: '', pham_vi_ap_dung: selectedUnitFilter || 'Toàn hệ thống', 
-        hieu_luc: 'Còn hiệu lực', nghiep_vu: '', van_ban_thay_the: '', mat: false
+        hieu_luc: 'Còn hiệu lực', nghiep_vu: '', van_ban_thay_the: '', mat: false,
+        msnv_lay_so: ''
       });
     }
     setIsModalOpen(true); setError(null);
@@ -511,6 +509,21 @@ export default function DocumentPage() {
     const { name, value } = e.target;
     if (name === 'hieu_luc' && value !== 'Thay thế VB khác') {
       setFormData((prev: any) => ({ ...prev, [name]: value, van_ban_thay_the: '' }));
+    } else if (name === 'msnv_lay_so') {
+      const cleanVal = String(value || '').trim().toLowerCase();
+      const matchedPerson = personnelList.find(
+        (p) => String(p.ma_so_nhan_vien || '').trim().toLowerCase() === cleanVal
+      );
+      if (matchedPerson) {
+        setFormData((prev: any) => ({
+          ...prev,
+          msnv_lay_so: value,
+          nguoi_lay_so: matchedPerson.ho_ten || '',
+          bo_phan_lay_so: matchedPerson.phong_ban || '',
+        }));
+      } else {
+        setFormData((prev: any) => ({ ...prev, msnv_lay_so: value }));
+      }
     } else {
       setFormData((prev: any) => ({ ...prev, [name]: value }));
     }
@@ -1277,29 +1290,37 @@ export default function DocumentPage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5">
-                    <div className="md:col-span-2 min-w-0">
+                  <div className="grid grid-cols-1 md:grid-cols-10 gap-4 md:gap-5">
+                    {/* Dòng 1: Người ký - Chức vụ người ký (50 - 50) */}
+                    <div className="md:col-span-5 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Người ký</label>
                       <CustomAutocomplete name="nguoi_ky" value={formData.nguoi_ky} onChange={handleInputChange} placeholder="Họ tên người ký..." suggestions={suggestNguoiky} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
                     </div>
-                    <div className="md:col-span-2 min-w-0">
+                    <div className="md:col-span-5 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Chức vụ người ký</label>
                       <CustomAutocomplete name="chuc_vu" value={formData.chuc_vu} onChange={handleInputChange} placeholder="VD: Giám đốc..." suggestions={suggestChucvu} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
                     </div>
+
+                    {/* Dòng 2: MSNV - Người lấy số - Bộ phận lấy số (20 - 40 - 40) */}
                     <div className="md:col-span-2 min-w-0">
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1">MSNV người lấy số</label>
+                      <CustomAutocomplete name="msnv_lay_so" value={formData.msnv_lay_so || ''} onChange={handleInputChange} placeholder="VD: NV001..." suggestions={suggestMsnv} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
+                    </div>
+                    <div className="md:col-span-4 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Người lấy số</label>
                       <CustomAutocomplete name="nguoi_lay_so" value={formData.nguoi_lay_so} onChange={handleInputChange} placeholder="Nhân viên..." suggestions={suggestNguoilayso} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
                     </div>
-                    <div className="md:col-span-2 min-w-0">
+                    <div className="md:col-span-4 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Bộ phận lấy số</label>
                       <CustomAutocomplete name="bo_phan_lay_so" value={formData.bo_phan_lay_so} onChange={handleInputChange} placeholder="Phòng HCNS..." suggestions={suggestBPlayso} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
                     </div>
 
-                    <div className="col-span-1 md:col-span-2 min-w-0">
+                    {/* Dòng 3: Phân loại Nghiệp vụ - Tình trạng Hiệu lực (50 - 50) */}
+                    <div className="md:col-span-5 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Phân loại Nghiệp vụ</label>
                       <CustomAutocomplete name="nghiep_vu" value={formData.nghiep_vu} onChange={handleInputChange} placeholder="Kinh doanh, Nhân sự, Dịch vụ..." suggestions={suggestNghiepvu} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
                     </div>
-                    <div className="col-span-1 md:col-span-2 min-w-0">
+                    <div className="md:col-span-5 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Tình trạng Hiệu lực *</label>
                       <select required name="hieu_luc" value={formData.hieu_luc || 'Còn hiệu lực'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-[#05469B]">
                         <option value="Còn hiệu lực">Còn hiệu lực</option>
@@ -1309,7 +1330,7 @@ export default function DocumentPage() {
                     </div>
 
                     {formData.hieu_luc === 'Thay thế VB khác' && (
-                      <div className="md:col-span-4 bg-orange-50 p-4 rounded-lg border border-orange-300 mt-2 min-w-0 animate-in fade-in zoom-in duration-200">
+                      <div className="md:col-span-10 bg-orange-50 p-4 rounded-lg border border-orange-300 mt-2 min-w-0 animate-in fade-in zoom-in duration-200">
                         <label className="block text-[11px] font-bold text-orange-800 mb-1">Link Văn bản bị thay thế (Dán link vào đây) *</label>
                         <div className="relative">
                           <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500" size={16} />

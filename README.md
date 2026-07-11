@@ -3,68 +3,50 @@
 ## 1. TỔNG QUAN HỆ THỐNG
 * **Mục tiêu:** Số hóa, chuẩn hóa và quản trị tập trung tổng thể Hành chính - Nhân sự - Tài sản - PCCC cho hệ thống Showroom/Đơn vị trên toàn quốc.
 * **Mô hình kiến trúc:** JAMstack (Client-side React + Backend-as-a-Service Supabase).
-* **Đặc tính cốt lõi:** Quản trị phân quyền theo dữ liệu phân cấp dạng cây (Hierarchy-based Access Control) kết hợp vai trò (Role-based Access Control).
+* **Đặc tính cốt lược:** Quản trị phân quyền theo dữ liệu phân cấp dạng cây (Hierarchy-based Access Control) kết hợp vai trò (Role-based Access Control).
 
 ## 2. CÔNG NGHỆ (TECH STACK)
 * **Frontend:** React 18 (Vite), TypeScript (Strict Typing).
-* **Styling & UI:** Tailwind CSS, Lucide React (Icons).
-* **Backend & Database:** Supabase (PostgreSQL, Authentication JWT, Storage).
-* **Xử lý Dữ liệu/Excel:** `xlsx` (SheetJS) - *Dự kiến tích hợp*.
+* **Styling & UI:** Vanilla CSS (Tailwind CSS v3, Lucide React Icons).
+* **Backend & Database:** Supabase (PostgreSQL RLS, Authentication JWT, Storage).
+* **Xử lý Dữ liệu/Excel:** `xlsx` (SheetJS) hỗ trợ xuất báo cáo & import dữ liệu.
 
 ---
 
 ## 3. CẤU TRÚC THƯ MỤC & CHỨC NĂNG (PROJECT STRUCTURE)
 
-Dự án được tổ chức theo mô hình Feature-based kết hợp Layer-based. Dưới đây là sơ đồ chi tiết chức năng của từng file/thư mục lõi:
+Dự án được tổ chức theo mô hình **Feature-based** kết hợp **Layer-based** nhằm tối ưu hóa khả năng mở rộng. Dưới đây là sơ đồ thư mục thu gọn và mô tả chức năng chi tiết:
 
-\`\`\`text
+### 📂 Sơ đồ thư mục tổng quan
+```text
 src/
-├── components/           # (Thành Phần Giao Diện Dùng Chung)
-│   ├── department/       # Modals xử lý riêng cho sơ đồ Tổ chức/Đơn vị (ATVSLĐ, PCCC...)
-│   ├── ExpiryAlert.tsx   # Thanh cảnh báo hết hạn (Đăng kiểm, Bảo hiểm...)
-│   ├── ExpiryBadge.tsx   # Nhãn trạng thái (Còn hạn/Hết hạn)
-│   ├── Layout.tsx        # Bộ khung bọc ngoài các trang (chứa Header, Sidebar và Content)
-│   ├── Sidebar.tsx       # Thanh menu điều hướng chính
-│   └── SkeletonLoader.tsx# Hiệu ứng tải trang (Loading state)
-│
-├── contexts/             # (Quản Lý Trạng Thái Toàn Cục)
-│   └── AuthContext.tsx   # Quản lý phiên đăng nhập. Nhiệm vụ cốt lõi: Giải mã `user_metadata` từ Supabase để trích xuất quyền (`quyen`) và mã đơn vị (`id_don_vi`).
-│
-├── pages/                # (Các Module Chức Năng Chính)
-│   ├── AccountPage.tsx   # Quản lý tài khoản hệ thống, phân quyền (Admin/User), gán tài khoản thuộc đơn vị nào.
-│   ├── AtvsldPage.tsx    # Quản lý An toàn Vệ sinh lao động.
-│   ├── DashboardPage.tsx # Trang tổng quan thống kê (Charts, Metrics).
-│   ├── DepartmentPage.tsx# Quản lý danh sách Cơ cấu tổ chức (Chi nhánh, Showroom, Đại lý) theo dạng cây.
-│   ├── DocumentPage.tsx  # Module quản lý tài liệu lưu trữ, văn bản, tờ trình (Luân chuyển, hiệu lực).
-│   ├── EquipmentPage.tsx # Quản lý Tài sản & Thiết bị Văn phòng (Cấp phát, Thu hồi, Báo hỏng).
-│   ├── FireSafetyPage.tsx# Quản lý an toàn PCCC & An ninh bảo vệ (Thiết bị PCCC, Đội PCCC cơ sở, Hạn kiểm định).
-│   ├── LoginPage.tsx     # Giao diện đăng nhập.
-│   ├── LogPage.tsx       # Nhật ký hệ thống (Audit Trail) ghi vết thao tác người dùng.
-│   ├── PersonnelPage.tsx # Quản lý Hồ sơ Nhân sự (Thông tin, Bằng cấp/Chứng chỉ, Thâm niên, Chốt nghỉ việc, Vào làm lại, Import).
-│   ├── PolicyPage.tsx    # Quản lý Quy định, Quy trình & Văn bản (Theo dõi hiệu lực, Tích hợp link tài liệu gốc).
-│   └── VehiclePage.tsx   # Quản lý Phương tiện & Xe cộ (Chi phí hoạt động, Cảnh báo hạn đăng kiểm/bảo hiểm).
-│
-├── services/             # (Giao Tiếp Cơ Sở Dữ Liệu)
-│   └── api.ts            # Gateway duy nhất giao tiếp với Supabase. Chứa tất cả các hàm CRUD.
-│
-├── types/                # (Định Nghĩa Kiểu Dữ Liệu)
-│   └── index.ts          # Interfaces/Types chuẩn hóa cho toàn dự án (TypeScript).
-│
-├── utils/                # (Hàm Tiện Ích Hỗ Trợ)
-│   ├── exportExcel.ts    # Logic xuất dữ liệu ra file Excel.
-│   ├── formatters.ts     # Format tiền tệ, số điện thoại, ngày tháng chuẩn VN.
-│   ├── hierarchy.ts      # Thuật toán xử lý mảng Đơn vị thành cấu trúc Cây (Tree), tạo tiền tố thụt lề (│ ├──) và gán Emoji.
-│   ├── logger.ts         # Ghi log hoạt động.
-│   └── toast.ts          # Hiển thị thông báo popup (Success/Error).
-│
-├── App.tsx               # Cấu hình Routing (Chuyển trang).
-├── index.css             # Định nghĩa CSS toàn cục & Custom scrollbar.
-└── main.tsx              # Điểm khởi chạy của ứng dụng (Entry point).
-\`\`\`
+├── components/       # Các thành phần UI dùng chung & Modals nghiệp vụ
+├── constants/        # Hằng số toàn hệ thống (Chứng chỉ, cấu hình...)
+├── contexts/         # Quản lý State toàn cục (Authentication...)
+├── hooks/            # Custom React Hooks dùng chung (Phân quyền...)
+├── pages/            # Các trang tính năng chính (Dashboard, Personnel, Document...)
+├── services/         # Tương tác Cơ sở dữ liệu (Supabase API Gateway)
+├── types/            # Định nghĩa kiểu dữ liệu TypeScript
+└── utils/            # Thư viện hàm tiện ích hỗ trợ (Formatters, Hierarchy...)
+```
+
+### 📋 Chi tiết chức năng từng phân vùng
+
+| Phân mục lõi | Thư mục con / File khóa | Vai trò & Chức năng nghiệp vụ |
+| :--- | :--- | :--- |
+| **`components/`** <br>*(Giao diện dùng chung)* | `dashboard/` | Chứa các widgets Dashboard được modul hóa: `PersonnelDoughnutChart` (Biểu đồ cơ cấu), `ExpiryAlertPanel` (Cảnh báo hết hạn), `KpiSection` (Thẻ KPI). |
+| | `department/`, `personnel/` | Modals nghiệp vụ quản trị sơ đồ tổ chức, cơ cấu phòng ban và hồ sơ nhân viên. |
+| | `ui/` | Các component nguyên tử dùng chung: `CustomAutocomplete`, `Pagination`, `UnitFilterSidebar`. |
+| **`constants/`** <br>*(Hằng số)* | `certificates.ts` | Quy hoạch danh sách chứng chỉ nghiệp vụ (PCCC, ATVSLĐ...) dùng chung làm nguồn dữ liệu chuẩn duy nhất (Single Source of Truth). |
+| **`contexts/`** <br>*(State toàn cục)* | `AuthContext.tsx` | Quản lý phiên đăng nhập và phân quyền truy cập thông qua giải mã token JWT. |
+| **`hooks/`** <br>*(Custom Hooks)* | `useAllowedUnits.ts` | Tính toán và phân quyền phạm vi truy cập danh sách Đơn vị đệ quy (Allowed Unit IDs). |
+| **`pages/`** <br>*(Trang tính năng)* | *Các Module chính* | Đại diện cho các màn hình nghiệp vụ độc lập: `DashboardPage`, `PersonnelPage` (Nhân sự), `DocumentPage` (Văn bản), `VehiclePage` (Xe cộ), `FireSafetyPage` (PCCC), `EquipmentPage` (Thiết bị), `LogPage` (Nhật ký). |
+| **`services/`** <br>*(Data Gateway)* | `api.ts` | Cổng kết nối duy nhất tương tác và thực hiện các tác vụ CRUD với cơ sở dữ liệu Supabase. |
+| **`utils/`** <br>*(Hàm tiện ích)* | `hierarchy.ts`, `formatters.ts` | Xử lý cấu trúc cây đơn vị (`getAllSubordinateIds`), định dạng ngày tháng (`normalizeDateToISO`), số điện thoại, tiền tệ chuẩn hóa. |
 
 ---
 
-## 4. CƠ CHẾ PHÂN QUYỀN (AUTHORIZATION LOGIC) - ⚠️ RẤT QUAN TRỌNG
+## 4. CƠ CHẾ PHÂN QUYỀN (AUTHORIZATION LOGIC) - ⚠️ RẤT QUAN TRỌ
 
 Hệ thống lọc dữ liệu hiển thị dựa trên sự kết hợp của 2 yếu tố:
 
@@ -75,26 +57,27 @@ Code không đọc bảng `users` thuần, mà đọc qua `user_metadata` trong 
 ### B. Logic Cấp quyền Hiển thị Dữ liệu (Row-level Visibility)
 1. **Quyền Toàn Hệ Thống (Master View):**
    * Chỉ kích hoạt khi Unit ID của user là `ALL`. Quản trị viên (Admin) của 1 đơn vị cụ thể chỉ được cấu hình nội bộ đơn vị đó, không có quyền xem Toàn quốc.
-2. **Quyền Theo Đơn Vị Phân Cấp (Recursive Hierarchy):**
-   * Nếu Unit ID là một mã cụ thể (VD: `DNB`), hệ thống sử dụng thuật toán đệ quy để tìm chính nó và **TẤT CẢ** các đơn vị con, cháu trực thuộc nó.
-   * Để chống lỗi Database lưu nhầm Tên thay vì Mã, thuật toán đối chiếu và quy đổi 2 chiều giữa `id` và `ten_don_vi`.
-
-### C. Logic Hiển Thị Menu (Cây Đơn Vị Bên Trái)
-* **Nguyên tắc:** Nếu cấp quản lý (cha) của một đơn vị KHÔNG nằm trong quyền được xem của User, thì hệ thống tự động đẩy đơn vị con đó lên làm Đơn vị Gốc (Root) trên giao diện đối với User đó.
+2. **Quyền Theo Đơn Vị Phân Cấp (Recursive Hierarchy - sử dụng `useAllowedUnits`):**
+   * Lấy quyền truy cập qua Hook dùng chung `useAllowedUnits`. Hệ thống sử dụng thuật toán đệ quy `getAllSubordinateIds` để tìm chính nó và **TẤT CẢ** các đơn vị con, cháu trực thuộc nó.
+3. **Phân quyền Module "Viewer Hạn chế":**
+   * Đối với tài khoản cấp độ thao tác (Viewer hạn chế), menu và quyền truy cập module được quản lý chặt chẽ. Nếu tài khoản chỉ được cấp quyền xem một số Module (ví dụ: *Văn bản - Thông báo*), các module khác bao gồm cả Tổng quan (Dashboard) sẽ bị ẩn hoàn toàn để bảo mật thông tin.
 
 ---
 
 ## 5. TÍNH NĂNG NỔI BẬT & QUY ƯỚC LẬP TRÌNH (CONVENTIONS)
 
-* **Tự động hóa thông minh:**
-  * Tự động sinh `Ngày nhận việc` từ `Mã Nhân viên`.
-  * Import hàng loạt (Bulk Import) qua Clipboard (Copy Excel), tự động nhận diện cột và gán dữ liệu.
-* **Xử lý Ảnh/File Đính kèm:** Sử dụng link chia sẻ Google Drive public. Code tự động bóc tách ID file qua hàm `getDirectImageLink` để render Thumbnail trực tiếp.
-* **Format Dữ liệu:** * Số điện thoại: Chia block `4-3-3` (Ví dụ: `0901 234 567`).
+* **Tìm kiếm Tiếng Việt Thông minh (Accent-Insensitive Search):**
+  * Hỗ trợ tìm kiếm linh hoạt trên toàn bộ ô tìm kiếm của ứng dụng: Tìm kiếm theo kiểu **không bỏ dấu** hoặc **có bỏ dấu** đều được, giúp người dùng dễ dàng định vị bản ghi chính xác.
+* **Bộ lọc Nâng cao gợi ý tự động (Autocomplete Filter):**
+  * Tại các bộ lọc nâng cao của các module, người dùng có thể tự do gõ và hiển thị danh sách gợi ý tự động dựa trên dữ liệu đang có (sử dụng component `CustomAutocomplete`).
+* **Liên kết dữ liệu & Auto-fill thông minh:**
+  * **Hồ sơ nhân sự:** Tự động sinh `Ngày nhận việc` từ `Mã Nhân viên`. Import hàng loạt qua Clipboard (Excel).
+  * **Hành chính - Văn bản (Cấp số):** Tại mục Theo dõi xử lý & Thông tin phụ trợ (bố cục Dòng 2 chia tỷ lệ **20 - 40 - 40** cho MSNV - Người lấy số - Bộ phận lấy số). Khi người dùng nhập/chọn MSNV, hệ thống tự động đối chiếu thông tin nhân sự để lấy **Họ tên** và **Bộ phận làm việc** để điền tự động.
+* **Nhật ký hệ thống chi tiết (Audit Trail):**
+  * Trang Nhật ký hệ thống (Log) bổ sung cột **Họ tên** trực tiếp sau cột Tài khoản. Cột này tự động lưu và đối chiếu dữ liệu tên nhân viên từ bảng tài khoản sang bảng `sys_logs` (Supabase).
+* **Format Dữ liệu chuẩn VN:**
+  * Số điện thoại: Chia block `4-3-3` (Ví dụ: `0901 234 567`).
   * Tiền tệ: Phân cách hàng nghìn bằng dấu cách (Ví dụ: `15 000 000`).
-* **Quy tắc UI/UX nghiệp vụ:** * Thanh phân trang (Smart Pagination) cố định dưới đáy, bảng tự động cuộn độc lập.
-  * Nhân sự "Đã nghỉ việc": Đẩy xuống cuối bảng, giảm độ sáng (`opacity-60`).
-  * Chốt nghỉ việc (Offboarding): Hệ thống rà soát chéo CSDL Tài sản, nếu đang giữ tài sản cấp phát sẽ hiển thị cảnh báo đỏ chặn lại.
 
 ---
 

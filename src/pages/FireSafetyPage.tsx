@@ -9,34 +9,19 @@ import {
 import { apiService } from '../services/api';
 import { DonVi } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy'; 
+import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits, getAllSubordinateIds } from '../utils/hierarchy'; 
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
-import { formatPhoneNumber, toUnaccented } from '../utils/formatters';
+import { formatPhoneNumber, toUnaccented, stripAccents, normalizeDateToISO, safeGet } from '../utils/formatters';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import CustomAutocomplete from '../components/ui/CustomAutocomplete';
-
-const normalizeDateToISO = (val: any) => {
-  if (!val) return '';
-  const str = String(val).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10);
-  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(str)) return `${str.split(/[\/\-]/)[2]}-${str.split(/[\/\-]/)[1].padStart(2, '0')}-${str.split(/[\/\-]/)[0].padStart(2, '0')}`;
-  return str;
-};
 
 const formatToVN = (isoStr: string) => {
   if (!isoStr) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(isoStr)) return `${isoStr.split('-')[2]}/${isoStr.split('-')[1]}/${isoStr.split('-')[0]}`;
   return isoStr; 
-};
-
-const safeGet = (obj: any, key: string) => {
-  if (!obj) return '';
-  if (obj[key] !== undefined) return obj[key];
-  const lowerKey = key.toLowerCase();
-  for (const k in obj) { if (k.toLowerCase() === lowerKey) return obj[k]; }
-  return '';
 };
 const getUnitIdSafe = (item: any) => safeGet(item, 'id_don_vi');
 const getPcccIdSafe = (item: any) => safeGet(item, 'id') || safeGet(item, 'id_pccc');
@@ -60,12 +45,7 @@ const EMERGENCY_CONTACTS = [
   { key: 'sdt_yte', label: 'Cơ quan Y tế', def: '', color: 'text-gray-800', bg: 'bg-white' },
 ];
 
-const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
-  const subs = allUnits.filter(u => u.cap_quan_ly === unitId);
-  let ids = subs.map(u => u.id);
-  subs.forEach(s => { ids = [...ids, ...getAllSubordinateIds(s.id, allUnits)]; });
-  return ids;
-};
+
 
 export default function FireSafetyPage() {
   const { user } = useAuth();
@@ -143,15 +123,7 @@ export default function FireSafetyPage() {
     return map;
   }, [donViList]);
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
-    if (userIdDonVi === 'ALL' || String(user.quyen).toLowerCase() === 'admin') return donViList.map(dv => dv.id);
-    const level1 = [userIdDonVi];
-    const level2 = donViList.filter(dv => level1.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const level3 = donViList.filter(dv => level2.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    return donViList.filter(dv => [...level1, ...level2, ...level3].includes(dv.id)).map(dv => dv.id);
-  }, [user, donViList]);
+  const allowedDonViIds = useAllowedUnits(donViList);
 
 
 
@@ -162,11 +134,11 @@ export default function FireSafetyPage() {
       result = result.filter(item => validIds.includes(item.id_don_vi));
     }
     if (searchTerm) {
-      const cleanSearch = toUnaccented(searchTerm).toLowerCase();
+      const cleanSearch = stripAccents(searchTerm);
       result = result.filter(item => 
-        toUnaccented(safeGet(item, 'giay_phep_pccc')).toLowerCase().includes(cleanSearch) || 
-        toUnaccented(safeGet(item, 'ho_ten_doi_truong')).toLowerCase().includes(cleanSearch) ||
-        toUnaccented(donViMap[item.id_don_vi] || '').toLowerCase().includes(cleanSearch)
+        stripAccents(safeGet(item, 'giay_phep_pccc')).includes(cleanSearch) || 
+        stripAccents(safeGet(item, 'ho_ten_doi_truong')).includes(cleanSearch) ||
+        stripAccents(donViMap[item.id_don_vi] || '').includes(cleanSearch)
       );
     }
     return result;

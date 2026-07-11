@@ -10,10 +10,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy';
 import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
-import { formatCurrencySpace as formatCurrency, toUnaccented } from '../utils/formatters';
+import { formatCurrencySpace as formatCurrency, stripAccents } from '../utils/formatters';
 import { safeEvalMath } from '../utils/mathEvaluator';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
+import { useAllowedUnits } from '../hooks/useAllowedUnits';
 
 // --- HÀM TỰ ĐỘNG DÒ TÌM ID TỪ SUPABASE ---
 const getCostId = (cp: any) => cp.id || cp.id_chi_phi_xe || '';
@@ -145,16 +146,7 @@ export default function VehiclePage() {
     return map;
   }, [donViList]);
 
-  const allowedDonViIds = useMemo(() => {
-    if (!user) return [];
-    const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
-    if (userIdDonVi === 'ALL' || String(user.quyen).toLowerCase() === 'admin') return donViList.map(dv => dv.id);
-    const level1 = [userIdDonVi];
-    const level2 = donViList.filter(dv => level1.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const level3 = donViList.filter(dv => level2.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const allAllowed = [...level1, ...level2, ...level3];
-    return donViList.filter(dv => allAllowed.includes(dv.id)).map(dv => dv.id);
-  }, [user, donViList]);
+  const allowedDonViIds = useAllowedUnits(donViList);
 
   const filteredUnits = useMemo(() => {
     let baseUnits = donViList.filter(item => allowedDonViIds.includes(item.id));
@@ -205,11 +197,11 @@ export default function VehiclePage() {
       result = result.filter(item => validIds.includes(item.id_don_vi));
     }
     if (carSearchTerm) {
-      const cleanSearch = toUnaccented(carSearchTerm).toLowerCase();
+      const cleanSearch = stripAccents(carSearchTerm);
       result = result.filter(item => 
-        toUnaccented(item.bien_so || '').toLowerCase().includes(cleanSearch) || 
-        toUnaccented(item.hieu_xe || '').toLowerCase().includes(cleanSearch) || 
-        toUnaccented(item.loai_xe || '').toLowerCase().includes(cleanSearch)
+        stripAccents(item.bien_so || '').includes(cleanSearch) || 
+        stripAccents(item.hieu_xe || '').includes(cleanSearch) || 
+        stripAccents(item.loai_xe || '').includes(cleanSearch)
       );
     }
     return result;

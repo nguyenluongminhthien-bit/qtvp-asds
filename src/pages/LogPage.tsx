@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ClipboardList, Search, Loader2, Clock, User, Activity, AlertCircle, Calendar } from 'lucide-react';
 import { apiService } from '../services/api';
 import { SysLog } from '../types';
+import { stripAccents } from '../utils/formatters';
 
 export default function LogPage() {
   const [logs, setLogs] = useState<SysLog[]>([]);
@@ -49,14 +50,14 @@ export default function LogPage() {
 
   const filteredLogs = useMemo(() => {
     if (!searchTerm) return logs;
-    const lower = searchTerm.toLowerCase();
+    const cleanSearch = stripAccents(searchTerm);
     return logs.filter(log => {
       const userFullName = log.ho_ten || userMap[log.id_user] || '';
       return (
-        log.id_user?.toLowerCase().includes(lower) || 
-        userFullName.toLowerCase().includes(lower) ||
-        log.hanh_dong?.toLowerCase().includes(lower) ||
-        log.chi_tiet?.toLowerCase().includes(lower)
+        stripAccents(log.id_user || '').includes(cleanSearch) || 
+        stripAccents(userFullName).includes(cleanSearch) ||
+        stripAccents(log.hanh_dong || '').includes(cleanSearch) ||
+        stripAccents(log.chi_tiet || '').includes(cleanSearch)
       );
     });
   }, [logs, searchTerm, userMap]);
