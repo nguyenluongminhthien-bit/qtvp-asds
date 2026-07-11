@@ -16,6 +16,7 @@ interface AuthContextType {
   user: AppUser | null;
   login: (username: string, pass: string, remember?: boolean) => Promise<void>;
   logout: () => void;
+  checkPermission: (moduleId: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -119,8 +120,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, 500);
   };
 
+  const checkPermission = (moduleId: string) => {
+    if (!user) return false;
+    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
+      return true;
+    }
+    return String(user.quyen_truy_cap || '').includes(moduleId);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, checkPermission }}>
       {children}
     </AuthContext.Provider>
   );

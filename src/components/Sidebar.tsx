@@ -25,7 +25,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
-  const { logout, user } = useAuth();
+  const { logout, user, checkPermission } = useAuth();
   
   // Trạng thái đóng/mở Sidebar (Mặc định đóng trên di động)
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -49,17 +49,6 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
-
-  // 🟢 TRẠM KIỂM SOÁT QUYỀN (Tự động đọc Checkbox từ Database)
-  const checkPermission = (moduleId: string) => {
-    if (!user) return false;
-    // Nếu là ADMIN hoặc được tick ô ALL -> Mở khóa toàn bộ
-    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
-      return true;
-    }
-    // Nếu là User thường -> Kiểm tra xem có được tick cấp quyền module này không
-    return String(user.quyen_truy_cap || '').includes(moduleId);
-  };
 
   return (
     <>

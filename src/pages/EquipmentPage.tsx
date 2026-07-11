@@ -53,6 +53,11 @@ const isFurniture = (nhom: string) => {
 
 export default function EquipmentPage() {
   const { user } = useAuth();
+  const hasRule = (ruleId: string) => {
+    if (!user) return false;
+    if (String(user.quyen).toUpperCase() === 'ADMIN') return false;
+    return String(user.quyen_chi_tiet || '').includes(ruleId);
+  };
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [tbData, setTbData] = useState<any[]>([]);
   const [nkData, setNkData] = useState<any[]>([]); 
@@ -1300,7 +1305,17 @@ export default function EquipmentPage() {
                   <div className="flex flex-col md:flex-row gap-4">
                     <div className="w-full md:w-[30%]">
                       <label className="block text-xs font-bold text-red-600 mb-1">Đơn giá (VNĐ)</label>
-                      <input type="text" name="gia_mua" value={formatCurrency(tbFormData.gia_mua)} onChange={handleTbChange} className="w-full p-2.5 border border-red-200 rounded-lg bg-red-50 text-red-700 outline-none focus:ring-2 focus:ring-red-500 font-bold" />
+                      <input 
+                        type="text" 
+                        name="gia_mua" 
+                        value={hasRule('TB_HIDE_PRICE') ? '***' : formatCurrency(tbFormData.gia_mua)} 
+                        onChange={(e) => {
+                          if (hasRule('TB_HIDE_PRICE')) return;
+                          handleTbChange(e);
+                        }} 
+                        disabled={hasRule('TB_HIDE_PRICE')}
+                        className={`w-full p-2.5 border border-red-200 rounded-lg bg-red-50 text-red-700 outline-none focus:ring-2 focus:ring-red-500 font-bold ${hasRule('TB_HIDE_PRICE') ? 'opacity-60 cursor-not-allowed bg-gray-50 text-gray-500 border-gray-200' : ''}`} 
+                      />
                     </div>
                     <div className="w-full md:w-[20%]">
                       <label className="block text-xs font-bold text-gray-700 mb-1">Khấu hao (Tháng)</label>
@@ -1516,7 +1531,12 @@ export default function EquipmentPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-5 rounded-xl border border-gray-200 mb-6">
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Ngày mua</p><p className="font-semibold text-gray-800">{viewData.ngay_mua ? new Date(viewData.ngay_mua).toLocaleDateString('vi-VN') : '-'}</p></div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Hạn bảo hành</p>{viewData.han_bao_hanh ? (<ExpiryBadge dateStr={viewData.han_bao_hanh} label="Hạn BH" warningDays={30} />) : (<p className="font-semibold text-gray-800">-</p>)}</div>
-                <div><p className="text-xs text-gray-500 font-bold mb-1">Nguyên giá</p><p className="font-bold text-red-600">{formatCurrency(viewData.gia_mua)} đ</p></div>
+                <div>
+                  <p className="text-xs text-gray-500 font-bold mb-1">Nguyên giá</p>
+                  <p className="font-bold text-red-600">
+                    {hasRule('TB_HIDE_PRICE') ? '***' : `${formatCurrency(viewData.gia_mua)} đ`}
+                  </p>
+                </div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Nhà cung cấp</p><p className="font-semibold text-gray-800">{viewData.nha_cung_cap || '-'}</p></div>
                 <div className="md:col-span-4"><p className="text-xs text-gray-500 font-bold mb-1">Mô tả ngoại hình / Ghi chú</p><p className="font-medium text-gray-700 bg-white p-2 rounded border border-gray-100">{viewData.mo_ta_dac_diem || '-'}</p></div>
               </div>

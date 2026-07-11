@@ -273,7 +273,8 @@ export default function DashboardPage() {
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
   const [widgetConfigs, setWidgetConfigs] = useState<WidgetConfig[]>(() => {
     try {
-      const saved = localStorage.getItem('dashboard_widget_prefs_v3');
+      const savedKey = user?.id ? `dashboard_widget_prefs_${user.id}` : 'dashboard_widget_prefs_v3';
+      const saved = localStorage.getItem(savedKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         const ids = new Set(parsed.map((w: any) => w.id));
@@ -284,14 +285,35 @@ export default function DashboardPage() {
     return DEFAULT_WIDGETS;
   });
 
+  // Đồng bộ cấu hình widget từ localStorage khi user.id đã tải xong
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const storageKey = `dashboard_widget_prefs_${user.id}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const ids = new Set(parsed.map((w: any) => w.id));
+        const merged = [...parsed, ...DEFAULT_WIDGETS.filter(w => !ids.has(w.id))];
+        setWidgetConfigs(merged);
+      } else {
+        setWidgetConfigs(DEFAULT_WIDGETS);
+      }
+    } catch (e) {
+      setWidgetConfigs(DEFAULT_WIDGETS);
+    }
+  }, [user?.id]);
+
   const handleUpdateWidgets = (updated: WidgetConfig[]) => {
     setWidgetConfigs(updated);
-    localStorage.setItem('dashboard_widget_prefs_v3', JSON.stringify(updated));
+    const storageKey = user?.id ? `dashboard_widget_prefs_${user.id}` : 'dashboard_widget_prefs_v3';
+    localStorage.setItem(storageKey, JSON.stringify(updated));
   };
 
   const handleResetWidgets = () => {
     setWidgetConfigs(DEFAULT_WIDGETS);
-    localStorage.removeItem('dashboard_widget_prefs_v3');
+    const storageKey = user?.id ? `dashboard_widget_prefs_${user.id}` : 'dashboard_widget_prefs_v3';
+    localStorage.removeItem(storageKey);
   };
 
   const togglePinWidget = (id: string) => {

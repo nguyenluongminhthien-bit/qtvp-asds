@@ -32,6 +32,11 @@ const extractStartDateFromMaNV = (maNV: string) => {
 
 export default function PersonnelPage() {
   const { user } = useAuth();
+  const hasRule = (ruleId: string) => {
+    if (!user) return false;
+    if (String(user.quyen).toUpperCase() === 'ADMIN') return false;
+    return String(user.quyen_chi_tiet || '').includes(ruleId);
+  };
   const [data, setData] = useState<any[]>([]);
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [loading, setLoading] = useState(true);
@@ -721,7 +726,15 @@ export default function PersonnelPage() {
     setError(null);
   };
 
-  const handleView = (item: any) => { setViewData(item); setShowNgachLuong(false); setIsViewModalOpen(true); };
+  const handleView = (item: any) => { 
+    if (hasRule('NS_NO_DETAIL')) {
+      toast.warning("Bạn không có quyền xem chi tiết hồ sơ nhân sự này!");
+      return;
+    }
+    setViewData(item); 
+    setShowNgachLuong(false); 
+    setIsViewModalOpen(true); 
+  };
 
   const handleDuplicate = (item: any) => {
     setModal({ isOpen: true, mode: 'create', formData: { ...item, id: '', chuc_vu: item.chuc_vu ? `${item.chuc_vu} (Kiêm nhiệm)` : 'Kiêm nhiệm', trang_thai: 'Đang làm việc', ngay_nghi_viec: '' } });
@@ -1609,7 +1622,13 @@ export default function PersonnelPage() {
                       <td className="py-2.5 px-3 whitespace-nowrap align-middle text-left">
                         <div className="flex flex-col gap-1 text-[11px]">
                           {item.sdt_cong_ty && <a href={`tel:${String(item.sdt_cong_ty).replace(/\D/g, '')}`} className="font-bold text-[#05469B] hover:underline flex items-center gap-1 w-fit"><Phone size={11} className="text-blue-400" /> {formatPhoneNumber(item.sdt_cong_ty)}</a>}
-                          {item.sdt_ca_nhan && <a href={`tel:${String(item.sdt_ca_nhan).replace(/\D/g, '')}`} className="font-bold text-emerald-500 hover:underline flex items-center gap-1 w-fit"><Phone size={11} className="text-emerald-400" /> {formatPhoneNumber(item.sdt_ca_nhan)}</a>}
+                          {item.sdt_ca_nhan && (
+                            hasRule('NS_HIDE_SENSITIVE') ? (
+                              <span className="text-gray-400 font-medium flex items-center gap-1 w-fit"><Lock size={11} className="text-gray-300"/> ***</span>
+                            ) : (
+                              <a href={`tel:${String(item.sdt_ca_nhan).replace(/\D/g, '')}`} className="font-bold text-emerald-500 hover:underline flex items-center gap-1 w-fit"><Phone size={11} className="text-emerald-400" /> {formatPhoneNumber(item.sdt_ca_nhan)}</a>
+                            )
+                          )}
                           {!item.sdt_cong_ty && !item.sdt_ca_nhan && <span className="text-gray-400 font-medium">---</span>}
                         </div>
                       </td>
@@ -1706,7 +1725,13 @@ export default function PersonnelPage() {
                           <p className="text-[10px] font-bold text-gray-400 uppercase">Điện thoại</p>
                           <div className="flex flex-col gap-1 mt-1">
                             {item.sdt_cong_ty && <a href={`tel:${String(item.sdt_cong_ty).replace(/\D/g, '')}`} className="font-bold text-[#05469B] hover:underline flex items-center gap-1 text-[11px]"><Phone size={11} className="text-blue-400 shrink-0" /> {formatPhoneNumber(item.sdt_cong_ty)}</a>}
-                            {item.sdt_ca_nhan && <a href={`tel:${String(item.sdt_ca_nhan).replace(/\D/g, '')}`} className="font-bold text-emerald-600 hover:underline flex items-center gap-1 text-[11px]"><Phone size={11} className="text-emerald-400 shrink-0" /> {formatPhoneNumber(item.sdt_ca_nhan)}</a>}
+                            {item.sdt_ca_nhan && (
+                              hasRule('NS_HIDE_SENSITIVE') ? (
+                                <span className="text-gray-400 font-medium flex items-center gap-1 text-[11px]"><Lock size={11} className="text-gray-300 shrink-0"/> ***</span>
+                              ) : (
+                                <a href={`tel:${String(item.sdt_ca_nhan).replace(/\D/g, '')}`} className="font-bold text-emerald-600 hover:underline flex items-center gap-1 text-[11px]"><Phone size={11} className="text-emerald-400 shrink-0" /> {formatPhoneNumber(item.sdt_ca_nhan)}</a>
+                              )
+                            )}
                             {!item.sdt_cong_ty && !item.sdt_ca_nhan && <span className="text-gray-400 font-medium">---</span>}
                           </div>
                         </div>
@@ -2321,7 +2346,13 @@ export default function PersonnelPage() {
                   <p className="text-lg font-bold text-[#05469B] mb-3">{viewData.chuc_vu}</p>
                   <div className="flex flex-col sm:flex-row flex-wrap justify-center sm:justify-start gap-3 sm:gap-4 text-sm text-gray-600 font-medium">
                     {viewData.sdt_cong_ty && (<a href={`tel:${String(viewData.sdt_cong_ty).replace(/\D/g, '')}`} className="flex items-center justify-center sm:justify-start gap-1.5 bg-blue-50 px-2 py-1 rounded text-blue-800 border border-blue-100 hover:bg-blue-100 transition-colors"><Phone size={16} className="text-blue-500"/> SĐT Cty: <span className="font-bold">{formatPhoneNumber(viewData.sdt_cong_ty)}</span></a>)}
-                    {viewData.sdt_ca_nhan && (<a href={`tel:${String(viewData.sdt_ca_nhan).replace(/\D/g, '')}`} className="flex items-center justify-center sm:justify-start gap-1.5 bg-emerald-50 px-2 py-1 rounded text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors"><Phone size={16} className="text-emerald-500"/> SĐT Cá nhân: <span className="font-bold">{formatPhoneNumber(viewData.sdt_ca_nhan)}</span></a>)}
+                    {viewData.sdt_ca_nhan && (
+                      hasRule('NS_HIDE_SENSITIVE') ? (
+                        <span className="flex items-center justify-center sm:justify-start gap-1.5 bg-gray-50 px-2 py-1 rounded text-gray-500 border border-gray-200"><Lock size={16} className="text-gray-400"/> SĐT Cá nhân: <span className="font-bold">***</span></span>
+                      ) : (
+                        <a href={`tel:${String(viewData.sdt_ca_nhan).replace(/\D/g, '')}`} className="flex items-center justify-center sm:justify-start gap-1.5 bg-emerald-50 px-2 py-1 rounded text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors"><Phone size={16} className="text-emerald-500"/> SĐT Cá nhân: <span className="font-bold">{formatPhoneNumber(viewData.sdt_ca_nhan)}</span></a>
+                      )
+                    )}
                     <span className="flex items-center justify-center sm:justify-start gap-1.5 mt-1 sm:mt-0"><Mail size={16} className="text-gray-400"/> {viewData.email || 'Chưa có Email'}</span>
                   </div>
                 </div>
@@ -2337,7 +2368,23 @@ export default function PersonnelPage() {
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Phân loại</p><p className="font-semibold text-gray-800">{viewData.phan_loai || '---'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Ngày nhận việc</p><p className="font-semibold text-gray-800">{viewData.ngay_nhan_vien ? new Date(viewData.ngay_nhan_vien).toLocaleDateString('vi-VN') : '---'}</p></div>
                   {viewData.trang_thai === 'Đã nghỉ việc' ? (<div><p className="text-xs text-red-500 uppercase font-bold mb-1">Ngày nghỉ việc</p><p className="font-semibold text-red-600">{viewData.ngay_nghi_viec ? new Date(viewData.ngay_nghi_viec).toLocaleDateString('vi-VN') : '---'}</p></div>) : (<div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Thâm niên</p><p className="font-semibold text-emerald-600">{calculateSeniority(viewData.ngay_nhan_vien, viewData.trang_thai || 'Đang làm việc', viewData.ngay_nghi_viec || '')}</p></div>)}
-                  <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Ngạch lương</p><div className="flex items-center gap-1.5"><p className={`font-semibold ${showNgachLuong ? 'text-[#05469B]' : 'text-gray-400 tracking-widest mt-1'}`}>{showNgachLuong ? (viewData.ngach_luong || '---') : '••••••'}</p>{(viewData.ngach_luong && viewData.ngach_luong.trim() !== '') && (<button onClick={() => setShowNgachLuong(!showNgachLuong)} className="text-gray-400 hover:text-[#05469B] transition-colors" title={showNgachLuong ? "Ẩn ngạch lương" : "Hiện ngạch lương"}>{showNgachLuong ? <EyeOff size={14} /> : <Eye size={14} />}</button>)}</div></div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Ngạch lương</p>
+                    {hasRule('NS_HIDE_SENSITIVE') ? (
+                      <p className="font-semibold text-gray-400">***</p>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <p className={`font-semibold ${showNgachLuong ? 'text-[#05469B]' : 'text-gray-400 tracking-widest mt-1'}`}>
+                          {showNgachLuong ? (viewData.ngach_luong || '---') : '••••••'}
+                        </p>
+                        {(viewData.ngach_luong && viewData.ngach_luong.trim() !== '') && (
+                          <button onClick={() => setShowNgachLuong(!showNgachLuong)} className="text-gray-400 hover:text-[#05469B] transition-colors" title={showNgachLuong ? "Ẩn ngạch lương" : "Hiện ngạch lương"}>
+                            {showNgachLuong ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   {viewData.ngay_vao_lam_lai && (<div className="col-span-2 md:col-span-1"><p className="text-xs text-blue-500 uppercase font-bold mb-1">Vào làm lại</p><p className="font-semibold text-blue-600">{new Date(viewData.ngay_vao_lam_lai).toLocaleDateString('vi-VN')}</p></div>)}
                 </div>
               </div>
@@ -2349,8 +2396,18 @@ export default function PersonnelPage() {
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Trình độ:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.trinh_do_hoc_van || '---'}</span></div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Thu nhập:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{formatCurrency(viewData.thu_nhap) || '---'} VNĐ</span></div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Ngoại hình:</span><span className="font-semibold text-gray-800 text-sm sm:text-right whitespace-pre-wrap flex-1">{viewData.mo_to_ngoai_hinh || '---'}</span></div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
+                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">Thu nhập:</span>
+                      <span className="font-semibold text-gray-800 text-sm sm:text-right">
+                        {hasRule('NS_HIDE_SENSITIVE') ? '***' : (viewData.thu_nhap ? `${formatCurrency(viewData.thu_nhap)} VNĐ` : '---')}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-4">
+                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">Ngoại hình:</span>
+                      <span className="font-semibold text-gray-800 text-sm sm:text-right whitespace-pre-wrap flex-1">
+                        {hasRule('NS_HIDE_SENSITIVE') ? '***' : (viewData.mo_to_ngoai_hinh || '---')}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex flex-col">
@@ -2427,6 +2484,7 @@ export default function PersonnelPage() {
         onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
         onSave={handleSave}
         setFormData={(updater) => setModal(prev => ({ ...prev, formData: updater(prev.formData) }))}
+        hideSensitiveFields={hasRule('NS_HIDE_SENSITIVE')}
       />
 
       {/* CÁC MODAL CÒN LẠI (REHIRE, DELETE, BULK IMPORT) GIỮ NGUYÊN */}

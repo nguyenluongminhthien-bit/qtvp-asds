@@ -15,6 +15,7 @@ interface PersonnelModalProps {
   onClose: () => void;
   onSave: (e: React.FormEvent) => void;
   setFormData: (updater: (prev: any) => any) => void;
+  hideSensitiveFields?: boolean;
 }
 
 export default function PersonnelModal({
@@ -27,6 +28,7 @@ export default function PersonnelModal({
   onClose,
   onSave,
   setFormData,
+  hideSensitiveFields = false,
 }: PersonnelModalProps) {
 
   // 🟢 TỰ ĐỘNG TÍNH NGÀY HẾT HẠN ATVSLĐ (Bơm IQ cho phần mềm)
@@ -151,7 +153,22 @@ export default function PersonnelModal({
               <div><label className="block text-xs font-bold text-gray-700 mb-1">Giới tính</label><select name="gioi_tinh" value={formData.gioi_tinh || 'Nam'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
               <div><label className="block text-xs font-bold text-gray-700 mb-1">Năm sinh</label><input type="date" name="nam_sinh" value={formData.nam_sinh ? formData.nam_sinh.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
               <div><label className="block text-xs font-bold text-[#05469B] mb-1">SĐT Công ty (Sim cấp)</label><input type="tel" name="sdt_cong_ty" value={formData.sdt_cong_ty || ''} onChange={(e) => setFormData(prev => ({...prev, sdt_cong_ty: formatPhoneNumber(e.target.value)}))} maxLength={13} className="w-full p-2.5 border border-blue-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide text-[#05469B]" placeholder="09xx xxx xxx" /></div>
-              <div><label className="block text-xs font-bold text-gray-700 mb-1">SĐT Cá nhân</label><input type="tel" name="sdt_ca_nhan" value={formData.sdt_ca_nhan || ''} onChange={(e) => setFormData(prev => ({...prev, sdt_ca_nhan: formatPhoneNumber(e.target.value)}))} maxLength={13} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide" placeholder="09xx xxx xxx" /></div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">SĐT Cá nhân</label>
+                <input 
+                  type="tel" 
+                  name="sdt_ca_nhan" 
+                  value={hideSensitiveFields ? '***' : (formData.sdt_ca_nhan || '')} 
+                  onChange={(e) => {
+                    if (hideSensitiveFields) return;
+                    setFormData(prev => ({...prev, sdt_ca_nhan: formatPhoneNumber(e.target.value)}));
+                  }} 
+                  disabled={hideSensitiveFields}
+                  maxLength={13} 
+                  className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
+                  placeholder="09xx xxx xxx" 
+                />
+              </div>
               <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Email</label><input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
               <div className="md:col-span-4"><label className="block text-xs font-bold text-gray-700 mb-1">Link Ảnh Đại Diện (Google Drive)</label><div className="relative"><input type="text" name="hinh_anh" value={formData.hinh_anh || ''} onChange={handleInputChange} className="w-full p-2.5 pl-10 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Dán link chia sẻ ảnh từ Google Drive vào đây..." /><ImageIcon className="absolute left-3 top-2.5 text-gray-400" size={18} /></div></div>
             </div>
@@ -196,8 +213,30 @@ export default function PersonnelModal({
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc *</label><input type="date" required name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm làm việc</label><input type="text" name="dia_diem_lam_viec" value={formData.dia_diem_lam_viec || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Showroom Bình Dương..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label><input type="text" name="ngach_luong" value={formData.ngach_luong || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Ví dụ: Chuyên viên" /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Thu nhập (Lương đóng BH) VNĐ</label><input type="text" name="thu_nhap" value={formData.thu_nhap ? Number(formData.thu_nhap).toLocaleString('vi-VN') : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-indigo-700" placeholder="10.000.000" /></div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label>
+                  <input 
+                    type="text" 
+                    name="ngach_luong" 
+                    value={hideSensitiveFields ? '***' : (formData.ngach_luong || '')} 
+                    onChange={handleInputChange} 
+                    disabled={hideSensitiveFields}
+                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
+                    placeholder="Ví dụ: Chuyên viên" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Thu nhập (Lương đóng BH) VNĐ</label>
+                  <input 
+                    type="text" 
+                    name="thu_nhap" 
+                    value={hideSensitiveFields ? '***' : (formData.thu_nhap ? Number(formData.thu_nhap).toLocaleString('vi-VN') : '')} 
+                    onChange={handleInputChange} 
+                    disabled={hideSensitiveFields}
+                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-indigo-700 ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
+                    placeholder="10.000.000" 
+                  />
+                </div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái làm việc</label><select name="trang_thai" value={formData.trang_thai || 'Đang làm việc'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Đang làm việc">Đang làm việc</option><option value="Đã thôi việc">Đã thôi việc</option></select></div>
               </div>
             </div>
@@ -268,7 +307,17 @@ export default function PersonnelModal({
           <div className="bg-orange-50/40 p-4 sm:p-5 rounded-xl border border-orange-100">
             <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-orange-500 rounded-full"></div> Thông tin Bổ sung</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label className="block text-xs font-bold text-gray-700 mb-1">Mô tả ngoại hình</label><textarea name="mo_to_ngoai_hinh" value={formData.mo_to_ngoai_hinh || ''} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none"></textarea></div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Mô tả ngoại hình</label>
+                <textarea 
+                  name="mo_to_ngoai_hinh" 
+                  value={hideSensitiveFields ? '***' : (formData.mo_to_ngoai_hinh || '')} 
+                  onChange={handleInputChange} 
+                  disabled={hideSensitiveFields}
+                  rows={3} 
+                  className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                ></textarea>
+              </div>
               <div><label className="block text-xs font-bold text-gray-700 mb-1">Ghi chú khác</label><textarea name="ghi_chu" value={formData.ghi_chu || ''} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none"></textarea></div>
             </div>
           </div>

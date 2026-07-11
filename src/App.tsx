@@ -40,15 +40,7 @@ function TabContainer({ active, children }: TabContainerProps) {
 }
 
 function AppContent() {
-  const { user } = useAuth();
-
-  const checkPermission = (moduleId: string) => {
-    if (!user) return false;
-    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
-      return true;
-    }
-    return String(user.quyen_truy_cap || '').includes(moduleId);
-  };
+  const { user, checkPermission } = useAuth();
   
   // Tùy chỉnh: Đặt 'dashboard' làm trang mặc định hiển thị đầu tiên
   const [activeTab, setActiveTab] = useState('dashboard');
