@@ -1,0 +1,5 @@
+const i={success:"bg-emerald-600 text-white",error:"bg-red-600 text-white",warning:"bg-amber-500 text-white",info:"bg-[#05469B] text-white"},r={success:"✓",error:"✕",warning:"⚠",info:"ℹ"};function a(e,t="info",s=3e3){const o=c(),n=document.createElement("div");n.className=`flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold
+    transition-all duration-300 translate-y-2 opacity-0 ${i[t]}`,n.innerHTML=`
+    <span class="text-base font-black">${r[t]}</span>
+    <span>${e}</span>
+  `,o.appendChild(n),requestAnimationFrame(()=>{requestAnimationFrame(()=>{n.classList.remove("translate-y-2","opacity-0")})}),setTimeout(()=>{n.classList.add("opacity-0","translate-y-2"),setTimeout(()=>n.remove(),300)},s)}function c(){let e=document.getElementById("toast-container");return e||(e=document.createElement("div"),e.id="toast-container",e.className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 items-end",document.body.appendChild(e)),e}const l={success:(e,t)=>a(e,"success",t),error:(e,t)=>a(e,"error",t),warning:(e,t)=>a(e,"warning",t),info:(e,t)=>a(e,"info",t)};export{l as t};
