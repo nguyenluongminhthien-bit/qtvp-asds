@@ -122,10 +122,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkPermission = (moduleId: string) => {
     if (!user) return false;
-    if (String(user.quyen).toUpperCase() === 'ADMIN' || String(user.quyen_truy_cap).includes('ALL')) {
+    const quyenUpper = String(user.quyen || '').toUpperCase();
+    const quyenTruyCap = String(user.quyen_truy_cap || '').trim();
+
+    // 1. ADMIN hoặc ALL thì luôn có toàn quyền
+    if (quyenUpper === 'ADMIN' || quyenTruyCap.includes('ALL')) {
       return true;
     }
-    return String(user.quyen_truy_cap || '').includes(moduleId);
+
+    // 2. Nếu quyen_truy_cap rỗng (tài khoản mặc định chưa bị giới hạn riêng) -> cho phép truy cập module
+    if (!quyenTruyCap && String(user.quyen).toLowerCase() !== 'viewer_hanche') {
+      return true;
+    }
+
+    // 3. Tương thích ngược: Nếu tài khoản có trọn bộ 9 module cũ trước khi có BaoCao -> tự động mở BaoCao
+    const legacyModules = ['TongQuan', 'CongTy', 'NhanSu', 'PCCC', 'ATVSLD', 'Xe', 'ThietBi', 'VanBan', 'QuyDinh'];
+    const isLegacyFullAccess = legacyModules.every(m => quyenTruyCap.includes(m));
+    if (moduleId === 'BaoCao' && isLegacyFullAccess) {
+      return true;
+    }
+
+    return quyenTruyCap.includes(moduleId);
   };
 
   return (

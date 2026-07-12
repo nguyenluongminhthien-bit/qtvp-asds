@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Loader2, Briefcase } from 'lucide-react';
 import { apiService } from '../../services/api';
 // 🟢 Import hàm vẽ cây đơn vị
@@ -24,9 +24,25 @@ export default function PnModal({ isOpen, mode, currentData, selectedUnitId, uni
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // State cho dropdown check-list
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Đóng dropdown khi nhấp ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      setIsDropdownOpen(false);
       
       // 🟢 LOGIC TỰ ĐỘNG CHỌN ĐƠN VỊ
       // Nếu là Thêm mới -> Ưu tiên lấy selectedUnitId từ bên ngoài. Nếu sửa -> lấy từ currentData
@@ -39,17 +55,55 @@ export default function PnModal({ isOpen, mode, currentData, selectedUnitId, uni
     }
   }, [isOpen, currentData, selectedUnitId, mode]);
 
+  // Lọc danh sách đơn vị chỉ hiển thị đơn vị gốc và các con/cháu trực thuộc
+  const filteredUnits = useMemo(() => {
+    if (!selectedUnitId || unitList.length === 0) return unitList;
+
+    // Hàm đệ quy thu thập tất cả ID đơn vị cấp dưới
+    const getSubordinateIds = (id: string): string[] => {
+      const subs = unitList.filter(u => u.cap_quan_ly === id);
+      let ids = subs.map(u => u.id);
+      subs.forEach(s => {
+        ids = [...ids, ...getSubordinateIds(s.id)];
+      });
+      return ids;
+    };
+
+    const allowedIds = [selectedUnitId, ...getSubordinateIds(selectedUnitId)];
+    return unitList.filter(u => allowedIds.includes(u.id));
+  }, [unitList, selectedUnitId]);
+
   if (!isOpen) return null;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev: any) => ({ ...prev, [name]: value }));
   };
 
+  const handleUnitToggle = (unitId: string) => {
+    const currentSelected = String(formData.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
+    let newSelected: string[];
+    if (currentSelected.includes(unitId)) {
+      newSelected = currentSelected.filter(id => id !== unitId);
+    } else {
+      newSelected = [...currentSelected, unitId];
+    }
+    setFormData((prev: any) => ({ ...prev, id_don_vi: newSelected.join(',') }));
+  };
+
+  const selectedUnitsText = () => {
+    const selectedIds = String(formData.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (selectedIds.length === 0) return "-- Chọn Đơn vị --";
+    const names = selectedIds.map(id => {
+      const u = unitList.find(x => x.id === id);
+      return u ? u.ten_don_vi : id;
+    });
+    return names.join(', ');
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); 
-    // 🟢 Thay alert bằng toast.warning
-    if (!formData.id_don_vi) return toast.warning("Vui lòng chọn Đơn vị trực thuộc!");
+    if (!formData.id_don_vi) return toast.warning("Vui lòng chọn ít nhất một Đơn vị!");
 
     setSubmitting(true); setError(null);
     try {
@@ -61,7 +115,6 @@ export default function PnModal({ isOpen, mode, currentData, selectedUnitId, uni
       // 🟢 BÁO CÁO LẠI CHO FILE MẸ ĐỂ CẬP NHẬT GIAO DIỆN
       onSaved(finalData, mode === 'create');
       onClose();
-      // 🟢 Thêm thông báo thành công (Phân biệt hành động)
       if (mode === 'create') {
         toast.success("Thêm mới Pháp nhân thành công!");
       } else {
@@ -70,9 +123,7 @@ export default function PnModal({ isOpen, mode, currentData, selectedUnitId, uni
 
     } catch (err: any) { 
       setError(err.message || 'Lỗi lưu dữ liệu Pháp nhân.'); 
-      // 🔴 Thêm thông báo lỗi
       toast.error(err.message || "Đã xảy ra lỗi khi lưu thông tin Pháp nhân!");
-      
     } finally { 
       setSubmitting(false); 
     }
@@ -98,17 +149,40 @@ export default function PnModal({ isOpen, mode, currentData, selectedUnitId, uni
               <input type="text" required name="ma_so_thue" value={formData.ma_so_thue || ''} onChange={handleChange} placeholder="Nhập MST..." className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-orange-500 font-bold text-orange-700 tracking-widest" />
             </div>
             
-            {/* 🟢 Ô CHỌN ĐƠN VỊ LẤY DỮ LIỆU TỪ unitList */}
-            <div className="md:col-span-3">
-              <label className="block text-xs font-bold text-gray-600 mb-1">Đơn vị trực thuộc *</label>
-              <select required name="id_don_vi" value={formData.id_don_vi || ''} onChange={handleChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-orange-500 font-bold text-[#05469B]" style={{ fontFamily: 'monospace, sans-serif' }}>
-                <option value="">-- Chọn Đơn vị --</option>
-                {buildHierarchicalOptions(unitList || []).map(({ unit, prefix }) => (
-                  <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
-                    {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
-                  </option>
-                ))}
-              </select>
+            {/* 🟢 Ô CHỌN NHIỀU ĐƠN VỊ LỌC THEOselectedUnitId */}
+            <div className="md:col-span-3" ref={dropdownRef}>
+              <label className="block text-xs font-bold text-gray-600 mb-1">Đơn vị *</label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-orange-500 font-bold text-[#05469B] text-left flex justify-between items-center min-h-[42px]"
+                >
+                  <span className="truncate block pr-4">{selectedUnitsText()}</span>
+                  <span className="text-gray-400 text-xs shrink-0">▼</span>
+                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute left-0 right-0 mt-1 bg-[#FFFFF0] border border-gray-200 rounded-lg shadow-lg z-50 max-h-[220px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                    {buildHierarchicalOptions(filteredUnits).map(({ unit, prefix }) => {
+                      const selectedIds = String(formData.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
+                      const isChecked = selectedIds.includes(unit.id);
+                      return (
+                        <label key={unit.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-200/60 rounded text-xs font-semibold text-gray-700 cursor-pointer w-full">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleUnitToggle(unit.id)}
+                            className="rounded text-orange-600 focus:ring-orange-500 h-3.5 w-3.5"
+                          />
+                          <span className="font-mono text-gray-400 shrink-0 select-none">{prefix}</span>
+                          <span>{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="md:col-span-2">

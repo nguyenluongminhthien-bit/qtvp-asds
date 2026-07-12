@@ -15,7 +15,8 @@ import {
   UserCog,         
   ClipboardList,
   Moon,
-  Sun
+  Sun,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -243,22 +244,36 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           </div>
         </div>
 
-        {/* Nhóm 3: Hệ thống (Chỉ ADMIN) */}
-        {String(user?.quyen).toUpperCase() === 'ADMIN' && (
-          <div>
-            {!isCollapsed && <p className="px-3 text-[10px] font-bold text-blue-300/80 uppercase tracking-widest mb-2 animate-in fade-in">Hệ thống</p>}
-            <div className="space-y-1">
+        {/* Nhóm 3: Hệ thống */}
+        <div>
+          {!isCollapsed && <p className="px-3 text-[10px] font-bold text-blue-300/80 uppercase tracking-widest mb-2 animate-in fade-in">Hệ thống</p>}
+          <div className="space-y-1">
+            {checkPermission('BaoCao') && (
               <button
-                onClick={() => setActiveTab('accounts')}
-                title="Tài khoản"
+                onClick={() => setActiveTab('reports')}
+                title="Báo cáo"
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
-                  activeTab === 'accounts' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+                  activeTab === 'reports' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
                 }`}
               >
-                <UserCog size={18} />
-                {!isCollapsed && <span className="text-sm">Tài khoản</span>}
+                <Sun size={18} className="hidden" />
+                <BarChart3 size={18} />
+                {!isCollapsed && <span className="text-sm">Báo cáo</span>}
               </button>
+            )}
 
+            <button
+              onClick={() => setActiveTab('accounts')}
+              title="Tài khoản"
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'gap-3 px-3 py-2.5'} rounded-lg font-semibold transition-all duration-200 ${
+                activeTab === 'accounts' ? 'bg-white/10 text-white shadow-sm' : 'text-blue-100 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <UserCog size={18} />
+              {!isCollapsed && <span className="text-sm">Tài khoản</span>}
+            </button>
+
+            {String(user?.quyen).toUpperCase() === 'ADMIN' && (
               <button
                 onClick={() => setActiveTab('logs')}
                 title="Nhật ký (Log)"
@@ -269,9 +284,9 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
                 <ClipboardList size={18} />
                 {!isCollapsed && <span className="text-sm">Nhật ký (Log)</span>}
               </button>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </nav>
 
       {/* FOOTER: CHẾ ĐỘ BAN ĐÊM & ĐĂNG XUẤT */}

@@ -1,5 +1,5 @@
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../utils/hierarchy';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, 
   FileText, Building2, MapPin, ChevronDown, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen,
@@ -221,23 +221,72 @@ export default function DocumentPage() {
     return map;
   }, [donViList]);
 
+  const isHOAdmin = useMemo(() => {
+    if (!user) return false;
+    const userQuyen = String(user.quyen || (user as any).role || '').trim().toLowerCase();
+    const userIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();
+    if (userQuyen !== 'admin') return false;
+    if (userIdDonVi === 'ALL' || userIdDonVi === 'HO' || userIdDonVi === 'DV_HO' || !userIdDonVi) return true;
+    const uDonVi = donViList.find(dv => String(dv.id || '') === userIdDonVi);
+    if (uDonVi) {
+      const lh = String(uDonVi.loai_hinh || '').toLowerCase();
+      const name = String(uDonVi.ten_don_vi || '').toLowerCase();
+      const cap = String(uDonVi.cap_quan_ly || '').toUpperCase();
+      if (cap === 'HO' || lh.includes('tổng công ty') || name.includes('toàn quốc')) {
+        return true;
+      }
+    }
+    return false;
+  }, [user, donViList]);
+
+  const canEditOrDeleteDocument = useCallback((item: any) => {
+    if (!user || !item) return false;
+    if (isViewerHanChe) return false;
+    if (isHOAdmin) return true;
+
+    // Nếu không phải HO Admin:
+    // 1. Nếu văn bản ban hành Toàn hệ thống (*) hoặc ALL -> CHỈ XEM, không được sửa/xóa
+    const scope = String(item.pham_vi_ap_dung || '').trim();
+    if (scope === 'Toàn hệ thống' || scope === '*' || scope === 'ALL' || scope.toLowerCase() === 'toàn hệ thống') {
+      return false;
+    }
+
+    // 2. Chỉ được sửa/xóa nếu văn bản thuộc Đơn vị của mình (hoặc cấp dưới trực thuộc của mình)
+    const userIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();
+    if (!userIdDonVi) return false;
+
+    const level1 = [userIdDonVi];
+    const level2 = donViList.filter(dv => level1.includes(String(dv.cap_quan_ly || ''))).map(dv => String(dv.id || ''));
+    const level3 = donViList.filter(dv => level2.includes(String(dv.cap_quan_ly || ''))).map(dv => String(dv.id || ''));
+    const myUnits = [...level1, ...level2, ...level3];
+
+    return myUnits.includes(String(item.id_don_vi || '').trim());
+  }, [user, isViewerHanChe, isHOAdmin, donViList]);
+
   const visibleDocuments = useMemo(() => {
     if (!user) return [];
-    const userIdDonVi = user.id_don_vi || (user as any).idDonVi;
+    if (isHOAdmin) return vbData;
 
-    if (userIdDonVi === 'ALL' || String(user.quyen).toLowerCase() === 'admin') return vbData;
-    
+    const userIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();
+    if (!userIdDonVi || userIdDonVi === 'ALL') return vbData;
+
     const level1 = [userIdDonVi];
-    const level2 = donViList.filter(dv => level1.includes(dv.cap_quan_ly)).map(dv => dv.id);
-    const level3 = donViList.filter(dv => level2.includes(dv.cap_quan_ly)).map(dv => dv.id);
+    const level2 = donViList.filter(dv => level1.includes(String(dv.cap_quan_ly || ''))).map(dv => String(dv.id || ''));
+    const level3 = donViList.filter(dv => level2.includes(String(dv.cap_quan_ly || ''))).map(dv => String(dv.id || ''));
     const myUnits = [...level1, ...level2, ...level3];
-    
+
     return vbData.filter(vb => {
-      return myUnits.includes(vb.id_don_vi) || 
-             myUnits.includes(vb.pham_vi_ap_dung) || 
-             vb.pham_vi_ap_dung === 'Toàn hệ thống';
+      if (!vb) return false;
+      const scope = String(vb.pham_vi_ap_dung || '').trim();
+      const vbDonVi = String(vb.id_don_vi || '').trim();
+      return myUnits.includes(vbDonVi) || 
+             myUnits.includes(scope) || 
+             scope === 'Toàn hệ thống' ||
+             scope === '*' ||
+             scope === 'ALL' ||
+             scope.toLowerCase() === 'toàn hệ thống';
     });
-  }, [vbData, user, donViList]);
+  }, [vbData, user, donViList, isHOAdmin]);
 
   const { suggestNguoiky, suggestChucvu, suggestNguoilayso, suggestBPlayso, suggestNghiepvu, suggestDonViXuLy } = useMemo(() => {
     const getUnique = (field: string) => {
@@ -263,30 +312,37 @@ export default function DocumentPage() {
   const allowedDonViIds = useAllowedUnits(donViList);
 
   const filteredUnits = useMemo(() => {
-    let baseUnits = donViList.filter(dv => allowedDonViIds.includes(dv.id));
+    const list = donViList || [];
+    let baseUnits = list.filter(dv => allowedDonViIds.includes(String(dv.id || '')));
     if (!unitSearchTerm) return baseUnits;
 
     const lower = unitSearchTerm.toLowerCase();
     const matchedIds = new Set<string>();
 
     baseUnits.forEach(u => {
-      if (String(u.ten_don_vi || '').toLowerCase().includes(lower) || String(u.id || '').toLowerCase().includes(lower)) {
-        matchedIds.add(u.id);
+      const uId = String(u.id || '');
+      if (String(u.ten_don_vi || '').toLowerCase().includes(lower) || uId.toLowerCase().includes(lower)) {
+        matchedIds.add(uId);
         
-        let parentId = u.cap_quan_ly;
-        while (parentId && parentId !== 'HO') {
+        let parentId = String(u.cap_quan_ly || '').trim();
+        const visitedParents = new Set<string>([uId]);
+        while (parentId && parentId !== 'HO' && !visitedParents.has(parentId)) {
+          visitedParents.add(parentId);
           matchedIds.add(parentId);
-          const parentUnit = baseUnits.find(p => p.id === parentId);
-          parentId = parentUnit ? parentUnit.cap_quan_ly : null;
+          const parentUnit = baseUnits.find(p => String(p.id || '') === parentId);
+          parentId = parentUnit ? String(parentUnit.cap_quan_ly || '').trim() : '';
         }
       }
     });
 
-    const addChildren = (parentId: string) => {
+    const addChildren = (parentId: string, visited = new Set<string>()) => {
+      if (visited.has(parentId)) return;
+      visited.add(parentId);
       baseUnits.forEach(u => {
-        if (u.cap_quan_ly === parentId && !matchedIds.has(u.id)) {
-          matchedIds.add(u.id);
-          addChildren(u.id);
+        const uId = String(u.id || '');
+        if (String(u.cap_quan_ly || '') === parentId && !matchedIds.has(uId) && !visited.has(uId)) {
+          matchedIds.add(uId);
+          addChildren(uId, visited);
         }
       });
     };
@@ -294,12 +350,19 @@ export default function DocumentPage() {
     const initialMatches = Array.from(matchedIds);
     initialMatches.forEach(id => addChildren(id));
 
-    return baseUnits.filter(item => matchedIds.has(item.id));
+    return baseUnits.filter(item => matchedIds.has(String(item.id || '')));
   }, [donViList, unitSearchTerm, allowedDonViIds]);
 
-  const parentUnits = useMemo(() => filteredUnits.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly), [filteredUnits]);
-  const getChildUnits = (parentId: string) => sortDonViByThuTu(filteredUnits.filter(item => item.cap_quan_ly === parentId));
-  const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => groupParentUnits(parentUnits), [parentUnits]);
+  const parentUnits = useMemo(() => {
+    const unitIds = new Set((filteredUnits || []).map(item => String(item.id || '')));
+    return sortDonViByThuTu((filteredUnits || []).filter(item => {
+      const cap = String(item.cap_quan_ly || '').trim();
+      return !cap || cap === 'HO' || !unitIds.has(cap);
+    }));
+  }, [filteredUnits]);
+
+  const getChildUnits = (parentId: string) => sortDonViByThuTu((filteredUnits || []).filter(item => String(item.cap_quan_ly || '') === String(parentId || '') && String(item.id) !== String(parentId || '')));
+  const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => groupParentUnits(parentUnits || []), [parentUnits]);
 
   const toggleParent = (parentId: string) => {
     setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
@@ -424,6 +487,10 @@ export default function DocumentPage() {
   }, [filteredDocs, currentPage, actualRowsPerPage]);
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
+    if (mode === 'update' && item && !canEditOrDeleteDocument(item)) {
+      toast.warning("Bạn chỉ có quyền xem văn bản này, không có quyền chỉnh sửa!");
+      return;
+    }
     setModalMode(mode);
     const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
 
@@ -531,6 +598,10 @@ export default function DocumentPage() {
 
   // HÀM CẬP NHẬT NHANH TRẠNG THÁI HIỆU LỰC
   const handleQuickUpdateStatus = async (item: any, newStatus: string) => {
+    if (!canEditOrDeleteDocument(item)) {
+      toast.warning("Bạn chỉ có quyền xem văn bản này, không có quyền chỉnh sửa!");
+      return;
+    }
     if (item.hieu_luc === newStatus) return;
     
     // Yêu cầu mở modal nếu chọn "Thay thế VB khác" để nhập link
@@ -570,20 +641,25 @@ export default function DocumentPage() {
     }
   };
 
-  const renderUnitTree = (parent: DonVi, level: number = 1) => {
-    const children = getChildUnits(parent.id);
-    const isExpanded = expandedParents.includes(parent.id) || !!unitSearchTerm;
+  const renderUnitTree = (parent: DonVi, level: number = 1, visited = new Set<string>()) => {
+    if (!parent) return null;
+    const pId = String(parent.id || '');
+    if (level > 15 || visited.has(pId)) return null;
+    const nextVisited = new Set(visited).add(pId);
+
+    const children = getChildUnits(pId);
+    const isExpanded = expandedParents.includes(pId) || !!unitSearchTerm;
     const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
 
     return (
-      <div key={parent.id} className={level === 1 ? "mb-1" : "mt-1"}>
+      <div key={pId} className={level === 1 ? "mb-1" : "mt-1"}>
         <button 
           onClick={() => { 
-            setSelectedUnitFilter(parent.id); 
-            if (children.length > 0) toggleParent(parent.id); 
+            setSelectedUnitFilter(pId); 
+            if (children.length > 0) toggleParent(pId); 
             if(window.innerWidth < 768) setIsListCollapsed(true);
           }} 
-          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === parent.id ? 'bg-blue-50 text-[#05469B]' : 'text-gray-700 hover:bg-gray-50'} ${isParentDimmed ? 'opacity-50' : ''}`}
+          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === pId ? 'bg-blue-50 text-[#05469B]' : 'text-gray-700 hover:bg-gray-50'} ${isParentDimmed ? 'opacity-50' : ''}`}
         >
           {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />) : <div className="w-4 shrink-0" />}
           <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span>
@@ -592,7 +668,7 @@ export default function DocumentPage() {
         
         {isExpanded && children.length > 0 && (
           <div className={`ml-${level === 1 ? '6' : '4'} mt-1 border-l-2 border-gray-100 pl-2 space-y-1`}>
-            {children.map(child => renderUnitTree(child, level + 1))}
+            {children.map(child => renderUnitTree(child, level + 1, nextVisited))}
           </div>
         )}
       </div>
@@ -1006,8 +1082,10 @@ export default function DocumentPage() {
           <div className="relative group w-full max-w-[120px]">
             <select
               value={item.hieu_luc}
+              disabled={!canEditOrDeleteDocument(item)}
               onChange={(e) => handleQuickUpdateStatus(item, e.target.value)}
-              className={`w-full appearance-none pl-2 pr-5 py-1 rounded-md text-[10px] font-bold text-center cursor-pointer border shadow-sm
+              className={`w-full appearance-none pl-2 pr-5 py-1 rounded-md text-[10px] font-bold text-center border shadow-sm
+                ${!canEditOrDeleteDocument(item) ? 'cursor-not-allowed opacity-80 ' : 'cursor-pointer '}
                 ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border-green-200' : 
                   item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-yellow-50 text-yellow-700 border-yellow-300'}`}
             >
@@ -1021,9 +1099,13 @@ export default function DocumentPage() {
         {/* 7. Thao tác */}
         <td className="py-2.5 px-3 text-center">
           <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 text-emerald-600"><Eye size={14} /></button>
-            <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600"><Edit size={14} /></button>
-            <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-red-600"><Trash2 size={14} /></button>
+            <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 text-emerald-600" title="Xem chi tiết"><Eye size={14} /></button>
+            {canEditOrDeleteDocument(item) && (
+              <>
+                <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600" title="Sửa văn bản"><Edit size={14} /></button>
+                <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="p-1.5 text-red-600" title="Xóa văn bản"><Trash2 size={14} /></button>
+              </>
+            )}
           </div>
         </td>
       </tr>
@@ -1087,8 +1169,15 @@ export default function DocumentPage() {
 
                   {/* Nút thao tác trên Mobile */}
                   <div className="pl-2 flex gap-2 mt-3 pt-3 border-t border-gray-100 items-center">
-                    {isViewerHanChe ? (
-                       <span className="w-full text-center py-2 bg-gray-100 text-gray-400 rounded-lg text-xs font-bold border border-gray-200">Chỉ xem</span>
+                    {!canEditOrDeleteDocument(item) ? (
+                      <div className="flex w-full items-center gap-2">
+                        <span className={`flex-1 py-2 px-2 rounded-lg text-[11px] font-bold border text-center truncate
+                          ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border-green-200' :
+                            item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-yellow-50 text-yellow-700 border-yellow-300'}`}>
+                          {item.hieu_luc || 'Còn hiệu lực'} (Chỉ xem)
+                        </span>
+                        <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg flex justify-center items-center border border-emerald-200"><Eye size={14}/></button>
+                      </div>
                     ) : (
                       <>
                         <select
@@ -1102,9 +1191,9 @@ export default function DocumentPage() {
                           <option value="Hết hiệu lực">Hết hiệu lực</option>
                           <option value="Thay thế VB khác">Thay thế...</option>
                         </select>
-                        <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg flex justify-center items-center border border-emerald-200"><Eye size={14}/></button>
-                        <button onClick={() => openModal('update', item)} className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg flex justify-center items-center border border-blue-200"><Edit size={14}/></button>
-                        <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg flex justify-center items-center border border-red-200"><Trash2 size={14}/></button>
+                        <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg flex justify-center items-center border border-emerald-200" title="Xem"><Eye size={14}/></button>
+                        <button onClick={() => openModal('update', item)} className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg flex justify-center items-center border border-blue-200" title="Sửa"><Edit size={14}/></button>
+                        <button onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }} className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg flex justify-center items-center border border-red-200" title="Xóa"><Trash2 size={14}/></button>
                       </>
                     )}
                   </div>

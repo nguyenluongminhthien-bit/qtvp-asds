@@ -8,10 +8,13 @@ export function useAllowedUnits(donViList: DonVi[]): string[] {
 
   const allowedDonViIds = useMemo(() => {
     if (!user) return [];
-    if (user.id_don_vi === 'ALL') return donViList.map(dv => dv.id);
+    const userIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();
+    if (!userIdDonVi || userIdDonVi === 'ALL' || userIdDonVi === 'HO' || userIdDonVi === 'DV_HO') {
+      return donViList.map(dv => String(dv.id || ''));
+    }
 
-    const subIds = getAllSubordinateIds(user.id_don_vi, donViList);
-    return [user.id_don_vi, ...subIds];
+    const subIds = getAllSubordinateIds(userIdDonVi, donViList);
+    return Array.from(new Set([userIdDonVi, ...subIds])).map(String);
   }, [user, donViList]);
 
   return allowedDonViIds;

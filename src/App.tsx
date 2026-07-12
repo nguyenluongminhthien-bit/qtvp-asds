@@ -3,18 +3,28 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
 import Login from './pages/LoginPage'; 
 
-// Import các Module chính của hệ thống
-import DashboardPage from './pages/DashboardPage';
-import PersonnelPage from './pages/PersonnelPage';
-import DepartmentPage from './pages/DepartmentPage';
-import VehiclePage from './pages/VehiclePage';
-import DocumentPage from './pages/DocumentPage'; 
-import PolicyPage from './pages/PolicyPage'; 
-import EquipmentPage from './pages/EquipmentPage'; 
-import FireSafetyPage from './pages/FireSafetyPage';
-import AtvsldPage from './pages/AtvsldPage'; // 🟢 ĐÃ THÊM: Import trang ATVSLĐ mới
-import AccountPage from './pages/AccountPage';
-import LogPage from './pages/LogPage';
+// Lazy load các Module chính của hệ thống để giảm dung lượng bundle ban đầu (Code Splitting)
+const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
+const PersonnelPage = React.lazy(() => import('./pages/PersonnelPage'));
+const DepartmentPage = React.lazy(() => import('./pages/DepartmentPage'));
+const VehiclePage = React.lazy(() => import('./pages/VehiclePage'));
+const DocumentPage = React.lazy(() => import('./pages/DocumentPage')); 
+const PolicyPage = React.lazy(() => import('./pages/PolicyPage')); 
+const EquipmentPage = React.lazy(() => import('./pages/EquipmentPage')); 
+const FireSafetyPage = React.lazy(() => import('./pages/FireSafetyPage'));
+const AtvsldPage = React.lazy(() => import('./pages/AtvsldPage'));
+const AccountPage = React.lazy(() => import('./pages/AccountPage'));
+const LogPage = React.lazy(() => import('./pages/LogPage'));
+const ReportPage = React.lazy(() => import('./pages/ReportPage'));
+
+function PageLoadingFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full w-full bg-[#f4f7f9] dark:bg-[#0b1329] gap-3">
+      <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Đang tải giao diện...</p>
+    </div>
+  );
+}
 
 interface TabContainerProps {
   active: boolean;
@@ -34,7 +44,9 @@ function TabContainer({ active, children }: TabContainerProps) {
 
   return (
     <div className={`absolute inset-0 transition-opacity duration-200 ${active ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none -z-10'}`}>
-      {children}
+      <React.Suspense fallback={<PageLoadingFallback />}>
+        {children}
+      </React.Suspense>
     </div>
   );
 }
@@ -59,8 +71,9 @@ function AppContent() {
       if (tab === 'documents') return checkPermission('VanBan');
       if (tab === 'policies') return checkPermission('QuyDinh');
       if (tab === 'departments') return checkPermission('CongTy');
-      if (tab === 'accounts') return String(user?.quyen).toUpperCase() === 'ADMIN';
+      if (tab === 'accounts') return true;
       if (tab === 'logs') return String(user?.quyen).toUpperCase() === 'ADMIN';
+      if (tab === 'reports') return checkPermission('BaoCao');
       return false;
     };
 
@@ -74,7 +87,8 @@ function AppContent() {
         { tab: 'vehicles', key: 'Xe' },
         { tab: 'equipments', key: 'ThietBi' },
         { tab: 'documents', key: 'VanBan' },
-        { tab: 'policies', key: 'QuyDinh' }
+        { tab: 'policies', key: 'QuyDinh' },
+        { tab: 'reports', key: 'BaoCao' }
       ];
 
       const allowedTab = order.find(item => checkPermission(item.key));
@@ -102,7 +116,7 @@ function AppContent() {
 
     // 2. Kiểm tra pathname trực tiếp (Ví dụ: /T24ATTS32120025)
     const path = window.location.pathname.replace(/^\//, ''); // Bỏ dấu / ở đầu
-    if (path && path.length >= 5 && !['dashboard', 'personnel', 'firesafety', 'atvsld', 'vehicles', 'equipments', 'documents', 'policies', 'departments', 'accounts', 'logs'].includes(path.toLowerCase())) {
+    if (path && path.length >= 5 && !['dashboard', 'personnel', 'firesafety', 'atvsld', 'vehicles', 'equipments', 'documents', 'policies', 'departments', 'accounts', 'logs', 'reports'].includes(path.toLowerCase())) {
       // Coi đây là Mã tài sản quét trực tiếp từ QR!
       // Thiết lập lại URL thành dạng query để EquipmentPage xử lý đồng bộ
       const newUrl = `${window.location.origin}/?tab=equipment&qr=${path}`;
@@ -182,11 +196,15 @@ function AppContent() {
           </TabContainer>
         )}
 
-        {String(user?.quyen).toUpperCase() === 'ADMIN' && (
-          <TabContainer active={activeTab === 'accounts'}>
-            <AccountPage />
+        {checkPermission('BaoCao') && (
+          <TabContainer active={activeTab === 'reports'}>
+            <ReportPage />
           </TabContainer>
         )}
+
+        <TabContainer active={activeTab === 'accounts'}>
+          <AccountPage />
+        </TabContainer>
         
         {String(user?.quyen).toUpperCase() === 'ADMIN' && (
           <TabContainer active={activeTab === 'logs'}>

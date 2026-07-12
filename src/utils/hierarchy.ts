@@ -49,14 +49,19 @@ export const buildHierarchicalOptions = (units: DonVi[]) => {
   const VERTICAL = '│\xA0\xA0\xA0';
   const EMPTY = '\xA0\xA0\xA0\xA0';
 
+  const visited = new Set<string>();
+
   const buildTree = (nodes: DonVi[], prefixStr: string) => {
     nodes.forEach((node, index) => {
+      if (visited.has(node.id)) return;
+      visited.add(node.id);
+
       const isLast = index === nodes.length - 1;
       const nodePrefix = prefixStr ? prefixStr + (isLast ? LAST_BRANCH : BRANCH) : '';
       result.push({ unit: node, prefix: nodePrefix });
       
-      // Sắp xếp các đơn vị con theo đúng trình tự cột thu_tu
-      const children = sortDonViByThuTu(units.filter(u => u.cap_quan_ly === node.id));
+      // Sắp xếp các đơn vị con theo đúng trình tự cột thu_tu và loại bỏ node đã thăm
+      const children = sortDonViByThuTu(units.filter(u => u.cap_quan_ly === node.id && !visited.has(u.id)));
       if (children.length > 0) {
         const childPrefix = prefixStr ? prefixStr + (isLast ? EMPTY : VERTICAL) : '\xA0';
         buildTree(children, childPrefix);
@@ -68,12 +73,20 @@ export const buildHierarchicalOptions = (units: DonVi[]) => {
   return result;
 };
 
-// 4. Hàm dùng chung đệ quy lấy toàn bộ danh sách ID đơn vị cấp dưới
-export const getAllSubordinateIds = (unitId: string, allUnits: DonVi[]): string[] => {
-  const subordinates = allUnits.filter(u => u.cap_quan_ly === unitId);
-  let ids = subordinates.map(u => u.id);
+// 4. Hàm dùng chung đệ quy lấy toàn bộ danh sách ID đơn vị cấp dưới (có bảo vệ chống chu trình đệ quy vô hạn)
+export const getAllSubordinateIds = (unitId: string, allUnits: DonVi[], visited = new Set<string>()): string[] => {
+  const strId = String(unitId || '').trim();
+  if (!strId || visited.has(strId)) return [];
+  visited.add(strId);
+
+  const subordinates = allUnits.filter(u => String(u.cap_quan_ly || '').trim() === strId && String(u.id || '').trim() !== strId && !visited.has(String(u.id || '').trim()));
+  let ids: string[] = [];
   subordinates.forEach(sub => {
-    ids = [...ids, ...getAllSubordinateIds(sub.id, allUnits)];
+    const subId = String(sub.id || '').trim();
+    if (subId && !visited.has(subId)) {
+      ids.push(subId);
+      ids = [...ids, ...getAllSubordinateIds(subId, allUnits, visited)];
+    }
   });
-  return ids;
+  return Array.from(new Set(ids));
 };

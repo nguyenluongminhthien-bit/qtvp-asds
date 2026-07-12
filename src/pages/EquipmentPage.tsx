@@ -20,8 +20,6 @@ import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import CustomAutocomplete from '../components/ui/CustomAutocomplete';
 // @ts-ignore
 import { QRCodeSVG } from 'qrcode.react';
-// @ts-ignore
-import { Html5Qrcode } from 'html5-qrcode';
 
 
 // --- DANH SÁCH NHÓM TÀI SẢN CHUẨN ---
@@ -181,44 +179,51 @@ export default function EquipmentPage() {
     return { name: 'Chưa bàn giao', msnv: '---' };
   };
 
-  // Vòng đời camera quét QR trong ứng dụng
+  // Vòng đời camera quét QR trong ứng dụng (sử dụng Dynamic Import để giảm tải bundle)
   useEffect(() => {
     if (!isScannerOpen) return;
     
-    // Đợi DOM dựng xong thẻ div#reader
-    const timer = setTimeout(() => {
-      const html5QrCode = new Html5Qrcode("reader");
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-      
-      html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText) => {
-          html5QrCode.stop().then(() => {
-            setIsScannerOpen(false);
-            handleScannedCode(decodedText);
-          }).catch(err => {
-            console.error("Lỗi dừng camera quét QR:", err);
-            setIsScannerOpen(false);
-          });
-        },
-        () => {
-          // Callback quét lỗi (có thể bỏ qua để tránh log rác khi đang quét)
-        }
-      ).catch(err => {
-        console.error("Lỗi khởi động camera:", err);
+    let html5QrCodeInstance: any = null;
+    let isMounted = true;
+
+    // Đợi DOM dựng xong thẻ div#reader và tải động thư viện html5-qrcode
+    const timer = setTimeout(async () => {
+      try {
+        const { Html5Qrcode } = await import('html5-qrcode');
+        if (!isMounted) return;
+
+        const html5QrCode = new Html5Qrcode("reader");
+        html5QrCodeInstance = html5QrCode;
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          (decodedText: string) => {
+            html5QrCode.stop().then(() => {
+              setIsScannerOpen(false);
+              handleScannedCode(decodedText);
+            }).catch((err: any) => {
+              console.error("Lỗi dừng camera quét QR:", err);
+              setIsScannerOpen(false);
+            });
+          },
+          () => {}
+        );
+      } catch (err) {
+        console.error("Lỗi khởi động camera / tải thư viện QR:", err);
         toast.error("Không thể mở Camera. Vui lòng cấp quyền truy cập camera!");
         setIsScannerOpen(false);
-      });
-
-      return () => {
-        if (html5QrCode.isScanning) {
-          html5QrCode.stop().catch(err => console.error("Lỗi dừng camera clean-up:", err));
-        }
-      };
+      }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      if (html5QrCodeInstance && html5QrCodeInstance.isScanning) {
+        html5QrCodeInstance.stop().catch((err: any) => console.error("Lỗi clean-up camera:", err));
+      }
+    };
   }, [isScannerOpen, tbData]);
 
   // 🟢 DEEP LINK: TỰ ĐỘNG MỞ CHI TIẾT TÀI SẢN KHI TRUY CẬP QUA LINK QR

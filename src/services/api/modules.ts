@@ -1,5 +1,5 @@
 import { Personnel, DonVi, User, SysLog } from '../../types';
-import { fetchWithCache, resolveTable, apiCache, CACHE_DEPENDENCIES } from './cache';
+import { fetchWithCache, resolveTable, invalidateCache } from './cache';
 import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { writeLog } from './logs';
 import { getLocalRecords, saveLocalRecord, deleteLocalRecord } from './localStore';
@@ -36,6 +36,28 @@ export const getTsPCCC = () => getWithFallback<any>('ts_pccc');
 export const getUsers = () => getWithFallback<User>('config_users');
 export const getLogs = () => getWithFallback<SysLog>('sys_logs');
 
+// Helper làm sạch payload trước khi gửi lên Supabase (loại bỏ trường UI-only, rỗng "" -> null)
+function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false): Record<string, any> {
+  const cleaned: Record<string, any> = {};
+  const uiOnlyKeys = new Set(['STT', 'stt', 'isEditing', 'isSelected', 'action', '__rowNum__']);
+
+  Object.keys(item || {}).forEach(key => {
+    // Loại bỏ các trường nội bộ bắt đầu bằng _ hoặc trường UI-only
+    if (key.startsWith('_') || uiOnlyKeys.has(key)) return;
+
+    let value = item[key];
+    if (value === '') value = null;
+    cleaned[key] = value;
+  });
+
+  if (isUpdate) {
+    delete cleaned.id;
+    delete cleaned.ID;
+  }
+
+  return cleaned;
+}
+
 export async function save(data: any, action: 'create' | 'update', tableName: string): Promise<any> {
   if (API_MODE === 'MOCK') {
     return saveLocalRecord(data, action, tableName);
@@ -46,11 +68,7 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
 
     // Xử lý lưu nhiều dòng (Mảng)
     if (Array.isArray(data)) {
-      const cleanArray = data.map(item => {
-        const cleaned = { ...item };
-        Object.keys(cleaned).forEach(k => { if (cleaned[k] === '') cleaned[k] = null; });
-        return cleaned;
-      });
+      const cleanArray = data.map(item => sanitizePayload(item, false));
 
       const response = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}`, {
         method: 'POST', 
@@ -61,17 +79,13 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
         const errText = await response.text();
         throw new Error(`Lỗi Supabase: ${errText}`);
       }
-      delete apiCache[realTableName];
-      CACHE_DEPENDENCIES[realTableName]?.forEach(dep => delete apiCache[dep]);
+      invalidateCache(realTableName);
       void writeLog('CẬP NHẬT MẢNG', `Bảng: ${realTableName} | Lưu ${data.length} bản ghi`);
       return response.json();
     }
 
-    // Làm sạch dữ liệu Object (biến "" thành null)
-    const cleanedData = { ...data };
-    Object.keys(cleanedData).forEach(key => {
-      if (cleanedData[key] === '') cleanedData[key] = null;
-    });
+    // Làm sạch dữ liệu Object (biến "" thành null, loại bỏ trường UI-only)
+    const cleanedData = sanitizePayload(data, action === 'update');
 
     if (action === 'create' && !cleanedData.id) {
       const prefix = realTableName.substring(0, 2).toUpperCase();
@@ -82,10 +96,9 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
     let method = 'POST'; 
 
     if (action === 'update') {
-      const recordId = cleanedData.id || cleanedData.ID || cleanedData.ID_Xe || cleanedData.ID_User; 
+      const recordId = data.id || data.ID || data.ID_Xe || data.ID_User; 
       url = `${url}?id=eq.${recordId}`; 
       method = 'PATCH'; 
-      delete cleanedData.id;
     }
 
     const response = await fetch(url, {
@@ -106,8 +119,7 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
       throw new Error(errorMsg); 
     }
     
-    delete apiCache[realTableName];
-    CACHE_DEPENDENCIES[realTableName]?.forEach(dep => delete apiCache[dep]);
+    invalidateCache(realTableName);
     const tenHanhDong = action === 'create' ? 'THÊM MỚI' : 'CẬP NHẬT';
     void writeLog(tenHanhDong, `Bảng: ${realTableName}`);
 
@@ -137,8 +149,7 @@ export async function deleteRecord(id: string, tableName: string): Promise<boole
       throw new Error(`Lỗi xóa ${realTableName}: ${errorText}`);
     }
     
-    delete apiCache[realTableName];
-    CACHE_DEPENDENCIES[realTableName]?.forEach(dep => delete apiCache[dep]);
+    invalidateCache(realTableName);
     void writeLog('XÓA', `Bảng: ${realTableName} | ID Đối tượng: ${id}`);
     return true;
   } catch (err: any) {

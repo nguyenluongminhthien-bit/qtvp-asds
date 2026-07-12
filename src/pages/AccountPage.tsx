@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, UserCog, Shield, Key, Building2, Mail, CheckSquare, ListChecks, Eye, EyeOff } from 'lucide-react';
 import { apiService } from '../services/api';
 import { User, DonVi } from '../types';
-import { buildHierarchicalOptions, getUnitEmoji } from '../utils/hierarchy';
+import { buildHierarchicalOptions, getUnitEmoji, getAllSubordinateIds } from '../utils/hierarchy';
 import { toast } from '../utils/toast';
 import { stripAccents } from '../utils/formatters';
+import { useAuth } from '../contexts/AuthContext';
 
 // 🟢 1. KHO DANH SÁCH MODULE (quyen_truy_cap)
 const MODULE_LIST = [
@@ -16,7 +17,8 @@ const MODULE_LIST = [
   { id: 'Xe', label: 'Thông tin Xe', icon: '🚗' },
   { id: 'ThietBi', label: 'Thông tin TTB VP', icon: '💻' },
   { id: 'VanBan', label: 'Văn bản - Thông báo', icon: '📄' },
-  { id: 'QuyDinh', label: 'Quy định - Quy trình', icon: '📖' }
+  { id: 'QuyDinh', label: 'Quy định - Quy trình', icon: '📖' },
+  { id: 'BaoCao', label: 'Báo cáo Tổng hợp', icon: '📑' }
 ];
 
 // 🟢 2. KHO MA TRẬN QUYỀN CHI TIẾT (quyen_chi_tiet)
@@ -36,6 +38,7 @@ const ADVANCED_PERMISSIONS = {
 };
 
 export default function AccountPage() {
+  const { user: currentUser } = useAuth();
   const [data, setData] = useState<User[]>([]);
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,8 +61,8 @@ export default function AccountPage() {
       setLoading(true); setError(null);
       try {
         const [users, donvis] = await Promise.all([apiService.getUsers(), apiService.getDonVi()]);
-        setData(users); 
-        setDonViList(donvis);
+        setData(users || []); 
+        setDonViList(donvis || []);
       } catch (err: any) { 
         setError(err.message || 'Lỗi tải dữ liệu tài khoản.'); 
       } finally { 
@@ -71,25 +74,98 @@ export default function AccountPage() {
 
   const donViMap = useMemo(() => {
     const map: Record<string, string> = {};
-    donViList.forEach(dv => { map[dv.id] = dv.ten_don_vi; });
+    (donViList || []).forEach(dv => { map[String(dv.id || '')] = dv.ten_don_vi; });
     return map;
   }, [donViList]);
 
+  const isHOAdmin = useMemo(() => {
+    if (!currentUser) return false;
+    const userQuyen = String(currentUser.quyen || (currentUser as any).role || '').trim().toLowerCase();
+    const userIdDonVi = String(currentUser.id_don_vi || (currentUser as any).idDonVi || '').trim();
+    if (userQuyen !== 'admin') return false;
+    if (userIdDonVi === 'ALL' || userIdDonVi === 'HO' || userIdDonVi === 'DV_HO' || !userIdDonVi) return true;
+    const uDonVi = (donViList || []).find(dv => String(dv.id || '') === userIdDonVi);
+    if (uDonVi) {
+      const lh = String(uDonVi.loai_hinh || '').toLowerCase();
+      const name = String(uDonVi.ten_don_vi || '').toLowerCase();
+      const cap = String(uDonVi.cap_quan_ly || '').toUpperCase();
+      if (cap === 'HO' || lh.includes('tổng công ty') || name.includes('toàn quốc')) {
+        return true;
+      }
+    }
+    return false;
+  }, [currentUser, donViList]);
+
+  const myDonViId = useMemo(() => {
+    if (!currentUser) return '';
+    return String(currentUser.id_don_vi || (currentUser as any).idDonVi || '').trim();
+  }, [currentUser]);
+
+  const subordinateDonViIds = useMemo(() => {
+    if (!myDonViId || isHOAdmin) return (donViList || []).map(dv => String(dv.id || ''));
+    return getAllSubordinateIds(myDonViId, donViList || []);
+  }, [myDonViId, donViList, isHOAdmin]);
+
+  const visibleAccounts = useMemo(() => {
+    if (!currentUser) return [];
+    if (isHOAdmin) return data || [];
+    const myId = String(currentUser.id || '').trim();
+    const myUserName = String(currentUser.user_name || '').trim().toLowerCase();
+    return (data || []).filter(item => {
+      const itemId = String(item.id || '').trim();
+      const itemUserName = String(item.user_name || '').trim().toLowerCase();
+      const itemDv = String(item.id_don_vi || '').trim();
+      if (itemId === myId || (myUserName && itemUserName === myUserName)) return true;
+      if (subordinateDonViIds.includes(itemDv)) return true;
+      return false;
+    });
+  }, [data, currentUser, isHOAdmin, subordinateDonViIds]);
+
   const filteredData = useMemo(() => {
-    if (!searchTerm) return data;
+    if (!searchTerm) return visibleAccounts;
     const cleanSearch = stripAccents(searchTerm);
-    return data.filter(item => 
+    return visibleAccounts.filter(item => 
       stripAccents(item.user_name || '').includes(cleanSearch) || 
       stripAccents(item.ho_ten || '').includes(cleanSearch) ||
       stripAccents(item.id || '').includes(cleanSearch)
     );
-  }, [data, searchTerm]);
+  }, [visibleAccounts, searchTerm]);
+
+  const allowedModalDonViList = useMemo(() => {
+    if (isHOAdmin) return donViList || [];
+    return (donViList || []).filter(dv => subordinateDonViIds.includes(String(dv.id || '')) || String(dv.id || '') === myDonViId);
+  }, [donViList, isHOAdmin, subordinateDonViIds, myDonViId]);
+
+  const canEditAccount = useCallback((item: any) => {
+    if (!currentUser || !item) return false;
+    if (isHOAdmin) return true;
+    const itemId = String(item.id || '').trim();
+    const myId = String(currentUser.id || '').trim();
+    const itemDv = String(item.id_don_vi || '').trim();
+    if (itemId === myId) return true;
+    return subordinateDonViIds.includes(itemDv);
+  }, [currentUser, isHOAdmin, subordinateDonViIds]);
+
+  const canDeleteAccount = useCallback((item: any) => {
+    if (!currentUser || !item) return false;
+    if (isHOAdmin) return true;
+    const itemId = String(item.id || '').trim();
+    const myId = String(currentUser.id || '').trim();
+    if (itemId === myId) return false; // Không tự xóa chính mình
+    const itemDv = String(item.id_don_vi || '').trim();
+    return subordinateDonViIds.includes(itemDv);
+  }, [currentUser, isHOAdmin, subordinateDonViIds]);
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
+    if (item && mode === 'update' && !canEditAccount(item)) {
+      toast.error('Bạn không có quyền chỉnh sửa tài khoản này!');
+      return;
+    }
     setModalMode(mode);
     setShowPassword(false);
+    const defaultDv = isHOAdmin ? '' : (subordinateDonViIds[0] || myDonViId);
     setFormData(item ? { ...item } : { 
-      id: '', user_name: '', password: '', ho_ten: '', id_don_vi: '', 
+      id: '', user_name: '', password: '', ho_ten: '', id_don_vi: defaultDv, 
       quyen: 'USER', quyen_truy_cap: '', quyen_chi_tiet: '' 
     });
     setIsModalOpen(true); setError(null);
@@ -227,9 +303,13 @@ export default function AccountPage() {
                     </span>
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openModal('update', user)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"><Edit size={16}/></button>
-                      <button onClick={() => {setItemToDelete(user.id); setIsConfirmOpen(true)}} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors"><Trash2 size={16}/></button>
+                    <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      {canEditAccount(user) && (
+                        <button onClick={() => openModal('update', user)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Sửa thông tin / Đổi mật khẩu"><Edit size={16}/></button>
+                      )}
+                      {canDeleteAccount(user) && (
+                        <button onClick={() => {setItemToDelete(user.id); setIsConfirmOpen(true)}} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors" title="Xóa tài khoản"><Trash2 size={16}/></button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -293,11 +373,12 @@ export default function AccountPage() {
                           name="id_don_vi" 
                           value={formData.id_don_vi || ''} 
                           onChange={e=>setFormData({...formData, id_don_vi: e.target.value})} 
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"
+                          disabled={!isHOAdmin && modalMode === 'update' && String(formData.id) === String(currentUser?.id)}
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B]"
                           style={{ fontFamily: 'monospace, sans-serif' }}
                         >
-                          <option value="">-- Quản trị Toàn quốc (HO) --</option>
-                          {buildHierarchicalOptions(donViList).map(({ unit, prefix }) => (
+                          {isHOAdmin && <option value="">-- Quản trị Toàn quốc (HO) --</option>}
+                          {buildHierarchicalOptions(allowedModalDonViList).map(({ unit, prefix }) => (
                             <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
                               {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
                             </option>
@@ -310,10 +391,17 @@ export default function AccountPage() {
                       <label className="block text-xs font-bold text-gray-600 mb-1">Cấp độ Thao tác (Quyền Cốt lõi) *</label>
                       <div className="relative">
                         <Shield className="absolute left-3 top-3 text-gray-400" size={18}/>
-                        <select required name="quyen" value={formData.quyen || 'USER'} onChange={e=>setFormData({...formData, quyen: e.target.value})} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold">
+                        <select 
+                          required 
+                          name="quyen" 
+                          value={formData.quyen || 'USER'} 
+                          onChange={e=>setFormData({...formData, quyen: e.target.value})} 
+                          disabled={!isHOAdmin && (modalMode === 'update' && String(formData.id) === String(currentUser?.id))}
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                        >
                           <option value="USER">USER (Được quyền Thêm/Sửa/Xóa của mình)</option>
                           <option value="viewer_hanche">VIEWER HẠN CHẾ (Chỉ xem, cấm click chi tiết)</option>
-                          <option value="ADMIN">ADMIN (Quản trị toàn quyền)</option>
+                          {isHOAdmin && <option value="ADMIN">ADMIN (Quản trị toàn quyền)</option>}
                         </select>
                       </div>
                     </div>

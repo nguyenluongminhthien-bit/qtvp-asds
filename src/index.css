@@ -3,13 +3,14 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* =========================================================
-   🌙 CHẾ ĐỘ BAN ĐÊM (DARK MODE) SANG TRỌNG & CAO CẤP
+   🌙 CHẾ ĐỘ BAN ĐÊM (DARK MODE) SANG TRỌNG & THÔNG MINH
    ========================================================= */
 html.dark-mode, body.dark-mode {
   background-color: #0b1329 !important;
   color: #f1f5f9 !important;
 }
 
+/* 1. Nền tổng thể ứng dụng */
 .dark-mode .bg-\[\#f4f7f9\],
 .dark-mode .bg-gray-100,
 .dark-mode .bg-gray-50,
@@ -17,45 +18,44 @@ html.dark-mode, body.dark-mode {
 .dark-mode .bg-\[\#f8fafc\],
 .dark-mode .bg-\[\#f0f4f8\] {
   background-color: #0b1329 !important;
-  color: #f1f5f9 !important;
+  color: #f1f5f9;
 }
 
+/* 2. Thẻ Card & Khung nền trắng (Không dùng color !important để tránh đè chữ màu đặc thù bên trong) */
 .dark-mode .bg-white {
   background-color: #162038 !important;
-  color: #f1f5f9 !important;
-  border-color: #273554 !important;
+  border-color: #273554;
 }
 
 .dark-mode .bg-white\/80,
 .dark-mode .bg-white\/90,
 .dark-mode .bg-white\/95 {
   background-color: rgba(22, 32, 56, 0.95) !important;
-  color: #f1f5f9 !important;
-  border-color: #273554 !important;
+  border-color: #273554;
 }
 
+/* 3. Hiệu ứng Hover & Nền phụ trung tính */
 .dark-mode .bg-gray-50\/80,
-.dark-mode .bg-blue-50\/50,
 .dark-mode .bg-slate-50\/50,
-.dark-mode .hover\:bg-blue-50\/50:hover,
 .dark-mode .hover\:bg-gray-50:hover,
 .dark-mode .hover\:bg-slate-50:hover {
   background-color: #202e4f !important;
-  color: #ffffff !important;
 }
 
+/* 4. Viền khung trung tính (Không tác động đến các đường viền có màu trạng thái đặc thù) */
 .dark-mode .border-gray-100,
 .dark-mode .border-gray-200,
 .dark-mode .border-gray-300,
 .dark-mode .border-slate-100,
 .dark-mode .border-slate-200,
 .dark-mode .border-slate-300,
-.dark-mode .border-b,
-.dark-mode .border-t,
-.dark-mode .border {
-  border-color: #273554 !important;
+.dark-mode .border-b:not([class*="border-red-"]):not([class*="border-green-"]):not([class*="border-emerald-"]):not([class*="border-yellow-"]):not([class*="border-amber-"]):not([class*="border-blue-"]),
+.dark-mode .border-t:not([class*="border-red-"]):not([class*="border-green-"]):not([class*="border-emerald-"]):not([class*="border-yellow-"]):not([class*="border-amber-"]):not([class*="border-blue-"]),
+.dark-mode .border:not([class*="border-red-"]):not([class*="border-green-"]):not([class*="border-emerald-"]):not([class*="border-yellow-"]):not([class*="border-amber-"]):not([class*="border-blue-"]):not([class*="border-orange-"]):not([class*="border-purple-"]) {
+  border-color: #273554;
 }
 
+/* 5. Chữ trung tính chuẩn hóa (Không ghi đè chữ màu trạng thái đỏ/xanh/vàng) */
 .dark-mode .text-gray-900,
 .dark-mode .text-gray-800,
 .dark-mode .text-gray-700,
@@ -64,29 +64,31 @@ html.dark-mode, body.dark-mode {
 .dark-mode .text-slate-800,
 .dark-mode .text-slate-700,
 .dark-mode .text-slate-600 {
-  color: #e2e8f0 !important;
+  color: #e2e8f0;
 }
 
 .dark-mode .text-gray-500,
 .dark-mode .text-gray-400,
 .dark-mode .text-slate-500,
 .dark-mode .text-slate-400 {
-  color: #94a3b8 !important;
+  color: #94a3b8;
 }
 
-.dark-mode input,
-.dark-mode select,
-.dark-mode textarea {
-  background-color: #0f172a !important;
-  color: #f8fafc !important;
-  border-color: #334155 !important;
+/* 6. Ô nhập liệu (Input / Select / Textarea) */
+.dark-mode input:not([class*="border-red-"]):not([class*="border-green-"]),
+.dark-mode select:not([class*="border-red-"]):not([class*="border-green-"]),
+.dark-mode textarea:not([class*="border-red-"]):not([class*="border-green-"]) {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-color: #334155;
 }
 
 .dark-mode select option {
-  background-color: #162038 !important;
-  color: #f8fafc !important;
+  background-color: #162038;
+  color: #f8fafc;
 }
 
+/* 7. Bảng dữ liệu (Table) */
 .dark-mode table thead th,
 .dark-mode table thead tr {
   background-color: #0f182c !important;
@@ -95,19 +97,57 @@ html.dark-mode, body.dark-mode {
 }
 
 .dark-mode table tbody tr {
-  border-bottom-color: #273554 !important;
+  border-bottom-color: #273554;
 }
 
 .dark-mode table tbody tr:hover {
-  background-color: #202e4f/80 !important;
+  background-color: rgba(32, 46, 79, 0.6) !important;
 }
 
-/* Đảm bảo nhãn màu sắc (Badges / Pills) luôn hiển thị rõ nét trên nền tối */
-.dark-mode [class*="bg-"][class*="text-"][class*="border"] {
-  filter: brightness(0.95) contrast(1.15);
+/* =========================================================
+   🎨 HUY HIỆU & CẢNH BÁO MÀU SẮC TRẠNG THÁI (BADGES & STATUS PILLS)
+   Tự động phát sáng sang trọng trên nền tối
+   ========================================================= */
+.dark-mode .bg-red-50,
+.dark-mode .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.16) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
 }
 
-/* Thanh cuộn (Scrollbar) trên nền tối */
+.dark-mode .bg-emerald-50,
+.dark-mode .bg-emerald-100,
+.dark-mode .bg-green-50,
+.dark-mode .bg-green-100 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  color: #6ee7b7 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.dark-mode .bg-amber-50,
+.dark-mode .bg-amber-100,
+.dark-mode .bg-yellow-50,
+.dark-mode .bg-yellow-100 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+  color: #fde047 !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+.dark-mode .bg-blue-50:not(.hover\:bg-blue-50\/50),
+.dark-mode .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+  color: #93c5fd !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+.dark-mode .bg-purple-50,
+.dark-mode .bg-purple-100 {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+  color: #d8b4fe !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+
+/* 8. Thanh cuộn (Scrollbar) trên nền tối */
 .dark-mode::-webkit-scrollbar-track {
   background: #0f182c;
 }

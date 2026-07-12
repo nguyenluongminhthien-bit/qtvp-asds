@@ -360,7 +360,13 @@ export default function DepartmentPage() {
   const currentAtvsld = useMemo(() => atvsldData.find(item => getUnitIdSafe(item) === selectedUnitId) || null, [atvsldData, selectedUnitId]);
   const currentPctt = useMemo(() => pcttData.find(item => getUnitIdSafe(item) === selectedUnitId) || null, [pcttData, selectedUnitId]);
 
-  const currentPhapNhanList = useMemo(() => phapNhanData.filter(item => selectedUnitSubordinates.includes(getUnitIdSafe(item))), [phapNhanData, selectedUnitSubordinates]);
+  const currentPhapNhanList = useMemo(() => {
+    return phapNhanData.filter(item => {
+      const val = getUnitIdSafe(item);
+      const ids = String(val || '').split(',').map(s => s.trim()).filter(Boolean);
+      return ids.some(id => selectedUnitSubordinates.includes(id));
+    });
+  }, [phapNhanData, selectedUnitSubordinates]);
   const currentPhongHopList = useMemo(() => phongHopData.filter(item => getUnitIdSafe(item) === selectedUnitId), [phongHopData, selectedUnitId]);
   const unitStaff = useMemo(() => personnelData.filter(p => getUnitIdSafe(p) === selectedUnitId), [personnelData, selectedUnitId]);
 
@@ -1164,11 +1170,6 @@ export default function DepartmentPage() {
                     </h3>
                     
                     <div className="flex items-center gap-3">
-                      {/* Nút xuất báo cáo luôn hiển thị không cần điều kiện lọc */}
-                      <button onClick={handleExportExcel} className="px-4 py-2 text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg flex items-center gap-2 transition-colors border border-emerald-200 shadow-sm">
-                        <FileText size={16} /> Báo cáo ANBV
-                      </button>
-                      
                       <button onClick={openSecurityModal} className="px-4 py-2 text-sm font-bold text-[#05469B] bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center gap-2 transition-colors border border-blue-100 shadow-sm">
                         {currentAnNinh ? <><Edit size={16} /> Cập nhật</> : <><Plus size={16} /> Cập nhật AN-BV & Camera Giám sát</>}
                       </button>
@@ -1935,14 +1936,21 @@ export default function DepartmentPage() {
                     {currentPhapNhanList.length === 0 ? (<div className="py-12 text-center bg-white rounded-xl border border-dashed border-gray-300 text-gray-400"><Briefcase size={40} className="mx-auto mb-3 opacity-50"/><p>Chưa có thông tin pháp nhân cho đơn vị này.</p></div>) : (
                       currentPhapNhanList.map(pn => (
                         <div key={pn.id} className="bg-white px-5 py-4 rounded-xl border border-gray-200 shadow-sm hover:border-orange-300 transition-colors group flex flex-col md:flex-row md:items-center justify-between gap-4 relative">
-                          <div className="flex items-center gap-3 md:w-5/12 shrink-0">
+                          <div className="flex items-center gap-3 md:w-7/12 shrink-0">
                             <div className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center shrink-0"><FileText size={20} /></div>
                             <div className="min-w-0 pr-4">
                               <h4 className="font-bold text-gray-800 text-sm truncate" title={pn.ten_cong_ty}>{pn.ten_cong_ty}</h4>
-                              <div className="flex gap-2 items-center mt-1"><span className="inline-block px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-[10px] font-bold border border-orange-100">MST: {pn.ma_so_thue || '---'}</span><span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold border border-blue-100 truncate max-w-[150px]" title={donViMap[pn.id_don_vi] || pn.id_don_vi}>🏢 {donViMap[pn.id_don_vi] || pn.id_don_vi}</span></div>
+                              <div className="flex flex-wrap gap-1.5 items-center mt-1.5">
+                                <span className="inline-block px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-[10px] font-bold border border-orange-100">MST: {pn.ma_so_thue || '---'}</span>
+                                {String(pn.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean).map(id => (
+                                  <span key={id} className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold border border-blue-100 truncate max-w-[150px]" title={donViMap[id] || id}>
+                                    🏢 {donViMap[id] || id}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                          <div className="flex-1 min-w-0 border-t border-gray-100 md:border-t-0 pt-2 md:pt-0 space-y-1">
+                          <div className="md:w-3/12 min-w-0 border-t border-gray-100 md:border-t-0 pt-2 md:pt-0 space-y-1">
                             <div className="flex items-start gap-2 text-xs text-gray-500 group/map"><MapPin size={14} className="shrink-0 text-red-400 group-hover/map:text-blue-500 mt-0.5"/><span className="truncate" title={pn.dia_chi}>{pn.dia_chi ? (<a href={`http://maps.google.com/?q=$?q=${encodeURIComponent(pn.dia_chi)}`} target="_blank" rel="noreferrer" className="group-hover/map:text-blue-600 group-hover/map:underline transition-colors">{pn.dia_chi}</a>) : 'Chưa cập nhật địa chỉ'}</span></div>
                             <div className="flex items-center gap-2 text-xs text-gray-500 group/mail"><MailIcon size={14} className="shrink-0 text-gray-400 group-hover/mail:text-orange-500"/><span className="truncate">{pn.mail ? (<a href={`mailto:${pn.mail}`} className="group-hover/mail:text-orange-600 group-hover/mail:underline transition-colors">{pn.mail}</a>) : 'Chưa cập nhật Email'}</span></div>
                           </div>

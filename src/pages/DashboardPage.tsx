@@ -393,6 +393,12 @@ export default function DashboardPage() {
 
   const allowedDonViIds = useAllowedUnits(donViList);
 
+  const isHOAdmin = useMemo(() => {
+    if (!user) return false;
+    const userIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();
+    return !userIdDonVi || userIdDonVi === 'ALL' || userIdDonVi === 'HO' || userIdDonVi === 'DV_HO';
+  }, [user]);
+
   const filteredUnits = useMemo(() => {
     let baseUnits = donViList.filter(dv => allowedDonViIds.includes(dv.id));
     if (!unitSearchTerm) return baseUnits;
@@ -461,15 +467,20 @@ export default function DashboardPage() {
   };
 
   const selectedUnitName = useMemo(() => {
-    if (!selectedUnitFilter) return 'Toàn bộ Hệ thống';
+    if (!selectedUnitFilter) {
+      if (isHOAdmin) return 'Toàn bộ Hệ thống';
+      const userUnit = donViList.find(d => String(d.id || '').trim() === String(user?.id_don_vi || '').trim());
+      return userUnit ? `${userUnit.ten_don_vi} & Trực thuộc` : 'Tổng quan Đơn vị';
+    }
     const unit = donViList.find(d => d.id === selectedUnitFilter);
-    return unit ? unit.ten_don_vi : 'Toàn bộ Hệ thống';
-  }, [selectedUnitFilter, donViList]);
+    return unit ? unit.ten_don_vi : (isHOAdmin ? 'Toàn bộ Hệ thống' : 'Tổng quan Đơn vị');
+  }, [selectedUnitFilter, donViList, isHOAdmin, user]);
 
   const currentSubordinateIds = useMemo(() => {
-    if (!selectedUnitFilter) return donViList.map(u => u.id);
-    return [selectedUnitFilter, ...getAllSubIds(selectedUnitFilter, donViList)];
-  }, [selectedUnitFilter, donViList]);
+    if (!selectedUnitFilter) return allowedDonViIds;
+    const subIds = [selectedUnitFilter, ...getAllSubIds(selectedUnitFilter, donViList)];
+    return subIds.filter(id => allowedDonViIds.includes(id));
+  }, [selectedUnitFilter, donViList, allowedDonViIds]);
 
   // 🟢 TÍNH TOÁN DỮ LIỆU NHÂN SỰ CHO WIDGET GỘP TRÊN CÙNG
   const { widgetStats, staffRolesStats } = useMemo(() => {
@@ -1286,7 +1297,7 @@ export default function DashboardPage() {
         isListCollapsed={isListCollapsed}
         setIsListCollapsed={setIsListCollapsed}
         themeColor="blue"
-        allUnitsLabel="Báo cáo tổng hợp hệ thống"
+        allUnitsLabel={isHOAdmin ? "Báo cáo tổng hợp hệ thống" : "Tổng quan Đơn vị & Trực thuộc"}
       />
 
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 lg:p-8 relative transition-all duration-300">
