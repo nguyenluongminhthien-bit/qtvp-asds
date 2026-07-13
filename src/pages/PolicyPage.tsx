@@ -75,7 +75,15 @@ export default function PolicyPage() {
         }));
 
       const combinedData = [...mappedQd, ...mappedVb];
-      combinedData.sort((a, b) => new Date(b.ngay_ban_hanh || 0).getTime() - new Date(a.ngay_ban_hanh || 0).getTime());
+      combinedData.sort((a, b) => {
+        const aIsExpired = a.hieu_luc === 'Hết hiệu lực';
+        const bIsExpired = b.hieu_luc === 'Hết hiệu lực';
+        if (aIsExpired && !bIsExpired) return 1;
+        if (!aIsExpired && bIsExpired) return -1;
+        const dateA = a.ngay_ban_hanh ? new Date(a.ngay_ban_hanh).getTime() : 0;
+        const dateB = b.ngay_ban_hanh ? new Date(b.ngay_ban_hanh).getTime() : 0;
+        return dateB - dateA;
+      });
 
       setQdData(combinedData);
     } catch (err: any) { 
@@ -113,7 +121,16 @@ export default function PolicyPage() {
         stripAccents(item.phan_loai || '').includes(cleanSearch)
       );
     }
-    return result;
+
+    return [...result].sort((a, b) => {
+      const aIsExpired = a.hieu_luc === 'Hết hiệu lực';
+      const bIsExpired = b.hieu_luc === 'Hết hiệu lực';
+      if (aIsExpired && !bIsExpired) return 1;
+      if (!aIsExpired && bIsExpired) return -1;
+      const dateA = a.ngay_ban_hanh ? new Date(a.ngay_ban_hanh).getTime() : 0;
+      const dateB = b.ngay_ban_hanh ? new Date(b.ngay_ban_hanh).getTime() : 0;
+      return dateB - dateA;
+    });
   }, [qdData, searchTerm, selectedNghiepvu]);
 
   const openModal = (mode: 'create' | 'update', item?: PolicyItem) => {

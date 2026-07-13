@@ -249,13 +249,21 @@ export default function PersonnelPage() {
     
     if (personnelSearchTerm) {
       const cleanSearch = stripAccents(personnelSearchTerm);
-      result = result.filter(item => 
-        stripAccents(item.ma_so_nhan_vien || '').includes(cleanSearch) || 
-        stripAccents(item.ho_ten || '').includes(cleanSearch) || 
-        stripAccents(donViMap[String(item.id_don_vi)] || '').includes(cleanSearch) ||
-        stripAccents(item.chuc_vu || '').includes(cleanSearch) ||
-        stripAccents(item.phong_ban || '').includes(cleanSearch) 
-      );
+      const digitsSearch = personnelSearchTerm.replace(/\D/g, '');
+      
+      result = result.filter(item => {
+        const cleanPhone1 = String(item.sdt_ca_nhan || '').replace(/\D/g, '');
+        const cleanPhone2 = String(item.sdt_cong_ty || '').replace(/\D/g, '');
+        
+        return stripAccents(item.ma_so_nhan_vien || '').includes(cleanSearch) || 
+               stripAccents(item.ho_ten || '').includes(cleanSearch) || 
+               stripAccents(donViMap[String(item.id_don_vi)] || '').includes(cleanSearch) ||
+               stripAccents(item.chuc_vu || '').includes(cleanSearch) ||
+               stripAccents(item.phong_ban || '').includes(cleanSearch) ||
+               stripAccents(item.sdt_ca_nhan || '').includes(cleanSearch) ||
+               stripAccents(item.sdt_cong_ty || '').includes(cleanSearch) ||
+               (digitsSearch !== '' && (cleanPhone1.includes(digitsSearch) || cleanPhone2.includes(digitsSearch)));
+      });
     }
 
     if (filterPhongBan) {
