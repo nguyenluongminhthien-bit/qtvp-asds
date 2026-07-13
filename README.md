@@ -1,4 +1,4 @@
-# 🏢 HỆ THỐNG QUẢN LÝ DỊCH VỤ HỖ TRỢ - THACO AUTO (ERP MINI)
+# 🏢 HỆ THỐNG QUẢN LÝ DỊCH VỤ HỖ TRỢ - ERP MINI
 
 Tài liệu này tổng hợp toàn bộ thông tin kiến trúc, quy định nghiệp vụ cốt lõi, cơ chế phân quyền, quy chuẩn kỹ thuật và hướng dẫn vận hành của hệ thống **Quản lý Dịch vụ Hỗ trợ - THACO AUTO**.
 
