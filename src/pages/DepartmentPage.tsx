@@ -861,7 +861,13 @@ export default function DepartmentPage() {
       )}
 
       {/* CỘT TRÁI BỘ LỌC */}
-      <div className={`${isListCollapsed ? 'lg:w-80 lg:-ml-80 lg:relative lg:opacity-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0 z-50 lg:z-10'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm shrink-0 overflow-hidden ${isListCollapsed ? 'hidden lg:flex' : 'flex'}`}>
+      {!isListCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/40 z-[70] lg:hidden animate-in fade-in duration-200"
+          onClick={() => setIsListCollapsed(true)}
+        />
+      )}
+      <div className={`${isListCollapsed ? 'lg:w-80 lg:-ml-80 lg:relative lg:opacity-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0 z-[80] lg:z-10'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm shrink-0 overflow-hidden ${isListCollapsed ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b border-gray-100">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold text-[#05469B] flex items-center gap-2 whitespace-nowrap"><Building2 size={20} /> Công ty & Showroom</h2>

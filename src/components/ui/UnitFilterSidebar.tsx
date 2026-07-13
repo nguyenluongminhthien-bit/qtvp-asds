@@ -138,81 +138,89 @@ export default function UnitFilterSidebar({
   };
 
   return (
-    <div
-      className={`${
-        isListCollapsed ? 'lg:w-80 lg:-ml-80 lg:relative lg:opacity-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0 z-50 lg:z-10'
-      } transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm shrink-0 overflow-hidden ${isListCollapsed ? 'hidden lg:flex' : 'flex'}`}
-    >
-      <div className="p-4 border-b border-gray-100">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className={`text-lg font-bold ${colors.text} flex items-center gap-2 whitespace-nowrap`}>
-            <MapPin size={20} /> Bộ lọc Đơn vị
-          </h2>
+    <>
+      {!isListCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/40 z-[70] lg:hidden animate-in fade-in duration-200"
+          onClick={() => setIsListCollapsed(true)}
+        />
+      )}
+      <div
+        className={`${
+          isListCollapsed ? 'lg:w-80 lg:-ml-80 lg:relative lg:opacity-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0 z-[80] lg:z-10'
+        } transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm shrink-0 overflow-hidden ${isListCollapsed ? 'hidden lg:flex' : 'flex'}`}
+      >
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className={`text-lg font-bold ${colors.text} flex items-center gap-2 whitespace-nowrap`}>
+              <MapPin size={20} /> Bộ lọc Đơn vị
+            </h2>
+            <button
+              onClick={() => setIsListCollapsed(true)}
+              className={`p-1.5 text-gray-400 ${colors.hoverText} hover:bg-blue-50/50 rounded-md transition-colors cursor-pointer`}
+            >
+              <PanelLeftClose size={18} />
+            </button>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Tìm tên showroom..."
+              className={`w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm ${colors.ring} outline-none focus:ring-2`}
+              value={unitSearchTerm}
+              onChange={(e) => setUnitSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 min-w-[319px]">
           <button
-            onClick={() => setIsListCollapsed(true)}
-            className={`p-1.5 text-gray-400 ${colors.hoverText} hover:bg-blue-50/50 rounded-md transition-colors cursor-pointer`}
+            onClick={() => {
+              setSelectedUnitFilter(null);
+              if (window.innerWidth < 1024) setIsListCollapsed(true);
+            }}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${
+              selectedUnitFilter === null ? colors.bgActive : 'text-gray-700 hover:bg-gray-50'
+            }`}
           >
-            <PanelLeftClose size={18} />
+            <Users size={18} className={selectedUnitFilter === null ? colors.iconActive : 'text-gray-400'} />
+            {allUnitsLabel}
           </button>
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="text"
-            placeholder="Tìm tên showroom..."
-            className={`w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm ${colors.ring} outline-none focus:ring-2`}
-            value={unitSearchTerm}
-            onChange={(e) => setUnitSearchTerm(e.target.value)}
-          />
+          <hr className="border-gray-100 mb-4 mx-2" />
+
+          {parentUnits.length === 0 ? (
+            <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
+          ) : (
+            <>
+              {vpdhUnits.length > 0 && (
+                <div className="mb-6">
+                  <p className={`px-3 text-[10px] font-black ${colors.text} uppercase tracking-wider mb-2`}>VPĐH</p>
+                  {vpdhUnits.map(dv => renderUnitTree(dv, 1))}
+                </div>
+              )}
+              {ctttNamUnits.length > 0 && (
+                <div className="mb-6">
+                  <p className={`px-3 text-[10px] font-black ${colors.text} uppercase tracking-wider mb-2`}>CTTT Phía Nam</p>
+                  {ctttNamUnits.map(dv => renderUnitTree(dv, 1))}
+                </div>
+              )}
+              {ctttBacUnits.length > 0 && (
+                <div className="mb-6">
+                  <p className={`px-3 text-[10px] font-black ${colors.text} uppercase tracking-wider mb-2`}>CTTT Phía Bắc</p>
+                  {ctttBacUnits.map(dv => renderUnitTree(dv, 1))}
+                </div>
+              )}
+              {otherUnits.length > 0 && (
+                <div className="mb-6">
+                  <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>
+                  {otherUnits.map(dv => renderUnitTree(dv, 1))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
-
-      <div className="flex-1 overflow-y-auto p-2 min-w-[319px]">
-        <button
-          onClick={() => {
-            setSelectedUnitFilter(null);
-            if (window.innerWidth < 1024) setIsListCollapsed(true);
-          }}
-          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${
-            selectedUnitFilter === null ? colors.bgActive : 'text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          <Users size={18} className={selectedUnitFilter === null ? colors.iconActive : 'text-gray-400'} />
-          {allUnitsLabel}
-        </button>
-        <hr className="border-gray-100 mb-4 mx-2" />
-
-        {parentUnits.length === 0 ? (
-          <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
-        ) : (
-          <>
-            {vpdhUnits.length > 0 && (
-              <div className="mb-6">
-                <p className={`px-3 text-[10px] font-black ${colors.text} uppercase tracking-wider mb-2`}>VPĐH</p>
-                {vpdhUnits.map(dv => renderUnitTree(dv, 1))}
-              </div>
-            )}
-            {ctttNamUnits.length > 0 && (
-              <div className="mb-6">
-                <p className={`px-3 text-[10px] font-black ${colors.text} uppercase tracking-wider mb-2`}>CTTT Phía Nam</p>
-                {ctttNamUnits.map(dv => renderUnitTree(dv, 1))}
-              </div>
-            )}
-            {ctttBacUnits.length > 0 && (
-              <div className="mb-6">
-                <p className={`px-3 text-[10px] font-black ${colors.text} uppercase tracking-wider mb-2`}>CTTT Phía Bắc</p>
-                {ctttBacUnits.map(dv => renderUnitTree(dv, 1))}
-              </div>
-            )}
-            {otherUnits.length > 0 && (
-              <div className="mb-6">
-                <p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>
-                {otherUnits.map(dv => renderUnitTree(dv, 1))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

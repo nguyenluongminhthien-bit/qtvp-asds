@@ -1176,7 +1176,7 @@ export default function PersonnelPage() {
           <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
             {/* HÀNG 1: TÌM KIẾM & THAO TÁC */}
             {/* HÀNG 1: TÌM KIẾM & NÚT TÍNH NĂNG */}
-            <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-50">
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-30">
               {/* Ô Tìm kiếm */}
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
