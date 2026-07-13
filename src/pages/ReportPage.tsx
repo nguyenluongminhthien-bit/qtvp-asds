@@ -366,7 +366,11 @@ export default function ReportPage() {
       } else if (selectedTemplate.dataSource === 'getPersonnel') {
         rawData = [...personnelList];
       } else if (selectedTemplate.dataSource === 'getVanBan') {
-        rawData = await apiService.getVanBan();
+        const docs = await apiService.getVanBan();
+        rawData = docs.map((doc: any) => ({
+          ...doc,
+          msnv_nguoi_lay_so: doc.msnv_nguoi_lay_so || doc.msnv_lay_so || ''
+        }));
       }
 
       // XỬ LÝ LỌC TRÊN CLIENT SIDE

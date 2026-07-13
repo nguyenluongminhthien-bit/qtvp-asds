@@ -203,6 +203,7 @@ export interface VB_TB {
   nguoi_lay_so: string;
   bo_phan_lay_so: string;
   msnv_lay_so?: string;
+  msnv_nguoi_lay_so?: string;
   pham_vi_ap_dung: string;
   hieu_luc: string;
   nghiep_vu: string;

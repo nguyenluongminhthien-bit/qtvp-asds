@@ -199,6 +199,7 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
       { key: 'tieu_de', label: 'Tiêu Đề', width: 280, defaultVisible: true },
       { key: 'nguoi_ky', label: 'Người Ký', width: 150, defaultVisible: true },
       { key: 'chuc_vu', label: 'Chức Vụ Người Ký', width: 150, defaultVisible: true },
+      { key: 'msnv_nguoi_lay_so', label: 'MSNV người lấy số', width: 130, defaultVisible: true },
       { key: 'nguoi_lay_so', label: 'Người Lấy Số', width: 150, defaultVisible: true },
       { key: 'bo_phan_lay_so', label: 'Bộ Phận Lấy Số', width: 150, defaultVisible: true },
       { key: 'hieu_luc', label: 'Tình Trạng Hiệu Lực', width: 120, defaultVisible: true },

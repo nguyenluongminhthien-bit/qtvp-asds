@@ -501,7 +501,7 @@ export default function DocumentPage() {
         ngay_nhan: item.ngay_nhan ? item.ngay_nhan.split('T')[0] : '', 
         han_xu_ly: item.han_xu_ly ? item.han_xu_ly.split('T')[0] : '', 
         mat: isMatDocument(item.mat),
-        msnv_lay_so: item.msnv_lay_so || ''
+        msnv_nguoi_lay_so: item.msnv_nguoi_lay_so || item.msnv_lay_so || ''
       }); 
     } else {
       setFormData({
@@ -511,7 +511,7 @@ export default function DocumentPage() {
         bo_phan_xu_ly: '', han_xu_ly: '', trang_thai_xu_ly: 'Chờ xử lý',
         nguoi_ky: '', chuc_vu: '', nguoi_lay_so: '', bo_phan_lay_so: '', pham_vi_ap_dung: selectedUnitFilter || 'Toàn hệ thống', 
         hieu_luc: 'Còn hiệu lực', nghiep_vu: '', van_ban_thay_the: '', mat: false,
-        msnv_lay_so: ''
+        msnv_nguoi_lay_so: ''
       });
     }
     setIsModalOpen(true); setError(null);
@@ -576,7 +576,7 @@ export default function DocumentPage() {
     const { name, value } = e.target;
     if (name === 'hieu_luc' && value !== 'Thay thế VB khác') {
       setFormData((prev: any) => ({ ...prev, [name]: value, van_ban_thay_the: '' }));
-    } else if (name === 'msnv_lay_so') {
+    } else if (name === 'msnv_nguoi_lay_so') {
       const cleanVal = String(value || '').trim().toLowerCase();
       const matchedPerson = personnelList.find(
         (p) => String(p.ma_so_nhan_vien || '').trim().toLowerCase() === cleanVal
@@ -584,12 +584,12 @@ export default function DocumentPage() {
       if (matchedPerson) {
         setFormData((prev: any) => ({
           ...prev,
-          msnv_lay_so: value,
+          msnv_nguoi_lay_so: value,
           nguoi_lay_so: matchedPerson.ho_ten || '',
           bo_phan_lay_so: matchedPerson.phong_ban || '',
         }));
       } else {
-        setFormData((prev: any) => ({ ...prev, msnv_lay_so: value }));
+        setFormData((prev: any) => ({ ...prev, msnv_nguoi_lay_so: value }));
       }
     } else {
       setFormData((prev: any) => ({ ...prev, [name]: value }));
@@ -1393,7 +1393,7 @@ export default function DocumentPage() {
                     {/* Dòng 2: MSNV - Người lấy số - Bộ phận lấy số (20 - 40 - 40) */}
                     <div className="md:col-span-2 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">MSNV người lấy số</label>
-                      <CustomAutocomplete name="msnv_lay_so" value={formData.msnv_lay_so || ''} onChange={handleInputChange} placeholder="VD: NV001..." suggestions={suggestMsnv} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
+                      <CustomAutocomplete name="msnv_nguoi_lay_so" value={formData.msnv_nguoi_lay_so || ''} onChange={handleInputChange} placeholder="VD: NV001..." suggestions={suggestMsnv} onRemove={handleRemoveSuggestion} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
                     </div>
                     <div className="md:col-span-4 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Người lấy số</label>
