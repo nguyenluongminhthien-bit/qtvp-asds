@@ -102,6 +102,18 @@ export default function CuocDiDongTab({
     editingIndex: null
   });
 
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    open: false,
+    title: '',
+    description: '',
+    onConfirm: () => {}
+  });
+
   // Autocomplete helpers for modal
   const [staffSearchText, setStaffSearchText] = useState('');
   const [showStaffSuggestions, setShowStaffSuggestions] = useState(false);
@@ -508,16 +520,22 @@ export default function CuocDiDongTab({
   };
 
   // Delete Thue Bao
-  const handleDeleteThueBao = async (id: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa thuê bao này không?')) return;
-    try {
-      await apiService.delete(id, 'dm_thue_bao');
-      toast.success('Xóa thuê bao thành công!');
-      setSelectedThueBaoId(null);
-      loadData();
-    } catch (e: any) {
-      toast.error('Lỗi khi xóa: ' + e.message);
-    }
+  const handleDeleteThueBao = (id: string) => {
+    setConfirmModal({
+      open: true,
+      title: 'Xóa thuê bao?',
+      description: 'Hành động này sẽ xóa thuê bao vĩnh viễn khỏi cơ sở dữ liệu. Không thể khôi phục.',
+      onConfirm: async () => {
+        try {
+          await apiService.delete(id, 'dm_thue_bao');
+          toast.success('Xóa thuê bao thành công!');
+          setSelectedThueBaoId(null);
+          loadData();
+        } catch (e: any) {
+          toast.error('Lỗi khi xóa: ' + e.message);
+        }
+      }
+    });
   };
 
   // Open History NSD Dialog
@@ -611,37 +629,43 @@ export default function CuocDiDongTab({
   };
 
   // Delete History Item from timeline list
-  const handleDeleteHistoryItem = async (idx: number) => {
+  const handleDeleteHistoryItem = (idx: number) => {
     const { thueBao } = lichSuModal;
-    if (!thueBao || !window.confirm('Xóa bản ghi lịch sử này?')) return;
+    if (!thueBao) return;
+    setConfirmModal({
+      open: true,
+      title: 'Xóa lịch sử sử dụng?',
+      description: 'Hành động này sẽ xóa vĩnh viễn dòng lịch sử bàn giao này. Không thể khôi phục.',
+      onConfirm: async () => {
+        try {
+          let currentHist: LichSuNSD[] = [];
+          try {
+            currentHist = typeof thueBao.lich_su_nsd === 'string'
+              ? JSON.parse(thueBao.lich_su_nsd)
+              : (thueBao.lich_su_nsd || []);
+          } catch {
+            currentHist = [];
+          }
 
-    try {
-      let currentHist: LichSuNSD[] = [];
-      try {
-        currentHist = typeof thueBao.lich_su_nsd === 'string'
-          ? JSON.parse(thueBao.lich_su_nsd)
-          : (thueBao.lich_su_nsd || []);
-      } catch {
-        currentHist = [];
+          currentHist.splice(idx, 1);
+
+          const payload = {
+            ...thueBao,
+            lich_su_nsd: currentHist
+          };
+
+          await apiService.save(payload, 'update', 'dm_thue_bao');
+          toast.success('Đã xóa bản ghi lịch sử.');
+          setLichSuModal(prev => ({
+            ...prev,
+            thueBao: { ...prev.thueBao!, lich_su_nsd: currentHist }
+          }));
+          loadData();
+        } catch (e: any) {
+          toast.error('Lỗi khi xóa: ' + e.message);
+        }
       }
-
-      currentHist.splice(idx, 1);
-
-      const payload = {
-        ...thueBao,
-        lich_su_nsd: currentHist
-      };
-
-      await apiService.save(payload, 'update', 'dm_thue_bao');
-      toast.success('Đã xóa bản ghi lịch sử.');
-      setLichSuModal(prev => ({
-        ...prev,
-        thueBao: { ...prev.thueBao!, lich_su_nsd: currentHist }
-      }));
-      loadData();
-    } catch (e: any) {
-      toast.error('Lỗi khi xóa: ' + e.message);
-    }
+    });
   };
 
   // Edit History Item inline
@@ -1176,7 +1200,7 @@ export default function CuocDiDongTab({
           />
         </div>
         {selectedRowDetails && (
-          <div className="absolute right-0 top-0 bottom-0 z-20 w-[420px] sm:w-[460px] md:w-[480px] lg:w-[500px] border-l border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xs shadow-2xl flex flex-col h-full overflow-hidden animate-in slide-in-from-right-4 duration-300">
+          <div className="absolute right-0 top-0 bottom-0 z-20 w-[800px] sm:w-[880px] md:w-[920px] lg:w-[1000px] max-w-full border-l border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xs shadow-2xl flex flex-col h-full overflow-hidden animate-in slide-in-from-right-4 duration-300">
             {/* Header Details */}
             <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 shrink-0">
               <div className="flex items-center gap-2">
@@ -1192,110 +1216,117 @@ export default function CuocDiDongTab({
             </div>
 
             {/* Scrollable details content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar bg-white dark:bg-gray-800">
+            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-white dark:bg-gray-800">
               
-              {/* Box 1: Core info */}
-              <div className="bg-blue-50/30 dark:bg-gray-950/20 rounded-xl p-4 border border-blue-100/50 dark:border-gray-800">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <div className="text-2xl font-black text-[#05469B] dark:text-blue-400 tracking-wide font-mono">{selectedRowDetails.tb.so_dien_thoai}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{selectedRowDetails.tb.nha_mang}</div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                
+                {/* Cột 1: Thông tin cơ bản & Biểu đồ SVG */}
+                <div className="space-y-6">
+                  {/* Box 1: Core info */}
+                  <div className="bg-blue-50/30 dark:bg-gray-950/20 rounded-xl p-4 border border-blue-100/50 dark:border-gray-800">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="text-2xl font-black text-[#05469B] dark:text-blue-400 tracking-wide font-mono">{selectedRowDetails.tb.so_dien_thoai}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{selectedRowDetails.tb.nha_mang}</div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${selectedRowDetails.tb.trang_thai === 'Đang hoạt động' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400'}`}>
+                        {selectedRowDetails.tb.trang_thai}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-gray-800/60 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                      <div className="py-2.5 flex justify-between">
+                        <span className="text-gray-400 font-bold">Người sử dụng hiện tại:</span>
+                        <span className="font-bold text-gray-900 dark:text-gray-100">{selectedRowDetails.tb.ho_ten_nv || '---'} {selectedRowDetails.tb.ma_so_nv ? `(${selectedRowDetails.tb.ma_so_nv})` : ''}</span>
+                      </div>
+                      <div className="py-2.5 flex justify-between">
+                        <span className="text-gray-400 font-bold">Đơn vị công tác:</span>
+                        <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ten_bo_phan || '---'}</span>
+                      </div>
+                      <div className="py-2.5 flex justify-between">
+                        <span className="text-gray-400 font-bold">Định mức cước SIM:</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-200">
+                          {selectedRowDetails.tb.dinh_muc_cuoc !== null && selectedRowDetails.tb.dinh_muc_cuoc !== undefined
+                            ? `${formatCurrency(selectedRowDetails.tb.dinh_muc_cuoc)}đ/tháng`
+                            : 'Mặc định (Theo NV / Thực tế)'}
+                        </span>
+                      </div>
+                      <div className="py-2.5 flex justify-between">
+                        <span className="text-gray-400 font-bold">Định mức áp dụng:</span>
+                        <span className="font-bold text-[#05469B] dark:text-blue-400">
+                          {selectedRowDetails.dinhMuc !== null ? `${formatCurrency(selectedRowDetails.dinhMuc)}đ/tháng` : 'Thanh toán thực tế (Không ĐM)'}
+                        </span>
+                      </div>
+                      <div className="py-2.5 flex justify-between">
+                        <span className="text-gray-400 font-bold">Pháp nhân sở hữu:</span>
+                        <span className="font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[240px]">{selectedRowDetails.tb.ten_phap_nhan || '---'}</span>
+                      </div>
+                      <div className="py-2.5 flex justify-between">
+                        <span className="text-gray-400 font-bold">Ngày cấp/kích hoạt SIM:</span>
+                        <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ngay_cap || '---'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                      <button
+                        onClick={() => openUpdateModal(selectedRowDetails.tb)}
+                        className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
+                      >
+                        <Edit size={13} /> Sửa Thuê Bao
+                      </button>
+                      <button
+                        onClick={() => openHistoryModal(selectedRowDetails.tb)}
+                        className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-[#05469B] dark:text-blue-400 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
+                      >
+                        <History size={13} /> Lịch Sử NSD
+                      </button>
+                      <button
+                        onClick={() => handleDeleteThueBao(selectedRowDetails.tb.id)}
+                        className="py-2 px-3 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold flex items-center justify-center transition-colors border border-red-100 dark:border-red-900"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${selectedRowDetails.tb.trang_thai === 'Đang hoạt động' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400'}`}>
-                    {selectedRowDetails.tb.trang_thai}
-                  </span>
-                </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-800/60 text-xs text-gray-600 dark:text-gray-300 font-medium">
-                  <div className="py-2.5 flex justify-between">
-                    <span className="text-gray-400 font-bold">Người sử dụng hiện tại:</span>
-                    <span className="font-bold text-gray-900 dark:text-gray-100">{selectedRowDetails.tb.ho_ten_nv || '---'} {selectedRowDetails.tb.ma_so_nv ? `(${selectedRowDetails.tb.ma_so_nv})` : ''}</span>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <span className="text-gray-400 font-bold">Đơn vị công tác:</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ten_bo_phan || '---'}</span>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <span className="text-gray-400 font-bold">Định mức cước SIM:</span>
-                    <span className="font-bold text-gray-800 dark:text-gray-200">
-                      {selectedRowDetails.tb.dinh_muc_cuoc !== null && selectedRowDetails.tb.dinh_muc_cuoc !== undefined
-                        ? `${formatCurrency(selectedRowDetails.tb.dinh_muc_cuoc)}đ/tháng`
-                        : 'Mặc định (Theo NV / Thực tế)'}
-                    </span>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <span className="text-gray-400 font-bold">Định mức áp dụng:</span>
-                    <span className="font-bold text-[#05469B] dark:text-blue-400">
-                      {selectedRowDetails.dinhMuc !== null ? `${formatCurrency(selectedRowDetails.dinhMuc)}đ/tháng` : 'Thanh toán thực tế (Không ĐM)'}
-                    </span>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <span className="text-gray-400 font-bold">Pháp nhân sở hữu:</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[240px]">{selectedRowDetails.tb.ten_phap_nhan || '---'}</span>
-                  </div>
-                  <div className="py-2.5 flex justify-between">
-                    <span className="text-gray-400 font-bold">Ngày cấp/kích hoạt SIM:</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ngay_cap || '---'}</span>
-                  </div>
+
+                  {/* Box 2: SVG Chart */}
+                  {renderSVGChart()}
                 </div>
 
-                <div className="flex gap-2.5 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                  <button
-                    onClick={() => openUpdateModal(selectedRowDetails.tb)}
-                    className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
-                  >
-                    <Edit size={13} /> Sửa Thuê Bao
-                  </button>
-                  <button
-                    onClick={() => openHistoryModal(selectedRowDetails.tb)}
-                    className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-[#05469B] dark:text-blue-400 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
-                  >
-                    <History size={13} /> Lịch Sử NSD
-                  </button>
-                  <button
-                    onClick={() => handleDeleteThueBao(selectedRowDetails.tb.id)}
-                    className="py-2 px-3 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold flex items-center justify-center transition-colors border border-red-100 dark:border-red-900"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Box 2: SVG Chart */}
-              {renderSVGChart()}
-
-              {/* Box 3: History table */}
-              <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs">
-                <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-800 font-bold text-xs text-gray-600 dark:text-gray-300">
-                  LỊCH SỬ PHÁT SINH CƯỚC THÁNG
-                </div>
-                <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-gray-100 dark:divide-gray-800">
-                  {cuocList
-                    .filter(c => c.id_thue_bao === selectedRowDetails.tb.id)
-                    .sort((a, b) => b.thang_nam.localeCompare(a.thang_nam))
-                    .map(c => {
-                      const snapDM = c.dinh_muc_snap;
-                      const cBadge = getCuocBadge(c.tong_cuoc, snapDM);
-                      return (
-                        <div key={c.id} className="p-3 flex justify-between items-center text-xs">
-                          <div>
-                            <div className="font-bold text-gray-700 dark:text-gray-300">{c.thang_nam}</div>
-                            {snapDM !== null && (
-                              <div className="text-[10px] text-gray-400">Định mức snapshot: {formatCurrency(snapDM)}đ</div>
-                            )}
+                {/* Cột 2: Lịch sử cước hàng tháng */}
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs h-full bg-gray-50/20 dark:bg-gray-900/10">
+                  <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-800 font-bold text-xs text-gray-600 dark:text-gray-300">
+                    LỊCH SỬ PHÁT SINH CƯỚC THÁNG
+                  </div>
+                  <div className="overflow-y-auto custom-scrollbar divide-y divide-gray-100 dark:divide-gray-800 max-h-[500px]">
+                    {cuocList
+                      .filter(c => c.id_thue_bao === selectedRowDetails.tb.id)
+                      .sort((a, b) => b.thang_nam.localeCompare(a.thang_nam))
+                      .map(c => {
+                        const snapDM = c.dinh_muc_snap;
+                        const cBadge = getCuocBadge(c.tong_cuoc, snapDM);
+                        return (
+                          <div key={c.id} className="p-3 flex justify-between items-center text-xs">
+                            <div>
+                              <div className="font-bold text-gray-700 dark:text-gray-300">{c.thang_nam}</div>
+                              {snapDM !== null && (
+                                <div className="text-[10px] text-gray-400">Định mức snapshot: {formatCurrency(snapDM)}đ</div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(c.tong_cuoc)}đ</div>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${cBadge.cls} inline-block mt-0.5`}>
+                                {cBadge.label}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <div className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(c.tong_cuoc)}đ</div>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${cBadge.cls} inline-block mt-0.5`}>
-                              {cBadge.label}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  {cuocList.filter(c => c.id_thue_bao === selectedRowDetails.tb.id).length === 0 && (
-                    <div className="p-4 text-center text-xs text-gray-400 italic">Chưa có dữ liệu cước của thuê bao này.</div>
-                  )}
+                        );
+                      })}
+                    {cuocList.filter(c => c.id_thue_bao === selectedRowDetails.tb.id).length === 0 && (
+                      <div className="p-4 text-center text-xs text-gray-400 italic">Chưa có dữ liệu cước của thuê bao này.</div>
+                    )}
+                  </div>
                 </div>
+
               </div>
 
             </div>
@@ -1972,6 +2003,34 @@ export default function CuocDiDongTab({
               >
                 {importing ? <Loader2 className="animate-spin w-4 h-4" /> : <CheckCircle2 size={15}/>}
                 Xác Nhận Nhập Cước ({importPreview.filter(r => r.status !== 'SKIP').length} thuê bao)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmModal.open && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center animate-in zoom-in duration-200">
+            <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-950/20 text-red-500 flex items-center justify-center mx-auto mb-4 border-4 border-red-100 dark:border-red-900/40">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{confirmModal.title}</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{confirmModal.description}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmModal(prev => ({ ...prev, open: false }))}
+                className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl font-bold transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={async () => {
+                  await confirmModal.onConfirm();
+                  setConfirmModal(prev => ({ ...prev, open: false }));
+                }}
+                className="flex-1 py-3 text-white bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
+              >
+                <Trash2 className="w-5 h-5" /> Xác nhận
               </button>
             </div>
           </div>
