@@ -298,7 +298,8 @@ export default function AtvsldModal({ isOpen, currentData, selectedUnitId, onSav
         
         {error && <div className="mx-5 mt-3 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100">{error}</div>}
         
-        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scrollbar">
+        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* CỘT 1 */}
@@ -398,9 +399,14 @@ export default function AtvsldModal({ isOpen, currentData, selectedUnitId, onSav
             </div>
           </div>
 
-          <div className="pt-5 border-t border-gray-100 flex justify-end gap-3 mt-8 shrink-0">
-            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors">Hủy</button>
-            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-colors">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu ATVSLĐ</button>
+          </div>
+          
+          {/* FOOTER */}
+          <div className="p-5 border-t border-gray-100 flex justify-end gap-3 shrink-0 bg-white rounded-b-2xl">
+            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm">Hủy</button>
+            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-colors">
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu ATVSLĐ
+            </button>
           </div>
         </form>
       </div>

@@ -22,7 +22,7 @@ export interface ReportTemplate {
   title: string;
   icon: string;
   description: string;
-  dataSource: 'getDonVi' | 'getPersonnel' | 'getVanBan';
+  dataSource: 'getDonVi' | 'getPersonnel' | 'getVanBan' | 'getCuocThang';
   columns: ReportColumn[];
   filters: ReportFilter[];
   customizable: boolean;
@@ -212,6 +212,36 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
       { key: 'id_don_vi', label: 'Chọn Đơn vị ban hành', type: 'unit_multi' },
       { key: 'phan_loai', label: 'Loại Văn bản', type: 'multiselect', options: ['Thông báo', 'Quyết định', 'Tờ trình', 'Công văn đến', 'Công văn đi'] },
       { key: 'bo_phan_lay_so', label: 'Bộ phận lấy số (Nhiều mục)', type: 'multiselect', options: [] }
+    ]
+  },
+  {
+    id: 'cuoc_theo_thang',
+    module: 'NHÂN SỰ',
+    title: 'Báo cáo Cước ĐTDĐ theo tháng',
+    icon: 'Phone',
+    description: 'Tổng hợp tổng cước điện thoại CB-NV: so sánh với định mức, phân tích vượt/trong ĐM theo đơn vị và pháp nhân.',
+    dataSource: 'getCuocThang',
+    customizable: true,
+    columns: [
+      { key: 'index',         label: 'STT',           width: 50,  defaultVisible: true },
+      { key: 'ho_ten_nv',     label: 'Họ tên NV',     width: 180, defaultVisible: true },
+      { key: 'ma_so_nv',      label: 'MSNV',           width: 120, defaultVisible: true },
+      { key: 'ten_don_vi',    label: 'Đơn vị',         width: 200, defaultVisible: true },
+      { key: 'ten_phap_nhan', label: 'Pháp nhân TB',   width: 200, defaultVisible: true },
+      { key: 'so_dien_thoai', label: 'SĐT',            width: 130, format: 'phone', defaultVisible: true },
+      { key: 'loai_thue_bao', label: 'Loại TB',        width: 140, defaultVisible: false },
+      { key: 'thang_nam',     label: 'Tháng',          width: 90,  defaultVisible: true },
+      { key: 'tong_cuoc',     label: 'Tổng cước (đ)',  width: 140, format: 'currency', defaultVisible: true },
+      { key: 'dinh_muc_snap', label: 'Định mức (đ)',   width: 130, format: 'currency', defaultVisible: true },
+      { key: 'vuot',          label: 'Vượt ĐM (đ)',    width: 130, format: 'currency', defaultVisible: true },
+      { key: 'trang_thai',    label: 'Quyết toán',     width: 130, defaultVisible: false },
+    ],
+    filters: [
+      { key: 'id_don_vi',    label: 'Đơn vị',    type: 'unit_multi' },
+      { key: 'id_phap_nhan', label: 'Pháp nhân', type: 'multiselect' },
+      { key: 'thang_nam',    label: 'Tháng',     type: 'daterange' },
+      { key: 'loai_thue_bao', label: 'Loại TB',  type: 'select',
+        options: ['Cá nhân', 'Bộ phận dùng chung', 'Hotline'] },
     ]
   }
 ];

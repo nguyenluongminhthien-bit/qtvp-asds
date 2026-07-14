@@ -144,34 +144,92 @@ export default function PersonnelModal({
           <h3 className="text-xl font-bold text-[#05469B]">{mode === 'create' ? 'Thêm Hồ sơ' : 'Cập nhật Hồ sơ'}</h3>
           <button type="button" onClick={onClose} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
         </div>
-        <form onSubmit={onSave} className="p-4 sm:p-6 overflow-y-auto space-y-6 custom-scrollbar">
-          <div className="bg-blue-50/40 p-4 sm:p-5 rounded-xl border border-blue-100">
-            <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-[#05469B] rounded-full"></div> Thông tin cá nhân</h4>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div><label className="block text-xs font-bold text-gray-700 mb-1">Mã NV *</label><input type="text" required name="ma_so_nhan_vien" value={formData.ma_so_nhan_vien || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-              <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 mb-1">Họ và Tên *</label><input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-              <div><label className="block text-xs font-bold text-gray-700 mb-1">Giới tính</label><select name="gioi_tinh" value={formData.gioi_tinh || 'Nam'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></div>
-              <div><label className="block text-xs font-bold text-gray-700 mb-1">Năm sinh</label><input type="date" name="nam_sinh" value={formData.nam_sinh ? formData.nam_sinh.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-              <div><label className="block text-xs font-bold text-[#05469B] mb-1">SĐT Công ty (Sim cấp)</label><input type="tel" name="sdt_cong_ty" value={formData.sdt_cong_ty || ''} onChange={(e) => setFormData(prev => ({...prev, sdt_cong_ty: formatPhoneNumber(e.target.value)}))} maxLength={13} className="w-full p-2.5 border border-blue-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide text-[#05469B]" placeholder="09xx xxx xxx" /></div>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">SĐT Cá nhân</label>
-                <input 
-                  type="tel" 
-                  name="sdt_ca_nhan" 
-                  value={hideSensitiveFields ? '***' : (formData.sdt_ca_nhan || '')} 
-                  onChange={(e) => {
-                    if (hideSensitiveFields) return;
-                    setFormData(prev => ({...prev, sdt_ca_nhan: formatPhoneNumber(e.target.value)}));
-                  }} 
-                  disabled={hideSensitiveFields}
-                  maxLength={13} 
-                  className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
-                  placeholder="09xx xxx xxx" 
-                />
+        <form onSubmit={onSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 custom-scrollbar">
+            <div className="bg-blue-50/40 p-4 sm:p-5 rounded-xl border border-blue-100">
+              <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2">
+                <div className="w-2 h-6 bg-[#05469B] rounded-full"></div>
+                Thông tin cá nhân
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Dòng 1: Mã NV - Họ và Tên - Giới tính */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mã NV *</label>
+                  <input type="text" required name="ma_so_nhan_vien" value={formData.ma_so_nhan_vien || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Họ và Tên *</label>
+                  <input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Giới tính</label>
+                  <select name="gioi_tinh" value={formData.gioi_tinh || 'Nam'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
+                    <option value="Nam">Nam</option>
+                    <option value="Nữ">Nữ</option>
+                  </select>
+                </div>
+
+                {/* Dòng 2: Năm sinh - SĐT Cá nhân - SĐT Công ty - Định mức cước ĐTDĐ (VNĐ) */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Năm sinh</label>
+                  <input type="date" name="nam_sinh" value={formData.nam_sinh ? formData.nam_sinh.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">SĐT Cá nhân</label>
+                  <input 
+                    type="tel" 
+                    name="sdt_ca_nhan" 
+                    value={hideSensitiveFields ? '***' : (formData.sdt_ca_nhan || '')} 
+                    onChange={(e) => {
+                      if (hideSensitiveFields) return;
+                      setFormData(prev => ({...prev, sdt_ca_nhan: formatPhoneNumber(e.target.value)}));
+                    }} 
+                    disabled={hideSensitiveFields}
+                    maxLength={13} 
+                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
+                    placeholder="09xx xxx xxx" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#05469B] mb-1">SĐT Công ty (SIM cấp)</label>
+                  <input
+                    type="tel"
+                    name="sdt_cong_ty"
+                    value={formData.sdt_cong_ty || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, sdt_cong_ty: formatPhoneNumber(e.target.value) }))}
+                    maxLength={13}
+                    className="w-full p-2.5 border border-blue-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide text-[#05469B]"
+                    placeholder="09xx xxx xxx"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#05469B] mb-1">Định mức cước ĐTDĐ (VNĐ)</label>
+                  <input
+                    type="number"
+                    name="dinh_muc_cuoc"
+                    placeholder="Để trống nếu thanh toán thực tế (TT)"
+                    value={formData.dinh_muc_cuoc !== null && formData.dinh_muc_cuoc !== undefined ? formData.dinh_muc_cuoc : ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? null : Number(e.target.value);
+                      setFormData(prev => ({ ...prev, dinh_muc_cuoc: val }));
+                    }}
+                    className="w-full p-2.5 border border-blue-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-[#05469B]"
+                  />
+                </div>
+
+                {/* Dòng 3: Email - Link ảnh Đại diện (Google Drive) */}
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Email</label>
+                  <input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Link Ảnh Đại Diện (Google Drive)</label>
+                  <div className="relative">
+                    <input type="text" name="hinh_anh" value={formData.hinh_anh || ''} onChange={handleInputChange} className="w-full p-2.5 pl-10 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Dán link chia sẻ ảnh từ Google Drive vào đây..." />
+                    <ImageIcon className="absolute left-3 top-2.5 text-gray-400" size={18} />
+                  </div>
+                </div>
               </div>
-              <div className="md:col-span-1"><label className="block text-xs font-bold text-gray-700 mb-1">Email</label><input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-              <div className="md:col-span-4"><label className="block text-xs font-bold text-gray-700 mb-1">Link Ảnh Đại Diện (Google Drive)</label><div className="relative"><input type="text" name="hinh_anh" value={formData.hinh_anh || ''} onChange={handleInputChange} className="w-full p-2.5 pl-10 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Dán link chia sẻ ảnh từ Google Drive vào đây..." /><ImageIcon className="absolute left-3 top-2.5 text-gray-400" size={18} /></div></div>
-            </div>
           </div>
           <div className="bg-gray-50 p-4 sm:p-5 rounded-xl border border-gray-200">
             <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-gray-400 rounded-full"></div> Công việc</h4>
@@ -321,9 +379,14 @@ export default function PersonnelModal({
               <div><label className="block text-xs font-bold text-gray-700 mb-1">Ghi chú khác</label><textarea name="ghi_chu" value={formData.ghi_chu || ''} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none"></textarea></div>
             </div>
           </div>
-          <div className="pt-4 sm:pt-5 border-t border-gray-100 flex justify-end gap-3 mt-6 sm:mt-8">
-            <button type="button" onClick={onClose} className="w-full sm:w-auto px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors">Hủy</button>
-            <button type="submit" disabled={submitting} className="w-full sm:w-auto px-8 py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Dữ Liệu</button>
+          </div>
+          
+          {/* FOOTER */}
+          <div className="p-5 border-t border-gray-100 flex justify-end gap-3 shrink-0 bg-white rounded-b-2xl">
+            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm">Hủy</button>
+            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors">
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Dữ Liệu
+            </button>
           </div>
         </form>
       </div>

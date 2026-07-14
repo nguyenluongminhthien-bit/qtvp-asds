@@ -351,3 +351,60 @@ export interface PCTT {
   ghi_chu: string;
   [key: string]: any;
 }
+
+// Một phần tử trong mảng lich_su_nsd (lưu trong dm_thue_bao.lich_su_nsd)
+export interface LichSuNSD {
+  ho_ten: string;       // Gõ tay hoặc chọn từ danh sách NV
+  ma_so_nv: string;
+  tu_ngay: string;      // YYYY-MM-DD
+  den_ngay: string;     // YYYY-MM-DD hoặc '' nếu đang dùng
+  ly_do: string;        // Lý do chuyển giao / thu hồi
+  nguoi_ghi: string;    // Người ghi nhận (tự điền từ user đăng nhập)
+}
+
+// Danh mục thuê bao
+export interface ThueBao {
+  id: string;
+  so_dien_thoai: string;
+  nha_mang: string;
+  goi_cuoc: string;
+  loai_thue_bao: string;    // 'Cá nhân' | 'Bộ phận dùng chung' | 'Hotline'
+  id_nhan_su: string;
+  ma_so_nv: string;
+  ho_ten_nv: string;
+  ten_bo_phan: string;
+  id_don_vi: string;
+  id_phap_nhan: string;
+  ten_phap_nhan: string;
+  ngay_cap: string;
+  trang_thai: string;       // 'Đang hoạt động' | 'Tạm ngưng' | 'Đã thu hồi - Chờ tái cấp'
+  lich_su_nsd: LichSuNSD[]; // JSON array
+  ghi_chu: string;
+  [key: string]: any;
+}
+
+// Chi phí cước tháng
+export interface CuocThang {
+  id: string;
+  id_thue_bao: string;
+  so_dien_thoai: string;
+  ma_so_nv: string;
+  ho_ten_nv: string;
+  id_nhan_su: string;
+  id_don_vi: string;
+  id_phap_nhan: string;
+  thang_nam: string;        // 'YYYY-MM'
+  tong_cuoc: number;        // TRƯỜNG CHÍNH — tổng cước phát sinh
+  cuoc_noi_mang: number;
+  cuoc_ngoai_mang: number;
+  cuoc_data: number;
+  cuoc_sms: number;
+  cuoc_khac: number;
+  so_phut_goi: number;
+  dung_luong_data: number;
+  dinh_muc_snap: number;    // Snapshot định mức tại thời điểm nhập
+  trang_thai: string;
+  ghi_chu: string;
+  nguoi_nhap: string;
+  [key: string]: any;
+}

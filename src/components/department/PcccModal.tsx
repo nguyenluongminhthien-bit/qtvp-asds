@@ -188,7 +188,7 @@ export default function PcccModal({ isOpen, pcccMode, currentData, currentEquipm
           </h3>
           <button onClick={onClose} disabled={submitting} className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
         </div>
-        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <form id="pcccForm" onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 custom-scrollbar bg-[#f8fafc]">
             <fieldset disabled={pcccMode === 'view'} className="space-y-6 border-0 m-0 p-0">
               

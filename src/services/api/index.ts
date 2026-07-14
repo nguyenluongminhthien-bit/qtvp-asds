@@ -20,7 +20,9 @@ import {
   getUsers,
   getLogs,
   save,
-  deleteRecord
+  deleteRecord,
+  getThueBao,
+  getCuocThang
 } from './modules';
 
 export const apiService = {
@@ -46,5 +48,7 @@ export const apiService = {
   getUsers,
   getLogs,
   save,
-  delete: deleteRecord
+  delete: deleteRecord,
+  getThueBao,
+  getCuocThang
 };

@@ -18,6 +18,7 @@ import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
 import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import PersonnelModal from '../components/personnel/PersonnelModal';
+import CuocDiDongTab from '../components/personnel/CuocDiDongTab';
 import { CERTIFICATES } from '../constants/certificates';
 
 const extractStartDateFromMaNV = (maNV: string) => {
@@ -56,7 +57,9 @@ export default function PersonnelPage() {
   const [selectedUnitFilter, setSelectedUnitFilter] = useState<string | null>(null);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'info' | 'stats'>('info');
+  const [phapNhanList, setPhapNhanList] = useState<any[]>([]);
+
+  const [activeTab, setActiveTab] = useState<'info' | 'stats' | 'cuoc'>('info');
 
   const [modal, setModal] = useState<{ isOpen: boolean; mode: 'create' | 'update'; formData: any; }>({ isOpen: false, mode: 'create', formData: {} });
   
@@ -104,8 +107,14 @@ export default function PersonnelPage() {
   const loadData = async () => {
     setLoading(true); setError(null);
     try {
-      const [nsResult, dvResult] = await Promise.all([apiService.getPersonnel(), apiService.getDonVi()]);
-      setData(nsResult); setDonViList(dvResult);
+      const [nsResult, dvResult, pnResult] = await Promise.all([
+        apiService.getPersonnel(),
+        apiService.getDonVi(),
+        apiService.getPhapNhan()
+      ]);
+      setData(nsResult);
+      setDonViList(dvResult);
+      setPhapNhanList(pnResult || []);
     } catch (err: any) { setError(err.message || 'Lỗi tải dữ liệu.'); } 
     finally { setLoading(false); }
   };
@@ -1529,6 +1538,10 @@ export default function PersonnelPage() {
             <BarChart3 size={18} /> Thống kê Phân tích
             {activeTab === 'stats' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
           </button>
+          <button onClick={() => setActiveTab('cuoc')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'cuoc' ? 'text-[#05469B]' : 'text-gray-400 hover:text-gray-700'}`}>
+            <Phone size={18} /> Cước ĐTDĐ
+            {activeTab === 'cuoc' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
+          </button>
         </div>
 
         {/* 🟢 TAB THÔNG TIN */}
@@ -2149,6 +2162,17 @@ export default function PersonnelPage() {
           );
         })()}
 
+        {activeTab === 'cuoc' && (
+          <CuocDiDongTab
+            personnel={data}
+            donViList={donViList}
+            phapNhanList={phapNhanList}
+            allowedDonViIds={allowedDonViIds}
+            selectedUnitFilter={selectedUnitFilter}
+            selectedUnitSubordinates={selectedUnitSubordinates}
+          />
+        )}
+
       </div>
 
       {/* 🟢 TẤT CẢ CÁC MODALS BÊN DƯỚI */}
@@ -2404,6 +2428,16 @@ export default function PersonnelPage() {
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Trình độ:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.trinh_do_hoc_van || '---'}</span></div>
+                    {viewData.sdt_cong_ty && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
+                        <span className="text-gray-500 text-sm sm:w-32 shrink-0">Định mức cước ĐTDĐ:</span>
+                        <span className="font-bold text-[#05469B] text-sm sm:text-right">
+                          {viewData.dinh_muc_cuoc !== null && viewData.dinh_muc_cuoc !== undefined
+                            ? `${formatCurrency(viewData.dinh_muc_cuoc)} VNĐ`
+                            : 'Thanh toán thực tế (TT)'}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
                       <span className="text-gray-500 text-sm sm:w-20 shrink-0">Thu nhập:</span>
                       <span className="font-semibold text-gray-800 text-sm sm:text-right">

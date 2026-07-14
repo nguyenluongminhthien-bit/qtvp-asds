@@ -90,12 +90,12 @@ export default function PhModal({ isOpen, mode, currentData, selectedUnitId, onS
       <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-fuchsia-100 bg-fuchsia-50 rounded-t-3xl sm:rounded-t-2xl text-fuchsia-900 shrink-0">
           <h3 className="text-xl font-bold flex items-center gap-2"><Monitor size={24}/> {mode === 'create' ? 'Thêm Phòng họp mới' : 'Cập nhật Phòng họp'}</h3>
-          <button onClick={onClose} disabled={submitting} className="text-fuchsia-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
+          <button onClick={onClose} disabled={submitting} className="text-fuchsia-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors ml-1"><X className="w-6 h-6" /></button>
         </div>
-        
         {error && <div className="mx-5 mt-3 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100">{error}</div>}
         
-        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6">
+        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-gray-600 mb-1">Tên Phòng họp *</label>
@@ -166,10 +166,13 @@ export default function PhModal({ isOpen, mode, currentData, selectedUnitId, onS
             </div>
           </div>
           
-          <div className="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold rounded-xl transition-colors">Hủy</button>
-            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-fuchsia-600 hover:bg-fuchsia-700 font-bold rounded-xl flex items-center gap-2 shadow-md transition-colors">
-              {submitting ? <Loader2 className="animate-spin" /> : 'Lưu Phòng Họp'}
+          </div>
+          
+          {/* FOOTER */}
+          <div className="p-5 border-t border-gray-100 flex justify-end gap-3 shrink-0 bg-white rounded-b-2xl">
+            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm">Hủy</button>
+            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors">
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Phòng họp
             </button>
           </div>
         </form>

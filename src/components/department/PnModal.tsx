@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Loader2, Briefcase } from 'lucide-react';
+import { X, Loader2, Briefcase, Save } from 'lucide-react';
 import { apiService } from '../../services/api';
 // 🟢 Import hàm vẽ cây đơn vị
 import { buildHierarchicalOptions, getUnitEmoji } from '../../utils/hierarchy'; 
@@ -134,11 +134,12 @@ export default function PnModal({ isOpen, mode, currentData, selectedUnitId, uni
       <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-orange-100 bg-orange-50 rounded-t-3xl sm:rounded-t-2xl text-orange-900 shrink-0">
           <h3 className="text-xl font-bold flex items-center gap-2"><Briefcase size={24}/> {mode === 'create' ? 'Thêm Pháp nhân mới' : 'Cập nhật Pháp nhân'}</h3>
-          <button onClick={onClose} disabled={submitting} className="text-orange-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm"><X className="w-6 h-6" /></button>
+          <button onClick={onClose} disabled={submitting} className="text-orange-400 hover:text-red-500 rounded-full p-1.5 bg-white shadow-sm transition-colors"><X className="w-6 h-6" /></button>
         </div>
         {error && <div className="mx-5 mt-3 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100">{error}</div>}
         
-        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6">
+        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-gray-600 mb-1">Tên Công ty (Pháp nhân) *</label>
@@ -198,10 +199,13 @@ export default function PnModal({ isOpen, mode, currentData, selectedUnitId, uni
               <input type="url" name="gpkd" value={formData.gpkd || ''} onChange={handleChange} placeholder="Dán link file đính kèm..." className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-orange-500 text-blue-600" />
             </div>
           </div>
-          <div className="pt-4 border-t border-gray-100 flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold rounded-xl transition-colors">Hủy</button>
-            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-orange-600 hover:bg-orange-700 font-bold rounded-xl flex items-center gap-2 shadow-md transition-colors">
-              {submitting ? <Loader2 className="animate-spin" size={18}/> : 'Lưu Pháp nhân'}
+          </div>
+          
+          {/* FOOTER */}
+          <div className="p-5 border-t border-gray-100 flex justify-end gap-3 shrink-0 bg-white rounded-b-2xl">
+            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm">Hủy</button>
+            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors">
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Pháp nhân
             </button>
           </div>
         </form>

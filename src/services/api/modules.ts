@@ -1,4 +1,4 @@
-import { Personnel, DonVi, User, SysLog } from '../../types';
+import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang } from '../../types';
 import { fetchWithCache, resolveTable, invalidateCache } from './cache';
 import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { writeLog } from './logs';
@@ -35,6 +35,8 @@ export const getPCCC = () => getWithFallback<any>('hs_pccc');
 export const getTsPCCC = () => getWithFallback<any>('ts_pccc');
 export const getUsers = () => getWithFallback<User>('config_users');
 export const getLogs = () => getWithFallback<SysLog>('sys_logs');
+export const getThueBao   = () => getWithFallback<ThueBao>('dm_thue_bao');
+export const getCuocThang = () => getWithFallback<CuocThang>('cp_cuoc_thang');
 
 // Helper làm sạch payload trước khi gửi lên Supabase (loại bỏ trường UI-only, rỗng "" -> null)
 function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false): Record<string, any> {
@@ -126,8 +128,8 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
     const resultData = await response.json();
     return Array.isArray(resultData) ? resultData[0] : resultData;
   } catch (err: any) {
-    console.warn(`⚠️ Giao tiếp Supabase thất bại. Tự động lưu vào dữ liệu local bảng ${tableName}:`, err.message);
-    return saveLocalRecord(data, action, tableName);
+    console.error(`🔴 Giao tiếp Supabase thất bại cho bảng ${tableName}:`, err.message);
+    throw err;
   }
 }
 
@@ -153,7 +155,7 @@ export async function deleteRecord(id: string, tableName: string): Promise<boole
     void writeLog('XÓA', `Bảng: ${realTableName} | ID Đối tượng: ${id}`);
     return true;
   } catch (err: any) {
-    console.warn(`⚠️ Giao tiếp Supabase thất bại. Tự động xóa trong dữ liệu local bảng ${tableName}:`, err.message);
-    return deleteLocalRecord(id, tableName);
+    console.error(`🔴 Giao tiếp Supabase thất bại cho bảng ${tableName}:`, err.message);
+    throw err;
   }
 }

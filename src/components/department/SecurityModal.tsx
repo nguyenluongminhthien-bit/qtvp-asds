@@ -132,7 +132,6 @@ export default function SecurityModal({ isOpen, currentData, selectedUnitId, onS
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
       <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-5xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
         
-        {/* HEADER MODAL */}
         <div className="flex justify-between items-center p-4 sm:p-5 border-b border-indigo-100 bg-[#eef2ff] rounded-t-3xl sm:rounded-t-2xl text-indigo-900 shrink-0">
           <h3 className="text-xl font-bold flex items-center gap-2">
             <Shield size={24} className="text-[#05469B]"/> 
@@ -143,7 +142,8 @@ export default function SecurityModal({ isOpen, currentData, selectedUnitId, onS
         
         {error && <div className="mx-5 mt-3 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100">{error}</div>}
         
-        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scrollbar bg-[#f4f7f9]">
+        <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[#f4f7f9]">
           
           {/* PHẦN 1: LỰC LƯỢNG BẢO VỆ */}
           <div className="bg-white p-6 rounded-xl border border-blue-100 shadow-sm">
@@ -315,15 +315,16 @@ export default function SecurityModal({ isOpen, currentData, selectedUnitId, onS
             </div>
           </div>
 
+          </div>
+          
+          {/* FOOTER */}
+          <div className="p-5 border-t border-gray-100 flex justify-end gap-3 shrink-0 bg-white rounded-b-2xl">
+            <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm">Hủy</button>
+            <button type="submit" disabled={submitting} className="px-8 py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors">
+              {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Hồ Sơ An Ninh
+            </button>
+          </div>
         </form>
-
-        {/* FOOTER MODAL */}
-        <div className="p-5 border-t border-gray-100 flex justify-end gap-3 shrink-0 bg-white rounded-b-2xl">
-          <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors font-bold rounded-xl">Hủy</button>
-          <button type="submit" disabled={submitting} onClick={handleSave} className="px-8 py-3 bg-[#05469B] text-white rounded-xl font-bold flex items-center gap-2 hover:bg-[#04367a] shadow-lg transition-colors">
-            {submitting ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} Lưu Cập Nhật
-          </button>
-        </div>
 
       </div>
     </div>

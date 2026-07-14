@@ -1,0 +1,1983 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
+  Users, Activity, FileSpreadsheet, Briefcase, Calendar,
+  ChevronLeft, ChevronRight, Phone, TrendingUp, CheckCircle2, History, Link2, ExternalLink
+} from 'lucide-react';
+import { apiService } from '../../services/api';
+import { Personnel, DonVi, ThueBao, CuocThang, LichSuNSD } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { toast } from '../../utils/toast';
+import { formatCurrencySpace as formatCurrency, formatPhoneNumber } from '../../utils/formatters';
+import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu } from '../../utils/hierarchy';
+import Pagination from '../ui/Pagination';
+
+interface Props {
+  personnel: Personnel[];
+  donViList: DonVi[];
+  phapNhanList: any[];
+  allowedDonViIds: string[];
+  selectedUnitFilter: string | null;
+  selectedUnitSubordinates: string[];
+}
+
+interface ImportRow {
+  msnv: string;
+  tongCuoc: number;
+  sdt?: string;
+  noiMang?: number;
+  ngoaiMang?: number;
+  cuocData?: number;
+  sms?: number;
+  khac?: number;
+  phutGoi?: number;
+  dungLuong?: number;
+  matchedTB: ThueBao | null;
+  existingCuoc: CuocThang | null;
+  status: 'INSERT' | 'UPDATE' | 'SKIP';
+  skipReason?: string;
+}
+
+const getCurrMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+export default function CuocDiDongTab({
+  personnel,
+  donViList,
+  phapNhanList,
+  allowedDonViIds,
+  selectedUnitFilter,
+  selectedUnitSubordinates
+}: Props) {
+  const { user } = useAuth();
+  
+  // Data States
+  const [thueBaoList, setThueBaoList] = useState<ThueBao[]>([]);
+  const [cuocList, setCuocList] = useState<CuocThang[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filter States
+  const [filterThang, setFilterThang] = useState(getCurrMonth());
+  const [filterPhapNhan, setFilterPhapNhan] = useState('');
+  const [filterLoai, setFilterLoai] = useState('');
+  const [filterTrangThai, setFilterTrangThai] = useState('Đang hoạt động');
+  const [filterVuot, setFilterVuot] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 30;
+
+  // Selected State (For Left Panel vs Right Panel detail view)
+  const [selectedThueBaoId, setSelectedThueBaoId] = useState<string | null>(null);
+
+  // Modals
+  const [thueBaoModal, setThueBaoModal] = useState<{
+    open: boolean;
+    mode: 'create' | 'update';
+    data: Partial<ThueBao>;
+    changeNVReason: string;
+    showReasonInput: boolean;
+    originalNhanSuId: string | null;
+  }>({
+    open: false,
+    mode: 'create',
+    data: {},
+    changeNVReason: '',
+    showReasonInput: false,
+    originalNhanSuId: null
+  });
+
+  const [lichSuModal, setLichSuModal] = useState<{
+    open: boolean;
+    thueBao: ThueBao | null;
+    showAddForm: boolean;
+    formData: Partial<LichSuNSD>;
+    editingIndex: number | null;
+  }>({
+    open: false,
+    thueBao: null,
+    showAddForm: false,
+    formData: { ho_ten: '', ma_so_nv: '', tu_ngay: '', den_ngay: '', ly_do: '' },
+    editingIndex: null
+  });
+
+  // Autocomplete helpers for modal
+  const [staffSearchText, setStaffSearchText] = useState('');
+  const [showStaffSuggestions, setShowStaffSuggestions] = useState(false);
+  const staffSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Autocomplete helper for History Modal
+  const [histSearchText, setHistSearchText] = useState('');
+  const [showHistSuggestions, setShowHistSuggestions] = useState(false);
+  const histSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Import Excel States
+  const [importModal, setImportModal] = useState(false);
+  const [importThang, setImportThang] = useState(getCurrMonth());
+  const [importRawText, setImportRawText] = useState('');
+  const [importPreview, setImportPreview] = useState<ImportRow[]>([]);
+  const [importing, setImporting] = useState(false);
+
+  // Chart Tooltip state
+  const [chartTooltip, setChartTooltip] = useState<{
+    x: number;
+    y: number;
+    thang: string;
+    tongCuoc: number;
+    dinhMuc: number | null;
+    visible: boolean;
+  }>({ x: 0, y: 0, thang: '', tongCuoc: 0, dinhMuc: null, visible: false });
+
+  // Load Data
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [tbResult, cResult] = await Promise.all([
+        apiService.getThueBao(),
+        apiService.getCuocThang()
+      ]);
+      setThueBaoList(tbResult || []);
+      setCuocList(cResult || []);
+    } catch (e: any) {
+      toast.error('Lỗi khi tải dữ liệu cước ĐTDĐ: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Close Autocomplete click outside hooks
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (staffSuggestionsRef.current && !staffSuggestionsRef.current.contains(e.target as Node)) {
+        setShowStaffSuggestions(false);
+      }
+      if (histSuggestionsRef.current && !histSuggestionsRef.current.contains(e.target as Node)) {
+        setShowHistSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Filter legal entities based on selected Unit for filter toolbar
+  const filteredPhapNhansForFilter = useMemo(() => {
+    if (!selectedUnitFilter) return phapNhanList;
+    const unitIdsSet = new Set<string>(selectedUnitSubordinates);
+    const selectedUnit = donViList.find(d => d.id === selectedUnitFilter);
+    if (selectedUnit) {
+      let currentUnit = selectedUnit;
+      let iterations = 0;
+      while (currentUnit && currentUnit.cap_quan_ly && currentUnit.cap_quan_ly !== 'HO' && iterations < 10) {
+        unitIdsSet.add(currentUnit.cap_quan_ly);
+        const parent = donViList.find(d => d.id === currentUnit.cap_quan_ly);
+        if (!parent) break;
+        currentUnit = parent;
+        iterations++;
+      }
+    }
+    return phapNhanList.filter(pn => unitIdsSet.has(pn.id_don_vi));
+  }, [selectedUnitFilter, selectedUnitSubordinates, phapNhanList, donViList]);
+
+  // Filter legal entities based on selected Unit for modal form
+  const modalPhapNhanOptions = useMemo(() => {
+    const unitId = thueBaoModal.data.id_don_vi;
+    if (!unitId) return phapNhanList;
+    
+    const selectedUnit = donViList.find(d => d.id === unitId);
+    if (!selectedUnit) return phapNhanList;
+
+    const ancestorIds: string[] = [unitId];
+    let currentUnit = selectedUnit;
+    let iterations = 0;
+    while (currentUnit && currentUnit.cap_quan_ly && currentUnit.cap_quan_ly !== 'HO' && iterations < 10) {
+      ancestorIds.push(currentUnit.cap_quan_ly);
+      const parent = donViList.find(d => d.id === currentUnit.cap_quan_ly);
+      if (!parent) break;
+      currentUnit = parent;
+      iterations++;
+    }
+
+    const filtered = phapNhanList.filter(pn => ancestorIds.includes(pn.id_don_vi));
+    return filtered.length > 0 ? filtered : phapNhanList;
+  }, [thueBaoModal.data.id_don_vi, phapNhanList, donViList]);
+
+  // Auto-set id_phap_nhan in modal if there's exactly 1 option
+  useEffect(() => {
+    if (thueBaoModal.open && thueBaoModal.data.id_don_vi) {
+      const options = modalPhapNhanOptions;
+      if (options.length === 1 && thueBaoModal.data.id_phap_nhan !== options[0].id) {
+        setThueBaoModal(prev => ({
+          ...prev,
+          data: { ...prev.data, id_phap_nhan: options[0].id }
+        }));
+      }
+    }
+  }, [thueBaoModal.data.id_don_vi, modalPhapNhanOptions, thueBaoModal.open]);
+
+  // Reset phap nhan filter when sidebar unit changes
+  useEffect(() => {
+    setFilterPhapNhan('');
+    setCurrentPage(1);
+  }, [selectedUnitFilter]);
+
+  // Filter & Join Logic
+  const tableRows = useMemo(() => {
+    return thueBaoList
+      .filter(tb => allowedDonViIds.includes(tb.id_don_vi))
+      .map(tb => {
+        const cuocThang = cuocList.find(
+          c => c.id_thue_bao === tb.id && c.thang_nam === filterThang
+        );
+        const nv = personnel.find(p => p.id === tb.id_nhan_su);
+        const dinhMuc = cuocThang?.dinh_muc_snap ?? tb.dinh_muc_cuoc ?? nv?.dinh_muc_cuoc ?? null;
+        const tongCuoc = cuocThang?.tong_cuoc ?? null;
+        const vuot = dinhMuc !== null && tongCuoc !== null ? tongCuoc - dinhMuc : null;
+
+        return { tb, nv, cuocThang, dinhMuc, tongCuoc, vuot };
+      })
+      .filter(row => {
+        if (selectedUnitFilter && !selectedUnitSubordinates.includes(row.tb.id_don_vi)) return false;
+        if (filterPhapNhan && row.tb.id_phap_nhan !== filterPhapNhan) return false;
+        if (filterLoai && row.tb.loai_thue_bao !== filterLoai) return false;
+        if (filterTrangThai && row.tb.trang_thai !== filterTrangThai) return false;
+        
+        if (filterVuot === 'vuot') {
+          if (row.vuot === null || row.vuot <= 0) return false;
+        } else if (filterVuot === 'trong') {
+          if (row.tongCuoc === null || (row.vuot !== null && row.vuot > 0)) return false;
+        } else if (filterVuot === 'khong_dm') {
+          if (row.dinhMuc !== null) return false;
+        }
+
+        if (searchTerm) {
+          const q = searchTerm.toLowerCase();
+          const matchText = [
+            row.tb.ho_ten_nv,
+            row.tb.ma_so_nv,
+            row.tb.so_dien_thoai,
+            row.tb.ten_bo_phan,
+            row.tb.nha_mang
+          ].some(v => v?.toLowerCase().includes(q));
+          if (!matchText) return false;
+        }
+        return true;
+      });
+  }, [thueBaoList, cuocList, personnel, filterThang, filterPhapNhan, filterLoai, filterTrangThai, filterVuot, searchTerm, allowedDonViIds, selectedUnitFilter, selectedUnitSubordinates]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(tableRows.length / PAGE_SIZE);
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return tableRows.slice(start, start + PAGE_SIZE);
+  }, [tableRows, currentPage]);
+
+  // Overall Statistics from Filtered Data
+  const stats = useMemo(() => {
+    const totalSim = tableRows.length;
+    const activeSim = tableRows.filter(r => r.tb.trang_thai === 'Đang hoạt động').length;
+    const totalCuoc = tableRows.reduce((sum, r) => sum + (r.tongCuoc || 0), 0);
+    const vuotCount = tableRows.filter(r => r.vuot !== null && r.vuot > 0).length;
+    const trongCount = tableRows.filter(r => r.tongCuoc !== null && r.dinhMuc !== null && r.vuot !== null && r.vuot <= 0).length;
+    const noDataCount = tableRows.filter(r => r.tongCuoc === null).length;
+
+    return { totalSim, activeSim, totalCuoc, vuotCount, trongCount, noDataCount };
+  }, [tableRows]);
+
+  // Current page sum stats
+  const pageSums = useMemo(() => {
+    let dinhMuc = 0;
+    let cuoc = 0;
+    let vuot = 0;
+    paginatedRows.forEach(r => {
+      dinhMuc += r.dinhMuc || 0;
+      cuoc += r.tongCuoc || 0;
+      if (r.vuot && r.vuot > 0) {
+        vuot += r.vuot;
+      }
+    });
+    return { dinhMuc, cuoc, vuot };
+  }, [paginatedRows]);
+
+  // Color & badge mappings
+  const getCuocBadge = (tongCuoc: number | null, dinhMuc: number | null) => {
+    if (tongCuoc === null) {
+      return { label: 'Chưa có DL', cls: 'bg-gray-150 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700' };
+    }
+    if (dinhMuc === null) {
+      return { label: `${formatCurrency(tongCuoc)}đ (TT)`, cls: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border border-blue-200 dark:border-blue-800' };
+    }
+    const vuot = tongCuoc - dinhMuc;
+    if (vuot > 0) {
+      return { label: `Vượt +${formatCurrency(vuot)}đ`, cls: 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold' };
+    }
+    return { label: `Trong ĐM`, cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' };
+  };
+
+  const selectedRowDetails = useMemo(() => {
+    if (!selectedThueBaoId) return null;
+    const row = tableRows.find(r => r.tb.id === selectedThueBaoId);
+    if (!row) return null;
+
+    // Build 12-month data chart
+    const current = filterThang;
+    const [y, m] = current.split('-').map(Number);
+    const months = Array.from({ length: 12 }, (_, i) => {
+      let mm = m - (11 - i);
+      let yy = y;
+      while (mm <= 0) {
+        mm += 12;
+        yy--;
+      }
+      return `${yy}-${String(mm).padStart(2, '0')}`;
+    });
+
+    const chartPoints = months.map(mStr => {
+      const c = cuocList.find(item => item.id_thue_bao === row.tb.id && item.thang_nam === mStr);
+      return {
+        thang: mStr,
+        tongCuoc: c?.tong_cuoc ?? null,
+        dinhMuc: c?.dinh_muc_snap ?? row.nv?.dinh_muc_cuoc ?? null
+      };
+    });
+
+    // History data parse
+    let hist: LichSuNSD[] = [];
+    try {
+      hist = typeof row.tb.lich_su_nsd === 'string'
+        ? JSON.parse(row.tb.lich_su_nsd)
+        : (row.tb.lich_su_nsd || []);
+    } catch {
+      hist = [];
+    }
+
+    // Sort descending by tu_ngay
+    hist = [...hist].sort((a, b) => b.tu_ngay.localeCompare(a.tu_ngay));
+
+    return { ...row, chartPoints, historyList: hist };
+  }, [selectedThueBaoId, tableRows, cuocList, filterThang]);
+
+  // Form autocomplete filtering
+  const filteredPersonnelSuggestions = useMemo(() => {
+    if (!staffSearchText) return [];
+    const q = staffSearchText.toLowerCase();
+    return personnel
+      .filter(p => p.ho_ten.toLowerCase().includes(q) || p.ma_so_nhan_vien.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [staffSearchText, personnel]);
+
+  const filteredHistPersonnelSuggestions = useMemo(() => {
+    if (!histSearchText) return [];
+    const q = histSearchText.toLowerCase();
+    return personnel
+      .filter(p => p.ho_ten.toLowerCase().includes(q) || p.ma_so_nhan_vien.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [histSearchText, personnel]);
+
+  // Open Create Modal
+  const openCreateModal = () => {
+    setThueBaoModal({
+      open: true,
+      mode: 'create',
+      data: {
+        loai_thue_bao: 'Cá nhân',
+        trang_thai: 'Đang hoạt động',
+        nha_mang: 'Viettel',
+        dinh_muc_cuoc: null,
+        id_don_vi: selectedUnitFilter || ''
+      },
+      changeNVReason: '',
+      showReasonInput: false,
+      originalNhanSuId: null
+    });
+    setStaffSearchText('');
+  };
+
+  // Open Update Modal
+  const openUpdateModal = (tb: ThueBao) => {
+    setThueBaoModal({
+      open: true,
+      mode: 'update',
+      data: { ...tb },
+      changeNVReason: '',
+      showReasonInput: false,
+      originalNhanSuId: tb.id_nhan_su || null
+    });
+    setStaffSearchText(tb.ho_ten_nv ? `${tb.ho_ten_nv} (${tb.ma_so_nv})` : '');
+  };
+
+  // Autocomplete handle select staff
+  const selectStaff = (p: Personnel) => {
+    setThueBaoModal(prev => {
+      const isNVChanged = prev.mode === 'update' && prev.originalNhanSuId !== p.id;
+      return {
+        ...prev,
+        data: {
+          ...prev.data,
+          id_nhan_su: p.id,
+          ma_so_nv: p.ma_so_nhan_vien,
+          ho_ten_nv: p.ho_ten,
+          id_don_vi: p.id_don_vi,
+          ten_bo_phan: p.chuc_vu,
+          dinh_muc_cuoc: p.dinh_muc_cuoc !== undefined && p.dinh_muc_cuoc !== null ? Number(p.dinh_muc_cuoc) : null
+        },
+        showReasonInput: isNVChanged
+      };
+    });
+    setStaffSearchText(`${p.ho_ten} (${p.ma_so_nhan_vien})`);
+    setShowStaffSuggestions(false);
+  };
+
+  // Save Thue Bao
+  const handleSaveThueBao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { data: formData, mode, originalNhanSuId, changeNVReason } = thueBaoModal;
+
+    if (!formData.so_dien_thoai || !formData.id_phap_nhan) {
+      toast.error('Vui lòng nhập đầy đủ thông tin bắt buộc (*)');
+      return;
+    }
+
+    // Clean phone number format
+    formData.so_dien_thoai = formatPhoneNumber(formData.so_dien_thoai);
+
+    try {
+      let isCreate = mode === 'create';
+      let payload = { ...formData };
+
+      // Parse current JSON history list
+      let historyList: LichSuNSD[] = [];
+      if (!isCreate && payload.lich_su_nsd) {
+        try {
+          historyList = typeof payload.lich_su_nsd === 'string'
+            ? JSON.parse(payload.lich_su_nsd)
+            : (payload.lich_su_nsd || []);
+        } catch {
+          historyList = [];
+        }
+      }
+
+      // Check transition log trigger
+      if (isCreate) {
+        // Create initial history entry
+        const initEntry: LichSuNSD = {
+          ho_ten: formData.ho_ten_nv || formData.ten_bo_phan || 'N/A',
+          ma_so_nv: formData.ma_so_nv || '',
+          tu_ngay: formData.ngay_cap || new Date().toISOString().split('T')[0],
+          den_ngay: '',
+          ly_do: 'Cấp mới thuê bao',
+          nguoi_ghi: user?.ho_ten || 'Hệ thống'
+        };
+        payload.lich_su_nsd = [initEntry];
+      } else if (originalNhanSuId !== formData.id_nhan_su) {
+        // If manager changed, close old entry & add new one
+        const today = new Date().toISOString().split('T')[0];
+        const openEntry = historyList.find(item => !item.den_ngay);
+        if (openEntry) {
+          openEntry.den_ngay = today;
+        }
+
+        historyList.push({
+          ho_ten: formData.ho_ten_nv || formData.ten_bo_phan || 'N/A',
+          ma_so_nv: formData.ma_so_nv || '',
+          tu_ngay: today,
+          den_ngay: '',
+          ly_do: changeNVReason || 'Thay đổi nhân sự sử dụng',
+          nguoi_ghi: user?.ho_ten || 'Hệ thống'
+        });
+        payload.lich_su_nsd = historyList;
+      }
+
+      // Auto resolve pháp nhân name
+      const pnObj = phapNhanList.find(p => p.id === formData.id_phap_nhan);
+      if (pnObj) {
+        payload.ten_phap_nhan = pnObj.ten_cong_ty || pnObj.ten_phap_nhan;
+      }
+
+      await apiService.save(payload, mode, 'dm_thue_bao');
+      toast.success(isCreate ? 'Thêm mới thuê bao thành công!' : 'Cập nhật thuê bao thành công!');
+      setThueBaoModal(prev => ({ ...prev, open: false }));
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi khi lưu dữ liệu thuê bao: ' + err.message);
+    }
+  };
+
+  // Delete Thue Bao
+  const handleDeleteThueBao = async (id: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa thuê bao này không?')) return;
+    try {
+      await apiService.delete(id, 'dm_thue_bao');
+      toast.success('Xóa thuê bao thành công!');
+      setSelectedThueBaoId(null);
+      loadData();
+    } catch (e: any) {
+      toast.error('Lỗi khi xóa: ' + e.message);
+    }
+  };
+
+  // Open History NSD Dialog
+  const openHistoryModal = (tb: ThueBao) => {
+    let hist: LichSuNSD[] = [];
+    try {
+      hist = typeof tb.lich_su_nsd === 'string'
+        ? JSON.parse(tb.lich_su_nsd)
+        : (tb.lich_su_nsd || []);
+    } catch {
+      hist = [];
+    }
+    setLichSuModal({
+      open: true,
+      thueBao: tb,
+      showAddForm: false,
+      formData: { ho_ten: '', ma_so_nv: '', tu_ngay: '', den_ngay: '', ly_do: '' },
+      editingIndex: null
+    });
+    setHistSearchText('');
+  };
+
+  // Select staff in History Modal autocomplete
+  const selectHistStaff = (p: Personnel) => {
+    setLichSuModal(prev => ({
+      ...prev,
+      formData: {
+        ...prev.formData,
+        ho_ten: p.ho_ten,
+        ma_so_nv: p.ma_so_nhan_vien
+      }
+    }));
+    setHistSearchText(`${p.ho_ten} (${p.ma_so_nhan_vien})`);
+    setShowHistSuggestions(false);
+  };
+
+  // Save entry in History Modal list
+  const handleSaveHistoryItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { thueBao, formData, editingIndex } = lichSuModal;
+    if (!thueBao || !formData.ho_ten || !formData.tu_ngay || !formData.ly_do) {
+      toast.error('Vui lòng điền đủ thông tin lịch sử (*)');
+      return;
+    }
+
+    try {
+      let currentHist: LichSuNSD[] = [];
+      try {
+        currentHist = typeof thueBao.lich_su_nsd === 'string'
+          ? JSON.parse(thueBao.lich_su_nsd)
+          : (thueBao.lich_su_nsd || []);
+      } catch {
+        currentHist = [];
+      }
+
+      const newEntry: LichSuNSD = {
+        ho_ten: formData.ho_ten,
+        ma_so_nv: formData.ma_so_nv || '',
+        tu_ngay: formData.tu_ngay,
+        den_ngay: formData.den_ngay || '',
+        ly_do: formData.ly_do,
+        nguoi_ghi: user?.ho_ten || 'Hệ thống'
+      };
+
+      if (editingIndex !== null) {
+        currentHist[editingIndex] = newEntry;
+      } else {
+        currentHist.push(newEntry);
+      }
+
+      const payload = {
+        ...thueBao,
+        lich_su_nsd: currentHist
+      };
+
+      await apiService.save(payload, 'update', 'dm_thue_bao');
+      toast.success('Cập nhật lịch sử sử dụng thành công!');
+      
+      setLichSuModal(prev => ({
+        ...prev,
+        thueBao: { ...prev.thueBao!, lich_su_nsd: currentHist },
+        showAddForm: false,
+        formData: { ho_ten: '', ma_so_nv: '', tu_ngay: '', den_ngay: '', ly_do: '' },
+        editingIndex: null
+      }));
+      setHistSearchText('');
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi khi cập nhật lịch sử: ' + err.message);
+    }
+  };
+
+  // Delete History Item from timeline list
+  const handleDeleteHistoryItem = async (idx: number) => {
+    const { thueBao } = lichSuModal;
+    if (!thueBao || !window.confirm('Xóa bản ghi lịch sử này?')) return;
+
+    try {
+      let currentHist: LichSuNSD[] = [];
+      try {
+        currentHist = typeof thueBao.lich_su_nsd === 'string'
+          ? JSON.parse(thueBao.lich_su_nsd)
+          : (thueBao.lich_su_nsd || []);
+      } catch {
+        currentHist = [];
+      }
+
+      currentHist.splice(idx, 1);
+
+      const payload = {
+        ...thueBao,
+        lich_su_nsd: currentHist
+      };
+
+      await apiService.save(payload, 'update', 'dm_thue_bao');
+      toast.success('Đã xóa bản ghi lịch sử.');
+      setLichSuModal(prev => ({
+        ...prev,
+        thueBao: { ...prev.thueBao!, lich_su_nsd: currentHist }
+      }));
+      loadData();
+    } catch (e: any) {
+      toast.error('Lỗi khi xóa: ' + e.message);
+    }
+  };
+
+  // Edit History Item inline
+  const editHistoryItem = (item: LichSuNSD, idx: number) => {
+    setLichSuModal(prev => ({
+      ...prev,
+      showAddForm: true,
+      editingIndex: idx,
+      formData: { ...item }
+    }));
+    setHistSearchText(item.ho_ten ? `${item.ho_ten} (${item.ma_so_nv})` : '');
+  };
+
+  // Excel Paste Parser Logic
+  const handleParseExcel = () => {
+    if (!importRawText.trim()) {
+      toast.error('Vui lòng dán dữ liệu cước từ Excel vào ô nhập!');
+      return;
+    }
+
+    const rows = importRawText.split('\n').filter(l => l.trim()).map(line => {
+      const cols = line.split('\t').map(c => c.trim());
+      const msnv = cols[0] || '';
+      const tongCuoc = parseNum(cols[1]);
+      const sdt = cols[2] || '';
+      const noiMang = parseNum(cols[3]);
+      const ngoaiMang = parseNum(cols[4]);
+      const cuocData = parseNum(cols[5]);
+      const sms = parseNum(cols[6]);
+      const khac = parseNum(cols[7]);
+      const phutGoi = parseNum(cols[8]);
+      const dungLuong = parseNum(cols[9]);
+
+      // Match: msnv first, fallback sdt
+      const matchedTB = thueBaoList.find(tb =>
+        (msnv && tb.ma_so_nv === msnv) ||
+        (sdt && formatPhoneNumber(tb.so_dien_thoai) === formatPhoneNumber(sdt))
+      ) || null;
+
+      const existingCuoc = matchedTB
+        ? cuocList.find(c => c.id_thue_bao === matchedTB.id && c.thang_nam === importThang) || null
+        : null;
+
+      return {
+        msnv,
+        tongCuoc,
+        sdt,
+        noiMang,
+        ngoaiMang,
+        cuocData,
+        sms,
+        khac,
+        phutGoi,
+        dungLuong,
+        matchedTB,
+        existingCuoc,
+        status: !matchedTB ? 'SKIP' as const : existingCuoc ? 'UPDATE' as const : 'INSERT' as const,
+        skipReason: !matchedTB ? 'Không tìm thấy MSNV/SĐT' : undefined
+      };
+    });
+
+    setImportPreview(rows);
+  };
+
+  const parseNum = (s: string): number =>
+    parseFloat(String(s || '0').replace(/[^0-9.]/g, '')) || 0;
+
+  // Confirm Import save
+  const handleConfirmImport = async () => {
+    const validRows = importPreview.filter(r => r.status !== 'SKIP');
+    if (validRows.length === 0) {
+      toast.error('Không có dòng dữ liệu hợp lệ để import!');
+      return;
+    }
+    setImporting(true);
+    try {
+      for (const row of validRows) {
+        const nv = personnel.find(p => p.ma_so_nhan_vien === row.msnv);
+        const payload: Partial<CuocThang> = {
+          id: row.existingCuoc?.id || `CDD-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+          id_thue_bao: row.matchedTB!.id,
+          so_dien_thoai: row.matchedTB!.so_dien_thoai,
+          ma_so_nv: row.msnv || row.matchedTB!.ma_so_nv || '',
+          ho_ten_nv: row.matchedTB!.ho_ten_nv,
+          id_nhan_su: row.matchedTB!.id_nhan_su,
+          id_don_vi: row.matchedTB!.id_don_vi,
+          id_phap_nhan: row.matchedTB!.id_phap_nhan,
+          thang_nam: importThang,
+          tong_cuoc: row.tongCuoc,
+          cuoc_noi_mang: row.noiMang,
+          cuoc_ngoai_mang: row.ngoaiMang,
+          cuoc_data: row.cuocData,
+          cuoc_sms: row.sms,
+          cuoc_khac: row.khac,
+          so_phut_goi: row.phutGoi,
+          dung_luong_data: row.dungLuong,
+          dinh_muc_snap: nv?.dinh_muc_cuoc ?? null,
+          nguoi_nhap: user?.ho_ten || 'Hệ thống'
+        };
+        await apiService.save(payload, row.status === 'UPDATE' ? 'update' : 'create', 'cp_cuoc_thang');
+      }
+      toast.success(`Đã nhập cước thành công cho ${validRows.length} thuê bao.`);
+      setImportModal(false);
+      setImportRawText('');
+      setImportPreview([]);
+      loadData();
+    } catch (e: any) {
+      toast.error('Lỗi khi lưu cước: ' + e.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // Render SVG Line Chart (Clean custom SVG inline, no dependencies)
+  const renderSVGChart = () => {
+    if (!selectedRowDetails) return null;
+    const { chartPoints, nv } = selectedRowDetails;
+    
+    const dinhMuc = chartPoints[0]?.dinhMuc ?? nv?.dinh_muc_cuoc ?? null;
+
+    // Filter points with values
+    const validDataPoints = chartPoints.map((p, idx) => ({ ...p, idx }));
+    const maxVal = Math.max(
+      ...chartPoints.map(p => Math.max(p.tongCuoc || 0, p.dinhMuc || 0, 100000)),
+      300000
+    );
+
+    // Grid details
+    const width = 580;
+    const height = 200;
+    const padLeft = 65;
+    const padRight = 20;
+    const padTop = 20;
+    const padBottom = 45;
+
+    const chartW = width - padLeft - padRight;
+    const chartH = height - padTop - padBottom;
+
+    // Scale helpers
+    const getX = (idx: number) => padLeft + (idx / 11) * chartW;
+    const getY = (val: number) => padTop + chartH - (val / maxVal) * chartH;
+
+    // Build path points
+    const pointsStr = validDataPoints
+      .filter(p => p.tongCuoc !== null)
+      .map(p => `${getX(p.idx)},${getY(p.tongCuoc!)}`)
+      .join(' ');
+
+    return (
+      <div className="relative bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+        <div className="font-bold text-xs text-gray-500 mb-2 dark:text-gray-400">BIỂU ĐỒ DIỄN BIẾN 12 THÁNG GẦN NHẤT</div>
+        
+        {chartTooltip.visible && (
+          <div
+            className="absolute z-50 p-2.5 bg-gray-800/95 dark:bg-black/95 text-white rounded-lg shadow-xl text-[10.5px] border border-gray-700 pointer-events-none"
+            style={{ left: chartTooltip.x + 10, top: chartTooltip.y - 60 }}
+          >
+            <div className="font-bold border-b border-gray-700 pb-1 mb-1">Tháng: {chartTooltip.thang}</div>
+            <div>Cước: <span className="font-bold text-blue-400">{formatCurrency(chartTooltip.tongCuoc)}đ</span></div>
+            {chartTooltip.dinhMuc !== null ? (
+              <>
+                <div>Định mức: <span className="font-bold text-gray-300">{formatCurrency(chartTooltip.dinhMuc)}đ</span></div>
+                {chartTooltip.tongCuoc > chartTooltip.dinhMuc ? (
+                  <div className="text-red-400 font-bold mt-0.5">Vượt: +{formatCurrency(chartTooltip.tongCuoc - chartTooltip.dinhMuc)}đ ({Math.round((chartTooltip.tongCuoc / chartTooltip.dinhMuc) * 100)}%)</div>
+                ) : (
+                  <div className="text-emerald-400 font-medium mt-0.5">Trong định mức ({Math.round((chartTooltip.tongCuoc / chartTooltip.dinhMuc) * 100)}%)</div>
+                )}
+              </>
+            ) : (
+              <div className="text-blue-300 italic">Thanh toán thực tế</div>
+            )}
+          </div>
+        )}
+
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible select-none">
+          {/* Y Axis Grid Lines */}
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+            const val = ratio * maxVal;
+            const y = getY(val);
+            return (
+              <g key={i}>
+                <line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke="#e5e7eb" strokeDasharray="3,3" className="dark:stroke-gray-800" />
+                <text x={padLeft - 8} y={y + 4} textAnchor="end" className="fill-gray-400 dark:fill-gray-600 font-bold text-[9px]">
+                  {val >= 1000000 ? `${(val / 1000000).toFixed(1)}M` : `${Math.round(val / 1000)}k`}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* X Axis Labels */}
+          {chartPoints.map((p, idx) => {
+            const x = getX(idx);
+            return (
+              <g key={idx} transform={`translate(${x}, ${height - padBottom + 12})`}>
+                <text transform="rotate(30)" textAnchor="start" className="fill-gray-500 dark:fill-gray-400 text-[8.5px] font-bold">
+                  {p.thang.split('-')[1]}/{p.thang.split('-')[0].substring(2)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Dinh Muc Constant Line (If exists) */}
+          {dinhMuc !== null && (
+            <line
+              x1={padLeft}
+              y1={getY(dinhMuc)}
+              x2={width - padRight}
+              y2={getY(dinhMuc)}
+              stroke="#ef4444"
+              strokeWidth="1.5"
+              strokeDasharray="6,3"
+              opacity="0.8"
+            />
+          )}
+
+          {/* Area Fill for exceed */}
+          {dinhMuc !== null && pointsStr && (
+            <path
+              d={`M ${padLeft} ${height - padBottom} L ${pointsStr} L ${width - padRight} ${height - padBottom} Z`}
+              fill="url(#exceedGradient)"
+              className="pointer-events-none opacity-10"
+            />
+          )}
+
+          {/* Line Path */}
+          {pointsStr && (
+            <path
+              d={`M ${pointsStr}`}
+              fill="none"
+              stroke="#3b82f6"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {/* Circles points */}
+          {chartPoints.map((p, idx) => {
+            if (p.tongCuoc === null) return null;
+            const x = getX(idx);
+            const y = getY(p.tongCuoc);
+            const isExceeded = p.dinhMuc !== null && p.tongCuoc > p.dinhMuc;
+
+            return (
+              <circle
+                key={idx}
+                cx={x}
+                cy={y}
+                r="4.5"
+                className={`cursor-pointer transition-all duration-150 ${isExceeded ? 'fill-red-500 stroke-red-100 hover:scale-150 dark:stroke-red-950' : 'fill-blue-500 stroke-blue-100 hover:scale-150 dark:stroke-blue-950'}`}
+                strokeWidth="2.5"
+                onMouseEnter={(e) => {
+                  const svgEl = e.currentTarget.ownerSVGElement;
+                  if (svgEl) {
+                    const rect = svgEl.getBoundingClientRect();
+                    setChartTooltip({
+                      x: (x / width) * rect.width,
+                      y: (y / height) * rect.height,
+                      thang: p.thang,
+                      tongCuoc: p.tongCuoc!,
+                      dinhMuc: p.dinhMuc,
+                      visible: true
+                    });
+                  }
+                }}
+                onMouseLeave={() => setChartTooltip(prev => ({ ...prev, visible: false }))}
+              />
+            );
+          })}
+
+          {/* Gradients definitions */}
+          <defs>
+            <linearGradient id="exceedGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ef4444" />
+              <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+        </svg>
+
+        {dinhMuc === null && (
+          <div className="text-center text-[10.5px] font-semibold text-blue-500 italic mt-1 dark:text-blue-400">
+            *SIM Thanh toán cước theo thực tế phát sinh (Không có định mức áp đặt).
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col flex-1 h-full min-h-0">
+      
+      {/* TOOLBAR FILTER */}
+      <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3.5">
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kỳ cước</label>
+            <input
+              type="month"
+              value={filterThang}
+              onChange={(e) => { setFilterThang(e.target.value); setCurrentPage(1); }}
+              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-[#FFFFF0] dark:bg-gray-900 font-bold outline-none focus:ring-2 focus:ring-[#05469B]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Pháp nhân</label>
+            <select
+              value={filterPhapNhan}
+              onChange={(e) => { setFilterPhapNhan(e.target.value); setCurrentPage(1); }}
+              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B] max-w-[200px]"
+            >
+              <option value="">-- Tất cả Pháp nhân --</option>
+              {filteredPhapNhansForFilter.map(pn => (
+                <option key={pn.id} value={pn.id}>{pn.ten_cong_ty || pn.ten_phap_nhan}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Loại thuê bao</label>
+            <select
+              value={filterLoai}
+              onChange={(e) => { setFilterLoai(e.target.value); setCurrentPage(1); }}
+              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B]"
+            >
+              <option value="">-- Tất cả --</option>
+              <option value="Cá nhân">Cá nhân</option>
+              <option value="Bộ phận dùng chung">Bộ phận dùng chung</option>
+              <option value="Hotline">Hotline</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Trạng thái</label>
+            <select
+              value={filterTrangThai}
+              onChange={(e) => { setFilterTrangThai(e.target.value); setCurrentPage(1); }}
+              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B]"
+            >
+              <option value="">-- Tất cả SIM --</option>
+              <option value="Đang hoạt động">Đang hoạt động</option>
+              <option value="Tạm ngưng">Tạm ngưng</option>
+              <option value="Đã thu hồi - Chờ tái cấp">Đã thu hồi - Chờ tái cấp</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kiểm soát định mức</label>
+            <select
+              value={filterVuot}
+              onChange={(e) => { setFilterVuot(e.target.value); setCurrentPage(1); }}
+              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B]"
+            >
+              <option value="">-- Kiểm soát ĐM --</option>
+              <option value="vuot">SIM Vượt định mức</option>
+              <option value="trong">SIM Trong định mức</option>
+              <option value="khong_dm">SIM Thanh toán thực tế</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tìm kiếm</label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Tìm SĐT, Họ tên, MSNV..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                className="pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] w-[220px]"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0"
+          >
+            <FileSpreadsheet size={15} />
+            Nhập Cước Excel
+          </button>
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0"
+          >
+            <Plus size={15} />
+            Thêm Thuê Bao
+          </button>
+        </div>
+      </div>
+
+      {/* SUMMARY STATS BAR */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shrink-0">
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+          <div className="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Phone size={18}/></div>
+          <div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Tổng Số SIM</p>
+            <p className="text-xl font-black text-gray-800 dark:text-gray-100 leading-none">{stats.totalSim}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+          <div className="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><CheckCircle2 size={18}/></div>
+          <div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Đang Hoạt Động</p>
+            <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{stats.activeSim}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+          <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0"><TrendingUp size={18}/></div>
+          <div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Tổng Cước</p>
+            <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{formatCurrency(stats.totalCuoc)}đ</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+          <div className="w-9 h-9 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0"><AlertCircle size={18}/></div>
+          <div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Vượt Định Mức</p>
+            <p className="text-xl font-black text-red-600 dark:text-red-400 leading-none">{stats.vuotCount} SIM</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+          <div className="w-9 h-9 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0"><CheckCircle2 size={18}/></div>
+          <div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Trong Định Mức</p>
+            <p className="text-xl font-black text-teal-600 dark:text-teal-400 leading-none">{stats.trongCount} SIM</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+          <div className="w-9 h-9 rounded-full bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 flex items-center justify-center shrink-0"><Activity size={18}/></div>
+          <div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Chưa Có Dữ Liệu</p>
+            <p className="text-xl font-black text-yellow-600 dark:text-yellow-400 leading-none">{stats.noDataCount} SIM</p>
+          </div>
+        </div>
+      </div>
+
+      {/* CORE WORKSPACE GRID */}
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        
+        {/* LEFT PANEL: MAIN TABLE */}
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden w-full">
+          <div className="flex-1 overflow-auto custom-scrollbar">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400 py-20">
+                <Loader2 className="animate-spin w-8 h-8" />
+                <span className="text-sm font-semibold">Đang tải dữ liệu thuê bao & cước phí...</span>
+              </div>
+            ) : tableRows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400 py-20">
+                <Phone className="w-12 h-12 mb-2 text-gray-300 dark:text-gray-700" />
+                <span className="text-sm font-bold">Không tìm thấy thuê bao điện thoại nào.</span>
+              </div>
+            ) : (
+              <table className="w-full text-left text-sm border-collapse min-w-[700px]">
+                <thead className="sticky top-0 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 z-10">
+                  <tr>
+                    <th className="p-3.5 text-center w-12">STT</th>
+                    <th className="p-3.5 w-24">Phân Loại</th>
+                    <th className="p-3.5 w-32">Số Điện Thoại</th>
+                    <th className="p-3.5">Người Quản Lý / Bộ phận</th>
+                    <th className="p-3.5 w-40">Đơn vị</th>
+                    <th className="p-3.5 w-40">Pháp Nhân</th>
+                    <th className="p-3.5 w-32 text-right">Tổng Cước</th>
+                    <th className="p-3.5 w-40 text-center">Tình Trạng Cước</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {paginatedRows.map((row, idx) => {
+                    const isSelected = row.tb.id === selectedThueBaoId;
+                    const badge = getCuocBadge(row.tongCuoc, row.dinhMuc);
+                    const orderIndex = (currentPage - 1) * PAGE_SIZE + idx + 1;
+
+                    return (
+                      <tr
+                        key={row.tb.id}
+                        className={`cursor-pointer hover:bg-blue-50/40 dark:hover:bg-gray-700/30 transition-all ${isSelected ? 'bg-blue-50 dark:bg-gray-800/80 font-medium' : ''}`}
+                        onClick={() => setSelectedThueBaoId(isSelected ? null : row.tb.id)}
+                      >
+                        <td className="p-3.5 text-center text-xs font-bold text-gray-400 dark:text-gray-500">{orderIndex}</td>
+                        <td className="p-3.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide ${row.tb.loai_thue_bao === 'Cá nhân' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400' : row.tb.loai_thue_bao === 'Hotline' ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400' : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'}`}>
+                            {row.tb.loai_thue_bao}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-bold text-[#05469B] dark:text-blue-400 tabular-nums font-mono">{row.tb.so_dien_thoai}</td>
+                        <td className="p-3.5">
+                          {row.tb.loai_thue_bao === 'Cá nhân' ? (
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-800 dark:text-gray-200">{row.tb.ho_ten_nv}</span>
+                              <span className="text-[10.5px] text-gray-400 dark:text-gray-500 font-bold">{row.tb.ma_so_nv} {row.tb.ten_bo_phan ? `| ${row.tb.ten_bo_phan}` : ''}</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-800 dark:text-gray-200">{row.tb.ten_bo_phan || 'Chưa định nghĩa bộ phận'}</span>
+                              {row.tb.ho_ten_nv && <span className="text-[10.5px] text-gray-400 dark:text-gray-500">Phụ trách: {row.tb.ho_ten_nv} ({row.tb.ma_so_nv})</span>}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-xs text-gray-600 dark:text-gray-400 font-semibold">{donViList.find(d => d.id === row.tb.id_don_vi)?.ten_don_vi || '---'}</td>
+                        <td className="p-3.5 text-xs text-gray-600 dark:text-gray-400 truncate max-w-[150px] font-bold">{row.tb.ten_phap_nhan || '---'}</td>
+                        <td className="p-3.5 text-right font-bold tabular-nums">
+                          {row.tongCuoc !== null ? `${formatCurrency(row.tongCuoc)}đ` : <span className="text-gray-300 dark:text-gray-700 font-normal">--</span>}
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <span className={`text-[10.5px] font-bold px-2 py-0.8 rounded-lg ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {/* Fixed Total Sum Row */}
+                <tfoot className="sticky bottom-0 bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 z-10">
+                  <tr className="font-bold text-xs text-gray-700 dark:text-gray-200 text-left">
+                    <td colSpan={5} className="p-3.5 text-right text-gray-500 uppercase tracking-wider">Tổng trang đang xem:</td>
+                    <td className="p-3.5 text-xs font-normal text-gray-400 tabular-nums">ĐM: {formatCurrency(pageSums.dinhMuc)}đ</td>
+                    <td className="p-3.5 text-right font-black text-indigo-600 dark:text-indigo-400 tabular-nums text-sm">{formatCurrency(pageSums.cuoc)}đ</td>
+                    <td className="p-3.5 text-center font-black text-red-600 dark:text-red-400 tabular-nums">Vượt: +{formatCurrency(pageSums.vuot)}đ</td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+          </div>
+          {/* Footer Pagination */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            rowsPerPage={PAGE_SIZE}
+            totalRows={tableRows.length}
+            onPageChange={setCurrentPage}
+            onRowsPerPageChange={() => {}}
+            itemName="thuê bao"
+          />
+        </div>
+        {selectedRowDetails && (
+          <div className="absolute right-0 top-0 bottom-0 z-20 w-[420px] sm:w-[460px] md:w-[480px] lg:w-[500px] border-l border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xs shadow-2xl flex flex-col h-full overflow-hidden animate-in slide-in-from-right-4 duration-300">
+            {/* Header Details */}
+            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-6 bg-[#05469B] dark:bg-blue-500 rounded-full"></div>
+                <h4 className="font-black text-[#05469B] dark:text-blue-400 text-xs uppercase">CHI TIẾT THUÊ BAO</h4>
+              </div>
+              <button
+                onClick={() => setSelectedThueBaoId(null)}
+                className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white dark:bg-gray-800 shadow-xs transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Scrollable details content */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar bg-white dark:bg-gray-800">
+              
+              {/* Box 1: Core info */}
+              <div className="bg-blue-50/30 dark:bg-gray-950/20 rounded-xl p-4 border border-blue-100/50 dark:border-gray-800">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <div className="text-2xl font-black text-[#05469B] dark:text-blue-400 tracking-wide font-mono">{selectedRowDetails.tb.so_dien_thoai}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{selectedRowDetails.tb.nha_mang}</div>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${selectedRowDetails.tb.trang_thai === 'Đang hoạt động' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400'}`}>
+                    {selectedRowDetails.tb.trang_thai}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-800/60 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                  <div className="py-2.5 flex justify-between">
+                    <span className="text-gray-400 font-bold">Người sử dụng hiện tại:</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">{selectedRowDetails.tb.ho_ten_nv || '---'} {selectedRowDetails.tb.ma_so_nv ? `(${selectedRowDetails.tb.ma_so_nv})` : ''}</span>
+                  </div>
+                  <div className="py-2.5 flex justify-between">
+                    <span className="text-gray-400 font-bold">Đơn vị công tác:</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ten_bo_phan || '---'}</span>
+                  </div>
+                  <div className="py-2.5 flex justify-between">
+                    <span className="text-gray-400 font-bold">Định mức cước SIM:</span>
+                    <span className="font-bold text-gray-800 dark:text-gray-200">
+                      {selectedRowDetails.tb.dinh_muc_cuoc !== null && selectedRowDetails.tb.dinh_muc_cuoc !== undefined
+                        ? `${formatCurrency(selectedRowDetails.tb.dinh_muc_cuoc)}đ/tháng`
+                        : 'Mặc định (Theo NV / Thực tế)'}
+                    </span>
+                  </div>
+                  <div className="py-2.5 flex justify-between">
+                    <span className="text-gray-400 font-bold">Định mức áp dụng:</span>
+                    <span className="font-bold text-[#05469B] dark:text-blue-400">
+                      {selectedRowDetails.dinhMuc !== null ? `${formatCurrency(selectedRowDetails.dinhMuc)}đ/tháng` : 'Thanh toán thực tế (Không ĐM)'}
+                    </span>
+                  </div>
+                  <div className="py-2.5 flex justify-between">
+                    <span className="text-gray-400 font-bold">Pháp nhân sở hữu:</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[240px]">{selectedRowDetails.tb.ten_phap_nhan || '---'}</span>
+                  </div>
+                  <div className="py-2.5 flex justify-between">
+                    <span className="text-gray-400 font-bold">Ngày cấp/kích hoạt SIM:</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ngay_cap || '---'}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    onClick={() => openUpdateModal(selectedRowDetails.tb)}
+                    className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
+                  >
+                    <Edit size={13} /> Sửa Thuê Bao
+                  </button>
+                  <button
+                    onClick={() => openHistoryModal(selectedRowDetails.tb)}
+                    className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-[#05469B] dark:text-blue-400 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
+                  >
+                    <History size={13} /> Lịch Sử NSD
+                  </button>
+                  <button
+                    onClick={() => handleDeleteThueBao(selectedRowDetails.tb.id)}
+                    className="py-2 px-3 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold flex items-center justify-center transition-colors border border-red-100 dark:border-red-900"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Box 2: SVG Chart */}
+              {renderSVGChart()}
+
+              {/* Box 3: History table */}
+              <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs">
+                <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-800 font-bold text-xs text-gray-600 dark:text-gray-300">
+                  LỊCH SỬ PHÁT SINH CƯỚC THÁNG
+                </div>
+                <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-gray-100 dark:divide-gray-800">
+                  {cuocList
+                    .filter(c => c.id_thue_bao === selectedRowDetails.tb.id)
+                    .sort((a, b) => b.thang_nam.localeCompare(a.thang_nam))
+                    .map(c => {
+                      const snapDM = c.dinh_muc_snap;
+                      const cBadge = getCuocBadge(c.tong_cuoc, snapDM);
+                      return (
+                        <div key={c.id} className="p-3 flex justify-between items-center text-xs">
+                          <div>
+                            <div className="font-bold text-gray-700 dark:text-gray-300">{c.thang_nam}</div>
+                            {snapDM !== null && (
+                              <div className="text-[10px] text-gray-400">Định mức snapshot: {formatCurrency(snapDM)}đ</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(c.tong_cuoc)}đ</div>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${cBadge.cls} inline-block mt-0.5`}>
+                              {cBadge.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {cuocList.filter(c => c.id_thue_bao === selectedRowDetails.tb.id).length === 0 && (
+                    <div className="p-4 text-center text-xs text-gray-400 italic">Chưa có dữ liệu cước của thuê bao này.</div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* --- MODAL THÊM / SỬA THUÊ BẠO --- */}
+      {thueBaoModal.open && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-2xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
+              <h3 className="text-xl font-bold text-[#05469B] dark:text-blue-400 flex items-center gap-2">
+                <Phone size={22}/>
+                {thueBaoModal.mode === 'create' ? 'Khai Báo SIM / Thuê Bao Mới' : 'Cập Nhật SIM / Thuê Bao'}
+              </h3>
+              <button
+                onClick={() => setThueBaoModal(prev => ({ ...prev, open: false }))}
+                className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white dark:bg-gray-800 shadow-sm"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveThueBao} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-white dark:bg-gray-800 text-sm">
+                
+                {/* ROW 1: SỐ ĐIỆN THOẠI + PHÂN LOẠI + NHÀ MẠNG */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Số điện thoại *</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="VD: 0912345678"
+                      value={thueBaoModal.data.so_dien_thoai || ''}
+                      onChange={(e) => setThueBaoModal(prev => ({
+                        ...prev,
+                        data: { ...prev.data, so_dien_thoai: e.target.value }
+                      }))}
+                      className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] font-bold font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Phân loại thuê bao *</label>
+                    <select
+                      required
+                      value={thueBaoModal.data.loai_thue_bao || 'Cá nhân'}
+                      onChange={(e) => setThueBaoModal(prev => ({
+                        ...prev,
+                        data: {
+                          ...prev.data,
+                          loai_thue_bao: e.target.value,
+                          // Reset if switch type
+                          id_nhan_su: e.target.value !== 'Cá nhân' ? '' : prev.data.id_nhan_su,
+                          ma_so_nv: e.target.value !== 'Cá nhân' ? '' : prev.data.ma_so_nv,
+                          ho_ten_nv: e.target.value !== 'Cá nhân' ? '' : prev.data.ho_ten_nv,
+                          ten_bo_phan: e.target.value !== 'Cá nhân' ? '' : prev.data.ten_bo_phan
+                        }
+                      }))}
+                      className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                    >
+                      <option value="Cá nhân">Cá nhân sử dụng</option>
+                      <option value="Bộ phận dùng chung">Bộ phận dùng chung</option>
+                      <option value="Hotline">Hotline</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Nhà mạng *</label>
+                    <select
+                      required
+                      value={thueBaoModal.data.nha_mang || 'Viettel'}
+                      onChange={(e) => setThueBaoModal(prev => ({
+                        ...prev,
+                        data: { ...prev.data, nha_mang: e.target.value }
+                      }))}
+                      className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                    >
+                      <option value="Viettel">Viettel</option>
+                      <option value="Vinaphone">Vinaphone</option>
+                      <option value="Mobifone">Mobifone</option>
+                      <option value="Vietnamobile">Vietnamobile</option>
+                      <option value="Reddi">Reddi</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* ROW 3: ĐƠN VỊ SỞ HỮU + PHÁP NHÂN */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Đơn vị quản lý trực tiếp *</label>
+                    <select
+                      required
+                      value={thueBaoModal.data.id_don_vi || ''}
+                      onChange={(e) => setThueBaoModal(prev => ({
+                        ...prev,
+                        data: { ...prev.data, id_don_vi: e.target.value }
+                      }))}
+                      className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                    >
+                      <option value="">-- Chọn Đơn vị --</option>
+                      {buildHierarchicalOptions(donViList.filter(dv => allowedDonViIds.includes(dv.id))).map(({ unit, prefix }) => (
+                        <option key={unit.id} value={unit.id}>{prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Pháp nhân sở hữu *</label>
+                    <select
+                      required
+                      value={thueBaoModal.data.id_phap_nhan || ''}
+                      onChange={(e) => setThueBaoModal(prev => ({
+                        ...prev,
+                        data: { ...prev.data, id_phap_nhan: e.target.value }
+                      }))}
+                      className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                    >
+                      <option value="">-- Chọn Pháp nhân --</option>
+                      {modalPhapNhanOptions.map(pn => (
+                        <option key={pn.id} value={pn.id}>{pn.ten_cong_ty || pn.ten_phap_nhan}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* DYNAMIC SECTION BASED ON TYPE */}
+                {thueBaoModal.data.loai_thue_bao === 'Cá nhân' ? (
+                  <div className="bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900 relative space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-[#05469B] dark:text-blue-400 mb-1">Chọn Nhân sự sử dụng SIM *</label>
+                      
+                      {/* Autocomplete Field */}
+                      <div className="relative w-full" ref={staffSuggestionsRef}>
+                        <input
+                          type="text"
+                          placeholder="Tìm theo Tên hoặc Mã số nhân viên..."
+                          value={staffSearchText}
+                          onChange={(e) => {
+                            setStaffSearchText(e.target.value);
+                            setShowStaffSuggestions(true);
+                          }}
+                          onFocus={() => setShowStaffSuggestions(true)}
+                          className="w-full p-2.5 border border-blue-200 dark:border-blue-800 rounded-lg bg-white dark:bg-gray-900 font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                          autoComplete="off"
+                        />
+                        {showStaffSuggestions && filteredPersonnelSuggestions.length > 0 && (
+                          <ul className="absolute z-50 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto custom-scrollbar">
+                            {filteredPersonnelSuggestions.map(p => (
+                              <li
+                                key={p.id}
+                                onClick={() => selectStaff(p)}
+                                className="px-3 py-2.5 hover:bg-blue-50 dark:hover:bg-gray-800 cursor-pointer flex justify-between items-center text-xs border-b border-gray-50 dark:border-gray-800 last:border-0"
+                              >
+                                <span className="font-bold text-gray-800 dark:text-gray-200">{p.ho_ten}</span>
+                                <span className="text-[10px] text-gray-400 font-bold">{p.ma_so_nhan_vien} | {p.chuc_vu}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#05469B] dark:text-blue-400 mb-1">Định mức cước (VNĐ)</label>
+                      <input
+                        type="number"
+                        placeholder="Để trống nếu thanh toán thực tế (TT) - Tự động dò theo Nhân sự chọn"
+                        value={thueBaoModal.data.dinh_muc_cuoc !== null && thueBaoModal.data.dinh_muc_cuoc !== undefined ? thueBaoModal.data.dinh_muc_cuoc : ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? null : Number(e.target.value);
+                          setThueBaoModal(prev => ({
+                            ...prev,
+                            data: { ...prev.data, dinh_muc_cuoc: val }
+                          }));
+                        }}
+                        className="w-full p-2.5 border border-blue-200 dark:border-blue-800 rounded-lg bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-indigo-50/40 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-1">Tên bộ phận / Mục đích sử dụng *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="VD: Phòng HCNS, Hotline Bảo vệ..."
+                        value={thueBaoModal.data.ten_bo_phan || ''}
+                        onChange={(e) => setThueBaoModal(prev => ({
+                          ...prev,
+                          data: { ...prev.data, ten_bo_phan: e.target.value }
+                        }))}
+                        className="w-full p-2.5 border border-indigo-200 dark:border-indigo-800 rounded-lg bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-1">Nhân sự phụ trách quản lý</label>
+                      
+                      {/* Autocomplete for Non-Cá nhân SIM Manager */}
+                      <div className="relative w-full" ref={staffSuggestionsRef}>
+                        <input
+                          type="text"
+                          placeholder="Tìm người chịu trách nhiệm..."
+                          value={staffSearchText}
+                          onChange={(e) => {
+                            setStaffSearchText(e.target.value);
+                            setShowStaffSuggestions(true);
+                          }}
+                          onFocus={() => setShowStaffSuggestions(true)}
+                          className="w-full p-2.5 border border-indigo-200 dark:border-indigo-800 rounded-lg bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                          autoComplete="off"
+                        />
+                        {showStaffSuggestions && filteredPersonnelSuggestions.length > 0 && (
+                          <ul className="absolute z-50 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto custom-scrollbar">
+                            {filteredPersonnelSuggestions.map(p => (
+                              <li
+                                key={p.id}
+                                onClick={() => selectStaff(p)}
+                                className="px-3 py-2.5 hover:bg-indigo-50 dark:hover:bg-gray-800 cursor-pointer flex justify-between items-center text-xs border-b border-gray-50 dark:border-gray-800 last:border-0"
+                              >
+                                <span className="font-bold text-gray-800 dark:text-gray-200">{p.ho_ten}</span>
+                                <span className="text-[10px] text-gray-400 font-bold">{p.ma_so_nhan_vien}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-1">Định mức cước (VNĐ)</label>
+                      <input
+                        type="number"
+                        placeholder="Để trống nếu thanh toán thực tế (TT)"
+                        value={thueBaoModal.data.dinh_muc_cuoc !== null && thueBaoModal.data.dinh_muc_cuoc !== undefined ? thueBaoModal.data.dinh_muc_cuoc : ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? null : Number(e.target.value);
+                          setThueBaoModal(prev => ({
+                            ...prev,
+                            data: { ...prev.data, dinh_muc_cuoc: val }
+                          }));
+                        }}
+                        className="w-full p-2.5 border border-indigo-200 dark:border-indigo-800 rounded-lg bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* TRANSFER CONFIRM POPUP (inline reason input) */}
+                {thueBaoModal.showReasonInput && (
+                  <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded-xl animate-in zoom-in-95 duration-200 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-black text-orange-800 dark:text-orange-400">
+                      <AlertCircle size={15}/>
+                      XÁC NHẬN CHUYỂN GIAO THUÊ BAO
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">Hệ thống phát hiện có sự thay đổi nhân sự quản lý SIM. Lịch sử sử dụng sẽ được cập nhật tự động. Vui lòng nhập lý do:</p>
+                    <textarea
+                      required
+                      rows={2}
+                      placeholder="VD: Cựu nhân viên nghỉ việc bàn giao lại SIM, Điều chuyển nội bộ..."
+                      value={thueBaoModal.changeNVReason}
+                      onChange={(e) => setThueBaoModal(prev => ({ ...prev, changeNVReason: e.target.value }))}
+                      className="w-full p-2.5 border border-orange-300 dark:border-orange-800 rounded-lg outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-900 text-xs resize-none"
+                    ></textarea>
+                  </div>
+                )}
+
+                {/* ROW 4: NGÀY CẤP + TRẠNG THÁI */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Ngày cấp phát SIM</label>
+                    <input
+                      type="date"
+                      value={thueBaoModal.data.ngay_cap || ''}
+                      onChange={(e) => setThueBaoModal(prev => ({
+                        ...prev,
+                        data: { ...prev.data, ngay_cap: e.target.value }
+                      }))}
+                      className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Trạng thái SIM *</label>
+                    <select
+                      required
+                      value={thueBaoModal.data.trang_thai || 'Đang hoạt động'}
+                      onChange={(e) => setThueBaoModal(prev => ({
+                        ...prev,
+                        data: { ...prev.data, trang_thai: e.target.value }
+                      }))}
+                      className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                    >
+                      <option value="Đang hoạt động">Đang hoạt động</option>
+                      <option value="Tạm ngưng">Tạm ngưng sử dụng</option>
+                      <option value="Đã thu hồi - Chờ tái cấp">Đã thu hồi - Chờ tái cấp</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* ROW 5: GHI CHÚ */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Ghi chú khác</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Nhập thông tin ghi chú..."
+                    value={thueBaoModal.data.ghi_chu || ''}
+                    onChange={(e) => setThueBaoModal(prev => ({
+                      ...prev,
+                      data: { ...prev.data, ghi_chu: e.target.value }
+                    }))}
+                    className="w-full p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-[#FFFFF0] dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] resize-none"
+                  ></textarea>
+                </div>
+
+              </div>
+
+              {/* FOOTER FIXED */}
+              <div className="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end gap-3 shrink-0 rounded-b-2xl">
+                <button
+                  type="button"
+                  onClick={() => setThueBaoModal(prev => ({ ...prev, open: false }))}
+                  className="px-8 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl font-bold transition-all shadow-sm text-xs"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-8 py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all text-xs"
+                >
+                  <Save size={15} /> Lưu Thuê Bao
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL LỊCH SỬ SỬ DỤNG (lich_su_nsd) --- */}
+      {lichSuModal.open && lichSuModal.thueBao && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-2xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
+              <h3 className="text-xl font-bold text-[#05469B] dark:text-blue-400 flex items-center gap-2">
+                <History size={22}/>
+                Lịch Sử Người Sử Dụng: {lichSuModal.thueBao.so_dien_thoai}
+              </h3>
+              <button
+                onClick={() => setLichSuModal(prev => ({ ...prev, open: false }))}
+                className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white dark:bg-gray-800 shadow-sm"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-white dark:bg-gray-800 text-sm">
+              <div className="flex justify-between items-center mb-3">
+                <div className="text-xs text-gray-400 font-bold uppercase">Timeline các đợt chuyển giao</div>
+                <button
+                  type="button"
+                  onClick={() => setLichSuModal(prev => ({
+                    ...prev,
+                    showAddForm: true,
+                    editingIndex: null,
+                    formData: { ho_ten: '', ma_so_nv: '', tu_ngay: '', den_ngay: '', ly_do: '' }
+                  }))}
+                  className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold rounded-lg text-xs flex items-center gap-1 transition-all border border-gray-200 dark:border-gray-700"
+                >
+                  <Plus size={13} /> Thêm Thủ Công
+                </button>
+              </div>
+
+              {/* TIMELINE VIEW */}
+              <div className="relative border-l-2 border-blue-100 dark:border-gray-700 ml-3 pl-5 space-y-5 py-2">
+                {((): LichSuNSD[] => {
+                  let list: LichSuNSD[] = [];
+                  try {
+                    list = typeof lichSuModal.thueBao.lich_su_nsd === 'string'
+                      ? JSON.parse(lichSuModal.thueBao.lich_su_nsd)
+                      : (lichSuModal.thueBao.lich_su_nsd || []);
+                  } catch {
+                    list = [];
+                  }
+                  return [...list].sort((a, b) => b.tu_ngay.localeCompare(a.tu_ngay));
+                })().map((item, idx, arr) => {
+                  const isCurrent = !item.den_ngay;
+                  const originalIndexInStore = (() => {
+                    let list: LichSuNSD[] = [];
+                    try {
+                      list = typeof lichSuModal.thueBao.lich_su_nsd === 'string'
+                        ? JSON.parse(lichSuModal.thueBao.lich_su_nsd)
+                        : (lichSuModal.thueBao.lich_su_nsd || []);
+                    } catch {
+                      list = [];
+                    }
+                    return list.findIndex(x => x.ma_so_nv === item.ma_so_nv && x.tu_ngay === item.tu_ngay);
+                  })();
+
+                  return (
+                    <div key={idx} className="relative group animate-in slide-in-from-left-2">
+                      {/* Circle indicator */}
+                      <span className={`absolute -left-[27px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-gray-800 ${isCurrent ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                      <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-bold text-gray-900 dark:text-gray-100">{item.ho_ten}</span>
+                            {item.ma_so_nv && <span className="text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.2 rounded ml-2 font-bold font-mono">{item.ma_so_nv}</span>}
+                          </div>
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
+                            <button onClick={() => editHistoryItem(item, originalIndexInStore)} className="text-[#05469B] hover:text-[#04367a] p-1"><Edit size={12}/></button>
+                            <button onClick={() => handleDeleteHistoryItem(originalIndexInStore)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={12}/></button>
+                          </div>
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-1">
+                          <span className="font-semibold">Thời gian:</span> {item.tu_ngay} {item.den_ngay ? `đến ${item.den_ngay}` : 'đang sử dụng'}
+                        </div>
+                        <div className="text-[11.5px] text-gray-700 dark:text-gray-300 mt-1.5 font-medium">
+                          <span className="font-bold text-gray-400 text-[10.5px]">Lý do:</span> {item.ly_do}
+                        </div>
+                        {item.nguoi_ghi && (
+                          <div className="text-[10px] text-gray-400 italic text-right mt-1">Ghi nhận: {item.nguoi_ghi}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* INLINE ADD FORM */}
+              {lichSuModal.showAddForm && (
+                <form onSubmit={handleSaveHistoryItem} className="p-4 bg-blue-50/50 dark:bg-gray-900/50 border border-blue-200 dark:border-gray-800 rounded-xl space-y-4 animate-in zoom-in-95 duration-200">
+                  <div className="font-bold text-xs text-[#05469B] dark:text-blue-400 border-b border-blue-150 pb-1 flex justify-between">
+                    <span>{lichSuModal.editingIndex !== null ? 'SỬA BẢN GHI LỊCH SỬ' : 'THÊM BẢN GHI LỊCH SỬ'}</span>
+                    <button type="button" onClick={() => setLichSuModal(prev => ({ ...prev, showAddForm: false }))} className="text-gray-400 hover:text-red-500"><X size={14}/></button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">Chọn / Gõ tên nhân sự *</label>
+                      <div className="relative w-full" ref={histSuggestionsRef}>
+                        <input
+                          type="text"
+                          required
+                          value={histSearchText}
+                          onChange={(e) => {
+                            setHistSearchText(e.target.value);
+                            setLichSuModal(prev => ({
+                              ...prev,
+                              formData: { ...prev.formData, ho_ten: e.target.value }
+                            }));
+                            setShowHistSuggestions(true);
+                          }}
+                          onFocus={() => setShowHistSuggestions(true)}
+                          className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs"
+                          placeholder="Nguyễn Văn A..."
+                          autoComplete="off"
+                        />
+                        {showHistSuggestions && filteredHistPersonnelSuggestions.length > 0 && (
+                          <ul className="absolute z-50 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-xl mt-1 max-h-32 overflow-y-auto custom-scrollbar">
+                            {filteredHistPersonnelSuggestions.map(p => (
+                              <li
+                                key={p.id}
+                                onClick={() => selectHistStaff(p)}
+                                className="px-2 py-2 hover:bg-blue-50 dark:hover:bg-gray-800 cursor-pointer flex justify-between text-xs"
+                              >
+                                <span className="font-bold text-gray-800 dark:text-gray-200">{p.ho_ten}</span>
+                                <span className="text-[10px] text-gray-400">{p.ma_so_nhan_vien}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">Mã NV</label>
+                      <input
+                        type="text"
+                        value={lichSuModal.formData.ma_so_nv || ''}
+                        onChange={(e) => setLichSuModal(prev => ({
+                          ...prev,
+                          formData: { ...prev.formData, ma_so_nv: e.target.value }
+                        }))}
+                        className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-mono font-bold"
+                        placeholder="VD: 2401002"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">Từ ngày *</label>
+                      <input
+                        type="date"
+                        required
+                        value={lichSuModal.formData.tu_ngay || ''}
+                        onChange={(e) => setLichSuModal(prev => ({
+                          ...prev,
+                          formData: { ...prev.formData, tu_ngay: e.target.value }
+                        }))}
+                        className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">Đến ngày</label>
+                      <input
+                        type="date"
+                        value={lichSuModal.formData.den_ngay || ''}
+                        onChange={(e) => setLichSuModal(prev => ({
+                          ...prev,
+                          formData: { ...prev.formData, den_ngay: e.target.value }
+                        }))}
+                        className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">Lý do bàn giao / nhận SIM *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="VD: Nhận SIM mới, Bàn giao nhân sự cũ nghỉ việc..."
+                      value={lichSuModal.formData.ly_do || ''}
+                      onChange={(e) => setLichSuModal(prev => ({
+                        ...prev,
+                        formData: { ...prev.formData, ly_do: e.target.value }
+                      }))}
+                      className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2.5">
+                    <button
+                      type="submit"
+                      className="px-5 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-bold shadow transition-all"
+                    >
+                      <Save size={13} className="inline mr-1" /> Lưu Bản Ghi Lịch Sử
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* FOOTER FIXED */}
+            <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end shrink-0 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setLichSuModal(prev => ({ ...prev, open: false }))}
+                className="px-8 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl font-bold transition-all shadow-sm text-xs"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL NHẬP CƯỚC TỪ FILE EXCEL --- */}
+      {importModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
+            <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
+              <h3 className="text-xl font-bold text-[#05469B] dark:text-blue-400 flex items-center gap-2">
+                <FileSpreadsheet size={22}/>
+                Nhập Cước Điện Thoại Hàng Tháng Từ Excel
+              </h3>
+              <button
+                onClick={() => setImportModal(false)}
+                className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white dark:bg-gray-800 shadow-sm"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar bg-white dark:bg-gray-800 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Tháng cập nhật cước *</label>
+                  <input
+                    type="month"
+                    value={importThang}
+                    onChange={(e) => setImportThang(e.target.value)}
+                    className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-[#FFFFF0] dark:bg-gray-900 font-bold outline-none"
+                  />
+                </div>
+                <div className="md:col-span-2 text-xs text-gray-400 leading-normal font-medium dark:text-gray-500">
+                  <p className="font-bold text-gray-600 dark:text-gray-300 uppercase mb-0.5">Hướng dẫn copy/paste:</p>
+                  <p>Mở file Excel nhà mạng cung cấp → Copy 2 cột bắt buộc là: <strong className="text-blue-600 font-extrabold font-mono text-[13px]">MSNV</strong> và <strong className="text-blue-600 font-extrabold font-mono text-[13px]">Tổng cước</strong> phát sinh.</p>
+                  <p className="mt-0.5">(Hệ thống hỗ trợ tự động đối chiếu match MSNV trước, nếu không khớp sẽ đối chiếu qua SĐT cột 3).</p>
+                </div>
+              </div>
+
+              {/* Paste Raw input area */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Vùng dán dữ liệu (Paste data)</label>
+                <textarea
+                  rows={6}
+                  placeholder="Dán các cột dạng tab-separated vào đây...&#10;VD:&#10;2401001&#9;250000&#10;2312045&#9;120000"
+                  value={importRawText}
+                  onChange={(e) => setImportRawText(e.target.value)}
+                  className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-[#FFFFF0] dark:bg-gray-900 outline-none font-mono text-xs resize-none"
+                ></textarea>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleParseExcel}
+                  className="px-5 py-2.5 bg-[#05469B] hover:bg-[#04367a] text-white font-bold rounded-lg text-xs shadow"
+                >
+                  Xử lý Dữ liệu / Preview
+                </button>
+              </div>
+
+              {/* PREVIEW CONTAINER */}
+              {importPreview.length > 0 && (
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs">
+                  <div className="bg-gray-50 dark:bg-gray-900 p-3 font-bold text-xs text-gray-600 dark:text-gray-300 flex justify-between">
+                    <span>PREVIEW KẾT QUẢ ĐỐI CHIẾU ({importPreview.length} DÒNG)</span>
+                    <div className="flex gap-3 text-[10.5px]">
+                      <span className="text-emerald-600 font-extrabold">✅ {importPreview.filter(r => r.status === 'INSERT').length} tạo mới</span>
+                      <span className="text-orange-600 font-extrabold">🔄 {importPreview.filter(r => r.status === 'UPDATE').length} ghi đè cước</span>
+                      <span className="text-red-500 font-extrabold">⚠️ {importPreview.filter(r => r.status === 'SKIP').length} bỏ qua</span>
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="sticky top-0 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 font-bold text-gray-500 z-10">
+                        <tr>
+                          <th className="p-2.5 text-center w-12">STT</th>
+                          <th className="p-2.5">MSNV</th>
+                          <th className="p-2.5">SĐT</th>
+                          <th className="p-2.5">Nhân Viên sử dụng</th>
+                          <th className="p-2.5 text-right">Tổng Cước</th>
+                          <th className="p-2.5 text-center">Trạng thái</th>
+                          <th className="p-2.5">Chi tiết lỗi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                        {importPreview.map((row, idx) => (
+                          <tr key={idx} className={row.status === 'SKIP' ? 'bg-red-50/20' : ''}>
+                            <td className="p-2.5 text-center text-gray-400 font-bold">{idx + 1}</td>
+                            <td className="p-2.5 font-bold font-mono">{row.msnv || '---'}</td>
+                            <td className="p-2.5 font-mono">{row.sdt || row.matchedTB?.so_dien_thoai || '---'}</td>
+                            <td className="p-2.5">{row.matchedTB?.ho_ten_nv || <span className="text-red-400 font-semibold italic">Không khớp</span>}</td>
+                            <td className="p-2.5 text-right font-bold tabular-nums">{formatCurrency(row.tongCuoc)}đ</td>
+                            <td className="p-2.5 text-center">
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${row.status === 'INSERT' ? 'bg-emerald-100 text-emerald-800' : row.status === 'UPDATE' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'}`}>
+                                {row.status}
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-xs text-red-500 font-semibold">{row.skipReason || ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* FOOTER FIXED */}
+            <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end gap-3 shrink-0 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setImportModal(false)}
+                className="px-8 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl font-bold transition-all shadow-sm text-xs"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={importing || importPreview.filter(r => r.status !== 'SKIP').length === 0}
+                className="px-8 py-2.5 text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:cursor-not-allowed rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg transition-all text-xs"
+              >
+                {importing ? <Loader2 className="animate-spin w-4 h-4" /> : <CheckCircle2 size={15}/>}
+                Xác Nhận Nhập Cước ({importPreview.filter(r => r.status !== 'SKIP').length} thuê bao)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}

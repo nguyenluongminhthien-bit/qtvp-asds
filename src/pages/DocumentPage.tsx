@@ -1232,8 +1232,8 @@ export default function DocumentPage() {
               </button>
             </div>
             
-            {/* Form */}
-            <form id="docForm" onSubmit={handleSave} className="p-4 md:p-6 overflow-y-auto overflow-x-hidden space-y-6 md:space-8 flex-1 custom-scrollbar w-full bg-white">
+            <form onSubmit={handleSave} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-6 md:space-8 custom-scrollbar w-full bg-white">
               
               {/* KHỐI 1: THÔNG TIN HÀNH CHÍNH (XANH DƯƠNG) */}
               <div className="bg-white p-5 rounded-2xl border border-blue-200">
@@ -1430,26 +1430,17 @@ export default function DocumentPage() {
                   </div>
                 </div>
               </div>
-
+              
+              </div>
+              
+              {/* FOOTER */}
+              <div className="p-4 md:p-5 border-t border-gray-100 flex flex-col-reverse md:flex-row justify-end gap-3 mt-auto shrink-0 bg-white pb-8 md:pb-5">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="w-full md:w-auto px-8 py-3.5 md:py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm">Hủy</button>
+                <button type="submit" disabled={submitting} className="w-full md:w-auto px-8 py-3.5 md:py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors">
+                  {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Văn Bản
+                </button>
+              </div>
             </form>
-            
-            <div className="p-4 md:p-5 border-t border-gray-100 flex flex-col-reverse md:flex-row justify-end gap-3 mt-auto shrink-0 bg-white pb-8 md:pb-5">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)} 
-                className="w-full md:w-auto px-8 py-3.5 md:py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm"
-              >
-                Hủy
-              </button>
-              <button 
-                type="submit" 
-                form="docForm" 
-                disabled={submitting} 
-                className="w-full md:w-auto px-8 py-3.5 md:py-3 text-white bg-[#05469B] hover:bg-[#04367a] rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors"
-              >
-                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Lưu Văn Bản
-              </button>
-            </div>
 
           </div>
         </div>
