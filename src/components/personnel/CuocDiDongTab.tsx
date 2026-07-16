@@ -2,15 +2,20 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
   Users, Activity, FileSpreadsheet, Briefcase, Calendar,
-  ChevronLeft, ChevronRight, Phone, TrendingUp, CheckCircle2, History, Link2, ExternalLink
+  ChevronLeft, ChevronRight, Phone, TrendingUp, CheckCircle2, History, Link2, ExternalLink,
+  Pencil, ArrowLeftRight, UserPlus, PauseCircle, PlayCircle, XCircle, Zap
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { Personnel, DonVi, ThueBao, CuocThang, LichSuNSD } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from '../../utils/toast';
-import { formatCurrencySpace as formatCurrency, formatPhoneNumber } from '../../utils/formatters';
+import { formatCurrencySpace, formatPhoneNumber } from '../../utils/formatters';
+const formatCurrency = formatCurrencySpace;
 import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu } from '../../utils/hierarchy';
 import Pagination from '../ui/Pagination';
+import CustomAutocomplete from '../ui/CustomAutocomplete';
+import ThueBaoDetailCuocChart from './ThueBaoDetailCuocChart';
+import BatchCostEntryModal from './BatchCostEntryModal';
 
 interface Props {
   personnel: Personnel[];
@@ -70,6 +75,7 @@ export default function CuocDiDongTab({
 
   // Selected State (For Left Panel vs Right Panel detail view)
   const [selectedThueBaoId, setSelectedThueBaoId] = useState<string | null>(null);
+  const [batchCostModalOpen, setBatchCostModalOpen] = useState(false);
 
   // Modals
   const [thueBaoModal, setThueBaoModal] = useState<{
@@ -114,6 +120,22 @@ export default function CuocDiDongTab({
     onConfirm: () => {}
   });
 
+  // Modal Thu hồi (nhập lý do)
+  const [thuHoiModal, setThuHoiModal] = useState<{
+    open: boolean;
+    thueBao: ThueBao | null;
+    lyDo: string;
+  }>({ open: false, thueBao: null, lyDo: '' });
+
+  // Modal Tái cấp (chọn NV mới + ngày + lý do)
+  const [taiCapModal, setTaiCapModal] = useState<{
+    open: boolean;
+    thueBao: ThueBao | null;
+    nvMoi: any | null;       // NV được tái cấp
+    ngayTaiCap: string;
+    lyDo: string;
+  }>({ open: false, thueBao: null, nvMoi: null, ngayTaiCap: '', lyDo: '' });
+
   // Autocomplete helpers for modal
   const [staffSearchText, setStaffSearchText] = useState('');
   const [showStaffSuggestions, setShowStaffSuggestions] = useState(false);
@@ -123,6 +145,9 @@ export default function CuocDiDongTab({
   const [histSearchText, setHistSearchText] = useState('');
   const [showHistSuggestions, setShowHistSuggestions] = useState(false);
   const histSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Autocomplete helper for Tai Cap
+  const [taiCapSearchText, setTaiCapSearchText] = useState('');
 
   // Import Excel States
   const [importModal, setImportModal] = useState(false);
@@ -330,6 +355,23 @@ export default function CuocDiDongTab({
     return { label: `Trong ĐM`, cls: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' };
   };
 
+  const getTrangThaiBadge = (trangThai: string) => {
+    switch (trangThai) {
+      case 'Đang hoạt động':
+        return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700';
+      case 'Tạm ngưng':
+        return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-700';
+      case 'Đã thu hồi - Chờ tái cấp':
+        return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700';
+      case 'Đã huỷ':
+        return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700';
+      default:
+        return 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600';
+    }
+  };
+
+
+
   const selectedRowDetails = useMemo(() => {
     if (!selectedThueBaoId) return null;
     const row = tableRows.find(r => r.tb.id === selectedThueBaoId);
@@ -519,23 +561,190 @@ export default function CuocDiDongTab({
     }
   };
 
-  // Delete Thue Bao
-  const handleDeleteThueBao = (id: string) => {
-    setConfirmModal({
+  // ── Hàm helper: cập nhật lich_su_nsd ──────────────────────────────
+  const dongLogHienTai = (lichSu: any, lyDo: string): LichSuNSD[] => {
+    let list: LichSuNSD[] = [];
+    try {
+      list = typeof lichSu === 'string' ? JSON.parse(lichSu) : (lichSu || []);
+    } catch {
+      list = [];
+    }
+    const copy = JSON.parse(JSON.stringify(list));
+    const openEntry = copy.find((e: LichSuNSD) => !e.den_ngay);
+    if (openEntry) {
+      openEntry.den_ngay = new Date().toISOString().split('T')[0];
+      openEntry.ly_do = openEntry.ly_do
+        ? openEntry.ly_do + ' — ' + lyDo
+        : lyDo;
+    }
+    return copy;
+  };
+
+  const taoLogMoi = (
+    lichSu: any,
+    nv: { ho_ten: string; ma_so_nv: string },
+    lyDo: string
+  ): LichSuNSD[] => {
+    let list: LichSuNSD[] = [];
+    try {
+      list = typeof lichSu === 'string' ? JSON.parse(lichSu) : (lichSu || []);
+    } catch {
+      list = [];
+    }
+    return [...list, {
+      ho_ten: nv.ho_ten,
+      ma_so_nv: nv.ma_so_nv,
+      tu_ngay: new Date().toISOString().split('T')[0],
+      den_ngay: '',
+      ly_do: lyDo,
+      nguoi_ghi: user?.ho_ten || 'Hệ thống',
+    }];
+  };
+
+  // ── Thu hồi SIM ────────────────────────────────────────────────────
+  const handleThuHoi = (thueBao: ThueBao) => {
+    setThuHoiModal({ open: true, thueBao, lyDo: 'Nhân sự thôi việc' });
+  };
+
+  const confirmThuHoi = async () => {
+    const { thueBao, lyDo } = thuHoiModal;
+    if (!thueBao || !lyDo.trim()) {
+      toast.warning('Vui lòng nhập lý do thu hồi');
+      return;
+    }
+    try {
+      const lichSuMoi = dongLogHienTai(
+        thueBao.lich_su_nsd || [],
+        lyDo
+      );
+      await apiService.save({
+        ...thueBao,
+        trang_thai: 'Đã thu hồi - Chờ tái cấp',
+        id_nhan_su: null,
+        ma_so_nv: '',
+        ho_ten_nv: '',
+        lich_su_nsd: lichSuMoi,
+        updated_at: new Date().toISOString(),
+      }, 'update', 'dm_thue_bao');
+      toast.success(`Đã thu hồi SIM ${thueBao.so_dien_thoai}`);
+      setThuHoiModal({ open: false, thueBao: null, lyDo: '' });
+      setSelectedThueBaoId(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi thu hồi: ' + err.message);
+    }
+  };
+
+  // ── Tái cấp SIM ────────────────────────────────────────────────────
+  const handleTaiCap = (thueBao: ThueBao) => {
+    setTaiCapSearchText('');
+    setTaiCapModal({
       open: true,
-      title: 'Xóa thuê bao?',
-      description: 'Hành động này sẽ xóa thuê bao vĩnh viễn khỏi cơ sở dữ liệu. Không thể khôi phục.',
-      onConfirm: async () => {
-        try {
-          await apiService.delete(id, 'dm_thue_bao');
-          toast.success('Xóa thuê bao thành công!');
-          setSelectedThueBaoId(null);
-          loadData();
-        } catch (e: any) {
-          toast.error('Lỗi khi xóa: ' + e.message);
-        }
-      }
+      thueBao,
+      nvMoi: null,
+      ngayTaiCap: new Date().toISOString().split('T')[0],
+      lyDo: 'Tái cấp sau thu hồi',
     });
+  };
+
+  const confirmTaiCap = async () => {
+    const { thueBao, nvMoi, ngayTaiCap, lyDo } = taiCapModal;
+    if (!thueBao || !nvMoi) {
+      toast.warning('Vui lòng chọn nhân sự nhận SIM');
+      return;
+    }
+    try {
+      const lichSuMoi = taoLogMoi(
+        thueBao.lich_su_nsd || [],
+        { ho_ten: nvMoi.ho_ten, ma_so_nv: nvMoi.ma_so_nhan_vien },
+        lyDo
+      );
+      const lastEntry = lichSuMoi[lichSuMoi.length - 1];
+      if (lastEntry) lastEntry.tu_ngay = ngayTaiCap;
+
+      await apiService.save({
+        ...thueBao,
+        trang_thai: 'Đang hoạt động',
+        id_nhan_su: nvMoi.id,
+        ma_so_nv: nvMoi.ma_so_nhan_vien,
+        ho_ten_nv: nvMoi.ho_ten,
+        lich_su_nsd: lichSuMoi,
+        updated_at: new Date().toISOString(),
+      }, 'update', 'dm_thue_bao');
+      toast.success(`Đã tái cấp SIM ${thueBao.so_dien_thoai} cho ${nvMoi.ho_ten}`);
+      setTaiCapModal({ open: false, thueBao: null, nvMoi: null, ngayTaiCap: '', lyDo: '' });
+      setSelectedThueBaoId(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi tái cấp: ' + err.message);
+    }
+  };
+
+  // ── Tạm ngưng ──────────────────────────────────────────────────────
+  const handleTamNgung = async (thueBao: ThueBao) => {
+    if (!confirm(`Tạm ngưng thuê bao ${thueBao.so_dien_thoai}?\n(Cần báo nhà mạng tạm khóa số)`))
+      return;
+    try {
+      await apiService.save({
+        ...thueBao,
+        trang_thai: 'Tạm ngưng',
+        updated_at: new Date().toISOString(),
+      }, 'update', 'dm_thue_bao');
+      toast.success(`Đã tạm ngưng SIM ${thueBao.so_dien_thoai}`);
+      setSelectedThueBaoId(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi: ' + err.message);
+    }
+  };
+
+  // ── Kích hoạt lại ──────────────────────────────────────────────────
+  const handleKichHoat = async (thueBao: ThueBao) => {
+    if (!confirm(`Kích hoạt lại thuê bao ${thueBao.so_dien_thoai}?`))
+      return;
+    try {
+      await apiService.save({
+        ...thueBao,
+        trang_thai: 'Đang hoạt động',
+        updated_at: new Date().toISOString(),
+      }, 'update', 'dm_thue_bao');
+      toast.success(`Đã kích hoạt lại SIM ${thueBao.so_dien_thoai}`);
+      setSelectedThueBaoId(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi: ' + err.message);
+    }
+  };
+
+  // ── Huỷ SIM vĩnh viễn ──────────────────────────────────────────────
+  const handleHuySIM = async (thueBao: ThueBao) => {
+    const confirmed = confirm(
+      `⚠️ HUỶ VĨNH VIỄN SIM ${thueBao.so_dien_thoai}?\n\n` +
+      `SIM sẽ bị ẩn khỏi danh sách hoạt động.\n` +
+      `Dữ liệu cước lịch sử vẫn được giữ để báo cáo.\n\n` +
+      `Thao tác này không thể hoàn tác. Xác nhận?`
+    );
+    if (!confirmed) return;
+    try {
+      const lichSuMoi = dongLogHienTai(
+        thueBao.lich_su_nsd || [],
+        'Huỷ SIM vĩnh viễn'
+      );
+      await apiService.save({
+        ...thueBao,
+        trang_thai: 'Đã huỷ',
+        id_nhan_su: null,
+        ma_so_nv: '',
+        ho_ten_nv: '',
+        lich_su_nsd: lichSuMoi,
+        updated_at: new Date().toISOString(),
+      }, 'update', 'dm_thue_bao');
+      toast.success(`Đã huỷ SIM ${thueBao.so_dien_thoai}`);
+      setSelectedThueBaoId(null);
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi: ' + err.message);
+    }
   };
 
   // Open History NSD Dialog
@@ -1003,10 +1212,11 @@ export default function CuocDiDongTab({
               onChange={(e) => { setFilterTrangThai(e.target.value); setCurrentPage(1); }}
               className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B]"
             >
-              <option value="">-- Tất cả SIM --</option>
               <option value="Đang hoạt động">Đang hoạt động</option>
               <option value="Tạm ngưng">Tạm ngưng</option>
-              <option value="Đã thu hồi - Chờ tái cấp">Đã thu hồi - Chờ tái cấp</option>
+              <option value="Đã thu hồi - Chờ tái cấp">Đã thu hồi</option>
+              <option value="Đã huỷ">Đã huỷ</option>
+              <option value="">Tất cả trạng thái</option>
             </select>
           </div>
           <div>
@@ -1200,104 +1410,161 @@ export default function CuocDiDongTab({
           />
         </div>
         {selectedRowDetails && (
-          <div className="absolute right-0 top-0 bottom-0 z-20 w-[800px] sm:w-[880px] md:w-[920px] lg:w-[1000px] max-w-full border-l border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xs shadow-2xl flex flex-col h-full overflow-hidden animate-in slide-in-from-right-4 duration-300">
-            {/* Header Details */}
-            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-6 bg-[#05469B] dark:bg-blue-500 rounded-full"></div>
-                <h4 className="font-black text-[#05469B] dark:text-blue-400 text-xs uppercase">CHI TIẾT THUÊ BAO</h4>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700 my-auto">
+              {/* Header Details */}
+              <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-6 bg-[#05469B] dark:bg-blue-500 rounded-full"></div>
+                  <h4 className="font-black text-[#05469B] dark:text-blue-400 text-sm uppercase">CHI TIẾT THUÊ BAO</h4>
+                </div>
+                <button
+                  onClick={() => setSelectedThueBaoId(null)}
+                  className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white dark:bg-gray-800 shadow-xs transition-colors"
+                >
+                  <X size={18} />
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedThueBaoId(null)}
-                className="text-gray-400 hover:text-red-500 rounded-full p-1.5 bg-white dark:bg-gray-800 shadow-xs transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
 
-            {/* Scrollable details content */}
-            <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-white dark:bg-gray-800">
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                
-                {/* Cột 1: Thông tin cơ bản & Biểu đồ SVG */}
-                <div className="space-y-6">
-                  {/* Box 1: Core info */}
-                  <div className="bg-blue-50/30 dark:bg-gray-950/20 rounded-xl p-4 border border-blue-100/50 dark:border-gray-800">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="text-2xl font-black text-[#05469B] dark:text-blue-400 tracking-wide font-mono">{selectedRowDetails.tb.so_dien_thoai}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{selectedRowDetails.tb.nha_mang}</div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${selectedRowDetails.tb.trang_thai === 'Đang hoạt động' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-400'}`}>
-                        {selectedRowDetails.tb.trang_thai}
+              {/* Scrollable details content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar bg-white dark:bg-gray-800">
+                {/* 1. Phần đầu như hiện tại (Core info box & Action buttons) */}
+                <div className="bg-blue-50/30 dark:bg-gray-950/20 rounded-xl p-4 border border-blue-100/50 dark:border-gray-800">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <div className="text-2xl font-black text-[#05469B] dark:text-blue-400 tracking-wide font-mono">{selectedRowDetails.tb.so_dien_thoai}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{selectedRowDetails.tb.nha_mang}</div>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${getTrangThaiBadge(selectedRowDetails.tb.trang_thai)}`}>
+                      {selectedRowDetails.tb.trang_thai}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-100 dark:divide-gray-800/60 text-xs text-gray-600 dark:text-gray-300 font-medium">
+                    <div className="py-2.5 flex justify-between">
+                      <span className="text-gray-400 font-bold">Người sử dụng hiện tại:</span>
+                      <span className="font-bold text-gray-900 dark:text-gray-100">{selectedRowDetails.tb.ho_ten_nv || '---'} {selectedRowDetails.tb.ma_so_nv ? `(${selectedRowDetails.tb.ma_so_nv})` : ''}</span>
+                    </div>
+                    <div className="py-2.5 flex justify-between">
+                      <span className="text-gray-400 font-bold">Đơn vị công tác:</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ten_bo_phan || '---'}</span>
+                    </div>
+                    <div className="py-2.5 flex justify-between">
+                      <span className="text-gray-400 font-bold">Định mức cước SIM:</span>
+                      <span className="font-bold text-gray-800 dark:text-gray-200">
+                        {selectedRowDetails.tb.dinh_muc_cuoc !== null && selectedRowDetails.tb.dinh_muc_cuoc !== undefined
+                          ? `${formatCurrency(selectedRowDetails.tb.dinh_muc_cuoc)}đ/tháng`
+                          : 'Mặc định (Theo NV / Thực tế)'}
                       </span>
                     </div>
-                    <div className="divide-y divide-gray-100 dark:divide-gray-800/60 text-xs text-gray-600 dark:text-gray-300 font-medium">
-                      <div className="py-2.5 flex justify-between">
-                        <span className="text-gray-400 font-bold">Người sử dụng hiện tại:</span>
-                        <span className="font-bold text-gray-900 dark:text-gray-100">{selectedRowDetails.tb.ho_ten_nv || '---'} {selectedRowDetails.tb.ma_so_nv ? `(${selectedRowDetails.tb.ma_so_nv})` : ''}</span>
-                      </div>
-                      <div className="py-2.5 flex justify-between">
-                        <span className="text-gray-400 font-bold">Đơn vị công tác:</span>
-                        <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ten_bo_phan || '---'}</span>
-                      </div>
-                      <div className="py-2.5 flex justify-between">
-                        <span className="text-gray-400 font-bold">Định mức cước SIM:</span>
-                        <span className="font-bold text-gray-800 dark:text-gray-200">
-                          {selectedRowDetails.tb.dinh_muc_cuoc !== null && selectedRowDetails.tb.dinh_muc_cuoc !== undefined
-                            ? `${formatCurrency(selectedRowDetails.tb.dinh_muc_cuoc)}đ/tháng`
-                            : 'Mặc định (Theo NV / Thực tế)'}
-                        </span>
-                      </div>
-                      <div className="py-2.5 flex justify-between">
-                        <span className="text-gray-400 font-bold">Định mức áp dụng:</span>
-                        <span className="font-bold text-[#05469B] dark:text-blue-400">
-                          {selectedRowDetails.dinhMuc !== null ? `${formatCurrency(selectedRowDetails.dinhMuc)}đ/tháng` : 'Thanh toán thực tế (Không ĐM)'}
-                        </span>
-                      </div>
-                      <div className="py-2.5 flex justify-between">
-                        <span className="text-gray-400 font-bold">Pháp nhân sở hữu:</span>
-                        <span className="font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[240px]">{selectedRowDetails.tb.ten_phap_nhan || '---'}</span>
-                      </div>
-                      <div className="py-2.5 flex justify-between">
-                        <span className="text-gray-400 font-bold">Ngày cấp/kích hoạt SIM:</span>
-                        <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ngay_cap || '---'}</span>
-                      </div>
+                    <div className="py-2.5 flex justify-between">
+                      <span className="text-gray-400 font-bold">Định mức áp dụng:</span>
+                      <span className="font-bold text-[#05469B] dark:text-blue-400">
+                        {selectedRowDetails.dinhMuc !== null ? `${formatCurrency(selectedRowDetails.dinhMuc)}đ/tháng` : 'Thanh toán thực tế (Không ĐM)'}
+                      </span>
                     </div>
-
-                    <div className="flex gap-2.5 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                      <button
-                        onClick={() => openUpdateModal(selectedRowDetails.tb)}
-                        className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
-                      >
-                        <Edit size={13} /> Sửa Thuê Bao
-                      </button>
-                      <button
-                        onClick={() => openHistoryModal(selectedRowDetails.tb)}
-                        className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-[#05469B] dark:text-blue-400 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-colors border border-gray-200 dark:border-gray-700"
-                      >
-                        <History size={13} /> Lịch Sử NSD
-                      </button>
-                      <button
-                        onClick={() => handleDeleteThueBao(selectedRowDetails.tb.id)}
-                        className="py-2 px-3 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold flex items-center justify-center transition-colors border border-red-100 dark:border-red-900"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                    <div className="py-2.5 flex justify-between">
+                      <span className="text-gray-400 font-bold">Pháp nhân sở hữu:</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[240px]">{selectedRowDetails.tb.ten_phap_nhan || '---'}</span>
+                    </div>
+                    <div className="py-2.5 flex justify-between">
+                      <span className="text-gray-400 font-bold">Ngày cấp/kích hoạt SIM:</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">{selectedRowDetails.tb.ngay_cap || '---'}</span>
                     </div>
                   </div>
 
-                  {/* Box 2: SVG Chart */}
-                  {renderSVGChart()}
+                  {/* Nút hành động theo trạng thái hiện tại của thuê bao */}
+                  {selectedRowDetails.tb && (
+                    <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                      {/* Nút Ghi nhận cước theo tháng ngay phía trước nút Sửa thông tin */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setBatchCostModalOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg shadow-md transition-all cursor-pointer">
+                        <Zap size={13} className="text-yellow-300 fill-yellow-300" /> Ghi nhận cước theo tháng
+                      </button>
+
+                      {/* Nút Sửa — luôn hiện */}
+                      <button
+                        onClick={() => openUpdateModal(selectedRowDetails.tb)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800">
+                        <Pencil size={13} /> Sửa thông tin
+                      </button>
+
+                      {/* Nút Lịch sử NSD — luôn hiện */}
+                      <button
+                        onClick={() => openHistoryModal(selectedRowDetails.tb)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors bg-white dark:bg-gray-800">
+                        <History size={13} /> Lịch sử NSD
+                      </button>
+
+                      {/* Nút Thu hồi — chỉ hiện khi đang hoạt động */}
+                      {selectedRowDetails.tb.trang_thai === 'Đang hoạt động' && (
+                        <button
+                          onClick={() => handleThuHoi(selectedRowDetails.tb)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-orange-300 dark:border-orange-700 text-orange-700 dark:orange-400 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/30 transition-colors bg-white dark:bg-gray-800">
+                          <ArrowLeftRight size={13} /> Thu hồi SIM
+                        </button>
+                      )}
+
+                      {/* Nút Tái cấp — chỉ hiện khi đã thu hồi */}
+                      {selectedRowDetails.tb.trang_thai === 'Đã thu hồi - Chờ tái cấp' && (
+                        <button
+                          onClick={() => handleTaiCap(selectedRowDetails.tb)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors bg-white dark:bg-gray-800">
+                          <UserPlus size={13} /> Tái cấp SIM
+                        </button>
+                      )}
+
+                      {/* Nút Tạm ngưng — chỉ hiện khi đang hoạt động */}
+                      {selectedRowDetails.tb.trang_thai === 'Đang hoạt động' && (
+                        <button
+                          onClick={() => handleTamNgung(selectedRowDetails.tb)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors bg-white dark:bg-gray-800">
+                          <PauseCircle size={13} /> Tạm ngưng
+                        </button>
+                      )}
+
+                      {/* Nút Kích hoạt lại — chỉ hiện khi đang tạm ngưng */}
+                      {selectedRowDetails.tb.trang_thai === 'Tạm ngưng' && (
+                        <button
+                          onClick={() => handleKichHoat(selectedRowDetails.tb)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors bg-white dark:bg-gray-800">
+                          <PlayCircle size={13} /> Kích hoạt lại
+                        </button>
+                      )}
+
+                      {/* Nút Huỷ SIM — hiện khi đã thu hồi hoặc tạm ngưng */}
+                      {(selectedRowDetails.tb.trang_thai === 'Đã thu hồi - Chờ tái cấp' ||
+                        selectedRowDetails.tb.trang_thai === 'Tạm ngưng') && (
+                        <button
+                          onClick={() => handleHuySIM(selectedRowDetails.tb)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors bg-white dark:bg-gray-800">
+                          <XCircle size={13} /> Huỷ SIM
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Cột 2: Lịch sử cước hàng tháng */}
-                <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs h-full bg-gray-50/20 dark:bg-gray-900/10">
+                {/* 2. Phần BIỂU ĐỒ DIỄN BIẾN 12 THÁNG GẦN NHẤT thay bằng Biểu đồ so sánh cước 12 tháng */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-800 shadow-2xs">
+                  <ThueBaoDetailCuocChart
+                    thueBao={selectedRowDetails.tb}
+                    cuocList={cuocList}
+                    dinhMuc={selectedRowDetails.dinhMuc}
+                  />
+                </div>
+
+                {/* 3. LỊCH SỬ PHÁT SINH CƯỚC THÁNG phía dưới */}
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs bg-gray-50/20 dark:bg-gray-900/10">
                   <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-800 font-bold text-xs text-gray-600 dark:text-gray-300">
                     LỊCH SỬ PHÁT SINH CƯỚC THÁNG
                   </div>
-                  <div className="overflow-y-auto custom-scrollbar divide-y divide-gray-100 dark:divide-gray-800 max-h-[500px]">
+                  <div className="overflow-y-auto custom-scrollbar divide-y divide-gray-100 dark:divide-gray-800 max-h-[400px]">
                     {cuocList
                       .filter(c => c.id_thue_bao === selectedRowDetails.tb.id)
                       .sort((a, b) => b.thang_nam.localeCompare(a.thang_nam))
@@ -1326,13 +1593,23 @@ export default function CuocDiDongTab({
                     )}
                   </div>
                 </div>
-
               </div>
-
             </div>
           </div>
         )}
       </div>
+
+      {/* --- MODAL GHI NHẬN CƯỚC HÀNG LOẠT THEO THÁNG --- */}
+      <BatchCostEntryModal
+        open={batchCostModalOpen}
+        onClose={() => setBatchCostModalOpen(false)}
+        thueBao={selectedRowDetails?.tb ?? null}
+        cuocList={cuocList}
+        onSaved={async () => {
+          const fresh = await apiService.getCuocThang();
+          setCuocList(fresh);
+        }}
+      />
 
       {/* --- MODAL THÊM / SỬA THUÊ BẠO --- */}
       {thueBaoModal.open && (
@@ -2031,6 +2308,169 @@ export default function CuocDiDongTab({
                 className="flex-1 py-3 text-white bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
               >
                 <Trash2 className="w-5 h-5" /> Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Thu hồi SIM */}
+      {thuHoiModal.open && thuHoiModal.thueBao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in duration-200">
+            <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-1">
+              Thu hồi SIM
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              SĐT: <span className="font-bold text-gray-700 dark:text-gray-200">
+                {thuHoiModal.thueBao.so_dien_thoai}
+              </span>
+              {' '}— NV: <span className="font-bold text-gray-700 dark:text-gray-200">
+                {thuHoiModal.thueBao.ho_ten_nv || '—'}
+              </span>
+            </p>
+
+            {/* Lý do */}
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+              Lý do thu hồi <span className="text-red-500">*</span>
+            </label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {['Nhân sự thôi việc', 'Chuyển công tác', 'Thu hồi theo quyết định', 'Khác'].map(opt => (
+                <button key={opt}
+                  type="button"
+                  onClick={() => setThuHoiModal(p => ({ ...p, lyDo: opt }))}
+                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                    thuHoiModal.lyDo === opt
+                      ? 'bg-orange-500 border-orange-500 text-white'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-orange-400'
+                  }`}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={thuHoiModal.lyDo}
+              onChange={e => setThuHoiModal(p => ({ ...p, lyDo: e.target.value }))}
+              placeholder="Nhập hoặc chỉnh sửa lý do..."
+              rows={2}
+              className="w-full p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 resize-none outline-none focus:ring-2 focus:ring-orange-400 mb-4"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setThuHoiModal({ open: false, thueBao: null, lyDo: '' })}
+                className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={confirmThuHoi}
+                className="px-4 py-2 text-sm font-bold bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+              >
+                Xác nhận Thu hồi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tái cấp SIM */}
+      {taiCapModal.open && taiCapModal.thueBao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in duration-200">
+            <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-1">
+              Tái cấp SIM
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              SĐT: <span className="font-bold text-gray-700 dark:text-gray-200">
+                {taiCapModal.thueBao.so_dien_thoai}
+              </span>
+            </p>
+
+            {/* Chọn NV mới */}
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+              Nhân sự nhận SIM <span className="text-red-500">*</span>
+            </label>
+            <CustomAutocomplete
+              name="taiCapStaff"
+              value={taiCapSearchText}
+              onChange={(e: any) => {
+                const val = e.target.value;
+                setTaiCapSearchText(val);
+                const matched = personnel.find(
+                  (p: Personnel) => `${p.ho_ten} — ${p.ma_so_nhan_vien}` === val
+                );
+                if (matched) {
+                  setTaiCapModal(prev => ({ ...prev, nvMoi: matched }));
+                } else if (!val) {
+                  setTaiCapModal(prev => ({ ...prev, nvMoi: null }));
+                }
+              }}
+              placeholder="Tìm theo tên hoặc MSNV..."
+              suggestions={personnel.map((p: Personnel) => `${p.ho_ten} — ${p.ma_so_nhan_vien}`)}
+              className="w-full p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs"
+            />
+            {taiCapModal.nvMoi && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-2.5 text-sm text-green-800 dark:text-green-300 mb-3">
+                ✓ {taiCapModal.nvMoi.ho_ten} — {taiCapModal.nvMoi.ma_so_nhan_vien}
+                {taiCapModal.nvMoi.dinh_muc_cuoc &&
+                  ` — Định mức: ${formatCurrency(taiCapModal.nvMoi.dinh_muc_cuoc)}đ`}
+              </div>
+            )}
+
+            {/* Ngày tái cấp */}
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+              Ngày tái cấp
+            </label>
+            <input type="date"
+              value={taiCapModal.ngayTaiCap}
+              onChange={e => setTaiCapModal(p => ({ ...p, ngayTaiCap: e.target.value }))}
+              className="w-full p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-green-400 mb-3"
+            />
+
+            {/* Lý do */}
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+              Lý do / Ghi chú
+            </label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {['Tái cấp sau thu hồi', 'Nhân sự mới', 'Điều chuyển nội bộ'].map(opt => (
+                <button key={opt}
+                  type="button"
+                  onClick={() => setTaiCapModal(p => ({ ...p, lyDo: opt }))}
+                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                    taiCapModal.lyDo === opt
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-green-400'
+                  }`}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={taiCapModal.lyDo}
+              onChange={e => setTaiCapModal(p => ({ ...p, lyDo: e.target.value }))}
+              placeholder="Nhập lý do..."
+              rows={2}
+              className="w-full p-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200 resize-none outline-none focus:ring-2 focus:ring-green-400 mb-4"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTaiCapModal({ open: false, thueBao: null, nvMoi: null, ngayTaiCap: '', lyDo: '' })}
+                className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={confirmTaiCap}
+                disabled={!taiCapModal.nvMoi}
+                className="px-4 py-2 text-sm font-bold bg-green-500 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                Xác nhận Tái cấp
               </button>
             </div>
           </div>

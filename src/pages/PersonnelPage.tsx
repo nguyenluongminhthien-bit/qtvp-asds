@@ -19,6 +19,7 @@ import Pagination from '../components/ui/Pagination';
 import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import PersonnelModal from '../components/personnel/PersonnelModal';
 import CuocDiDongTab from '../components/personnel/CuocDiDongTab';
+import PersonnelDetailCuocChart from '../components/personnel/PersonnelDetailCuocChart';
 import { CERTIFICATES } from '../constants/certificates';
 
 const extractStartDateFromMaNV = (maNV: string) => {
@@ -387,7 +388,7 @@ export default function PersonnelPage() {
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.ngay_nhan_vien ? formatDate(p.ngay_nhan_vien) : '---'}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.ngay_nghi_viec ? formatDate(p.ngay_nghi_viec) : '---'}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.trang_thai)}</td>
-          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.nhom_doi_tuong ? (String(p.nhom_doi_tuong).startsWith('Nhóm') ? p.nhom_doi_tuong : `Nhóm ${p.nhom_doi_tuong}`) : ''}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.nhom_doi_tuong)}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.huan_luyen_tu ? formatDate(p.huan_luyen_tu) : '---'}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.huan_luyen_den ? formatDate(p.huan_luyen_den) : '---'}</td>
           <td style="text-align: center; font-weight: bold; color: #b91c1c; border: 1px solid #000000; padding: 5px;">${p.gia_tri_den ? formatDate(p.gia_tri_den) : '---'}</td>
@@ -786,11 +787,6 @@ export default function PersonnelPage() {
 
     // 🟢 TỰ ĐỘNG CHUẨN HOÁ TÊN CHỨNG NHẬN ATVSLĐ TRƯỚC KHI LƯU DB
     if (finalDataToSave.nhom_doi_tuong) {
-      const nhomStr = String(finalDataToSave.nhom_doi_tuong);
-      const match = nhomStr.match(/\d+/);
-      if (match) {
-        finalDataToSave.nhom_doi_tuong = parseInt(match[0], 10);
-      }
       const nhom = String(finalDataToSave.nhom_doi_tuong);
       if (nhom === '1' || nhom === '2' || nhom === '6') finalDataToSave.chung_nhan = 'Giấy chứng nhận huấn luyện ATVSLĐ';
       else if (nhom === '3') finalDataToSave.chung_nhan = 'Thẻ An toàn lao động';
@@ -1468,7 +1464,7 @@ export default function PersonnelPage() {
                 </div>
               </div>
 
-              {/* Lọc theo Phân loại */}
+              {/* Lọc theo Chức danh */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
                   <Tag size={13} className="text-emerald-500" /> Chức danh ({availableFilterOptions.phanLoaiList.length})
@@ -1498,7 +1494,8 @@ export default function PersonnelPage() {
                   )}
                 </div>
               </div>
-            {/* Lọc theo Chức vụ */}
+
+              {/* Lọc theo Chức vụ */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
                   <Briefcase size={13} className="text-orange-500" /> Chức vụ ({availableFilterOptions.chucVuList.length})
@@ -1528,8 +1525,7 @@ export default function PersonnelPage() {
                   )}
                 </div>
               </div>
-
-              </div>
+            </div>
           </div>
         )}
 
@@ -2426,10 +2422,12 @@ export default function PersonnelPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
+              {/* 🟢 HÀNG CÁ NHÂN & NGOẠI HÌNH (35%) + BIỂU ĐỒ CƯỚC (65%) */}
+              <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+                {/* Khối Cá nhân & Ngoại hình (35%) */}
+                <div className="lg:w-[35%] shrink-0 flex flex-col">
                   <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2"><UserIcon size={18} className="text-orange-500"/> Cá nhân & Ngoại hình</h4>
-                  <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-3">
+                  <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-3 flex-1">
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Trình độ:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.trinh_do_hoc_van || '---'}</span></div>
@@ -2457,10 +2455,19 @@ export default function PersonnelPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-col">
-                  <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2"><Info size={18} className="text-blue-500"/> Ghi chú khác</h4>
-                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex-1"><p className="text-sm font-semibold text-gray-800 whitespace-pre-wrap">{viewData.ghi_chu || 'Không có ghi chú.'}</p></div>
+
+                {/* Khối Biểu đồ Cước (65%) */}
+                <div className="lg:w-[65%] flex-1 flex flex-col min-w-0">
+                  <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs flex-1 flex flex-col">
+                    <PersonnelDetailCuocChart personnel={viewData} />
+                  </div>
                 </div>
+              </div>
+
+              {/* 🟢 HÀNG GHI CHÚ (Chuyển xuống ngay bên dưới) */}
+              <div>
+                <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2"><Info size={18} className="text-blue-500"/> Ghi chú khác</h4>
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100"><p className="text-sm font-semibold text-gray-800 whitespace-pre-wrap">{viewData.ghi_chu || 'Không có ghi chú.'}</p></div>
               </div>
               
               <div>
@@ -2485,7 +2492,7 @@ export default function PersonnelPage() {
                     <p>
                       <span className="text-gray-500 w-36 inline-block font-medium">Loại chứng nhận:</span> 
                       <span className="font-bold text-gray-900">{viewData.chung_nhan || '---'}</span> 
-                      {viewData.nhom_doi_tuong && <span className="text-[#05469B] font-bold ml-1.5">({String(viewData.nhom_doi_tuong).startsWith('Nhóm') ? viewData.nhom_doi_tuong : `Nhóm ${viewData.nhom_doi_tuong}`})</span>}
+                      {viewData.nhom_doi_tuong && <span className="text-[#05469B] font-bold ml-1.5">(Nhóm {viewData.nhom_doi_tuong})</span>}
                     </p>
                     <p>
                       <span className="text-gray-500 w-36 inline-block font-medium">Khóa huấn luyện:</span> 
@@ -2605,7 +2612,7 @@ export default function PersonnelPage() {
                             <td className="p-3">{item.phan_loai}</td>
                             <td className="p-3 font-semibold text-indigo-700">{item.khoi}</td>
                             <td className="p-3 font-semibold text-indigo-700">{item.dia_diem_lam_viec}</td>
-                            <td className="p-3 font-semibold text-emerald-600">{item.nhom_doi_tuong ? `Nhóm ${item.nhom_doi_tuong}` : ''}</td>
+                            <td className="p-3 font-semibold text-emerald-600">{item.nhom_doi_tuong}</td>
                           </tr>
                         ))}
                       </tbody>

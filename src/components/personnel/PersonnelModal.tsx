@@ -1,9 +1,59 @@
 import React, { useEffect, useMemo } from 'react';
-import { X, Loader2, Save, Image as ImageIcon, ShieldCheck } from 'lucide-react';
+import { X, Loader2, Save, Image as ImageIcon, ShieldCheck, Info } from 'lucide-react';
 import { DonVi } from '../../types';
 import { formatPhoneNumber } from '../../utils/formatters';
 import { buildHierarchicalOptions, getUnitEmoji } from '../../utils/hierarchy';
 import { CERTIFICATES } from '../../constants/certificates';
+
+const NHOM_ATVSLD_INFO: Record<string, { title: string; vp: string[]; showroom?: string[]; both?: string[] }> = {
+  'Nhóm 1': {
+    title: 'Nhóm 1 — Ban Lãnh Đạo & Quản Lý',
+    vp: [
+      'TGĐ/ P.TGĐ/ Giám đốc/ Phó Giám đốc;',
+      'Trưởng/Phó phòng.'
+    ],
+    showroom: [
+      'GĐ/Phụ trách SR',
+      'GĐ Bán hàng xe/DVPT',
+      'Trưởng/Phó phòng.',
+      'QĐ/PQĐ'
+    ]
+  },
+  'Nhóm 2': {
+    title: 'Nhóm 2 — Cán Bộ Chuyên Trách ATVSLĐ',
+    both: [
+      'PT/Chuyên viên phụ trách công tác ATVSLĐ (VP Công ty, Showroom)'
+    ],
+    vp: []
+  },
+  'Nhóm 3': {
+    title: 'Nhóm 3 — Lao Động Có Yêu Cầu Nghiêm Ngặt',
+    vp: [
+      'CV Kỹ thuật & CN sửa chữa'
+    ],
+    showroom: [
+      'TT/KTV/ CV Kỹ thuật sửa chữa; NV Kho PTVT;',
+      'Nhân viên Kho xe & Lái xe; Nhân viên PVHC (vệ sinh)'
+    ]
+  },
+  'Nhóm 4': {
+    title: 'Nhóm 4 — Văn Phòng, Kinh Doanh & Dịch Vụ',
+    vp: [
+      'Trợ lý/ Trưởng nhóm/ Chuyên viên/Nhân viên'
+    ],
+    showroom: [
+      'TN, CV, TVBH xe/DVPT',
+      'Hỗ trợ kinh doanh (HT KD xe, HT KD DVPT, PVHC (phục vụ khách chờ, Bảo vệ).'
+    ]
+  },
+  'Nhóm 6': {
+    title: 'Nhóm 6 — Mạng Lưới Vệ Sinh Viên',
+    both: [
+      'NS được phân công trách nhiệm An toàn, vệ sinh viên (VP Công ty, Showroom)'
+    ],
+    vp: []
+  }
+};
 
 interface PersonnelModalProps {
   isOpen: boolean;
@@ -30,6 +80,7 @@ export default function PersonnelModal({
   setFormData,
   hideSensitiveFields = false,
 }: PersonnelModalProps) {
+  const [showNhomTooltip, setShowNhomTooltip] = React.useState(false);
 
   // 🟢 TỰ ĐỘNG TÍNH NGÀY HẾT HẠN ATVSLĐ (Bơm IQ cho phần mềm)
   useEffect(() => {
@@ -39,9 +90,9 @@ export default function PersonnelModal({
       // Nhóm 4 -> 1 năm. Còn lại -> 2 năm
       const yearsToAdd = nhom.includes('4') ? 1 : 2;
       endDate.setFullYear(endDate.getFullYear() + yearsToAdd);
-      
+
       const formattedDate = endDate.toISOString().split('T')[0];
-      
+
       // Tự động điền vào ô Giá trị đến nếu nó chưa khớp
       if (formData.gia_tri_den !== formattedDate) {
         setFormData(prev => ({ ...prev, gia_tri_den: formattedDate }));
@@ -100,20 +151,20 @@ export default function PersonnelModal({
     return formData.giay_phep_lai_xe ? formData.giay_phep_lai_xe.split(',').map((s: string) => s.trim()) : [];
   }, [formData.giay_phep_lai_xe]);
 
-  const normalizedKhoi = useMemo(() => {
-    const val = String(formData.khoi || '').trim();
-    if (!val) return 'KD xe DL';
-    const cleanVal = val.replace(/^Khối\s+/i, '').trim();
-    return cleanVal || 'KD xe DL';
-  }, [formData.khoi]);
-
   const khoiOptions = useMemo(() => {
-    const base = ['KD xe DL', 'KD xe TM & XK', 'KD DVPT', 'NV QT Chuyên ngành', 'NV QT Cơ bản'];
-    if (normalizedKhoi && !base.includes(normalizedKhoi)) {
-      base.push(normalizedKhoi);
+    const base = [
+      'KD xe DL',
+      'KD xe Thương mại & Xuất khẩu',
+      'KD DVPT',
+      'NVQT Chuyên ngành',
+      'NVQT Cơ bản'
+    ];
+    const current = String(formData.khoi || '').trim();
+    if (current && !base.includes(current)) {
+      base.push(current);
     }
     return base;
-  }, [normalizedKhoi]);
+  }, [formData.khoi]);
 
   const phanLoaiOptions = useMemo(() => {
     const base = ['Lãnh đạo', 'PT KD Xe', 'PT KD DVPT', 'PT DVHT 1', 'PT DVHT 2', 'Hành chính NS', 'Nhân sự hỗ trợ'];
@@ -125,12 +176,10 @@ export default function PersonnelModal({
   }, [formData.phan_loai]);
 
   const nhomOptions = useMemo(() => {
-    const base = [1, 2, 3, 4, 6];
-    const currentStr = String(formData.nhom_doi_tuong || '');
-    const match = currentStr.match(/\d+/);
-    const currentNum = match ? parseInt(match[0], 10) : null;
-    if (currentNum && !base.includes(currentNum)) {
-      base.push(currentNum);
+    const base = ['Nhóm 1', 'Nhóm 2', 'Nhóm 3', 'Nhóm 4', 'Nhóm 6'];
+    const current = String(formData.nhom_doi_tuong || '').trim();
+    if (current && !base.includes(current)) {
+      base.push(current);
     }
     return base;
   }, [formData.nhom_doi_tuong]);
@@ -152,28 +201,11 @@ export default function PersonnelModal({
                 Thông tin cá nhân
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Mã số nhân viên */}
-<div>
-  <label className="block text-xs font-bold text-gray-700 mb-1">
-    Mã số NV
-    {mode === 'create' && <span className="text-gray-400 font-normal ml-1">(tự sinh nếu để trống)</span>}
-  </label>
-  <input
-    type="text"
-    name="ma_so_nhan_vien"
-    value={formData.ma_so_nhan_vien || ''}
-    onChange={handleInputChange}
-    readOnly={mode === 'update'}
-    className={`w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide
-      ${mode === 'update'
-        ? 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed'
-        : 'border-blue-300 bg-[#FFFFF0] text-[#05469B]'}`}
-    placeholder={mode === 'create' ? 'VD: 2601001' : ''}
-  />
-  {mode === 'update' && (
-    <p className="text-[10px] text-gray-400 mt-0.5">MSNV không thể thay đổi sau khi tạo</p>
-  )}
-</div>
+                {/* Dòng 1: Mã NV - Họ và Tên - Giới tính */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mã NV *</label>
+                  <input type="text" required name="ma_so_nhan_vien" value={formData.ma_so_nhan_vien || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
+                </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-gray-700 mb-1">Họ và Tên *</label>
                   <input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
@@ -193,18 +225,18 @@ export default function PersonnelModal({
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">SĐT Cá nhân</label>
-                  <input 
-                    type="tel" 
-                    name="sdt_ca_nhan" 
-                    value={hideSensitiveFields ? '***' : (formData.sdt_ca_nhan || '')} 
+                  <input
+                    type="tel"
+                    name="sdt_ca_nhan"
+                    value={hideSensitiveFields ? '***' : (formData.sdt_ca_nhan || '')}
                     onChange={(e) => {
                       if (hideSensitiveFields) return;
-                      setFormData(prev => ({...prev, sdt_ca_nhan: formatPhoneNumber(e.target.value)}));
-                    }} 
+                      setFormData(prev => ({ ...prev, sdt_ca_nhan: formatPhoneNumber(e.target.value) }));
+                    }}
                     disabled={hideSensitiveFields}
-                    maxLength={13} 
-                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
-                    placeholder="09xx xxx xxx" 
+                    maxLength={13}
+                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                    placeholder="09xx xxx xxx"
                   />
                 </div>
                 <div>
@@ -247,157 +279,255 @@ export default function PersonnelModal({
                   </div>
                 </div>
               </div>
-          </div>
-          <div className="bg-gray-50 p-4 sm:p-5 rounded-xl border border-gray-200">
-            <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-gray-400 rounded-full"></div> Công việc</h4>
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị công tác *</label>
-                  <select required name="id_don_vi" value={formData.id_don_vi || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" style={{ fontFamily: 'monospace, sans-serif' }}>
-                    <option value="">-- Chọn Đơn vị Showroom --</option>
-                    {buildHierarchicalOptions(donViList).map(({ unit, prefix }) => (
-                      <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
-                        {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label><select name="khoi" value={normalizedKhoi} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">{khoiOptions.map(opt => <option key={opt} value={opt}>{opt.startsWith('Khối') ? opt : `Khối ${opt}`}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận làm việc</label><input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Hành chính, Kỹ thuật..." /></div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại nhân sự</label>
-                  <input 
-                    type="text" 
-                    name="phan_loai" 
-                    list="phan-loai-suggestions"
-                    value={formData.phan_loai || ''} 
-                    onChange={handleInputChange} 
-                    className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" 
-                    placeholder="Nhập hoặc chọn phân loại..."
-                  />
-                  <datalist id="phan-loai-suggestions">
-                    {phanLoaiSuggestions.map(opt => (
-                      <option key={opt} value={opt} />
-                    ))}
-                  </datalist>
-                </div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức danh nghiệp vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Nhân viên, Kỹ thuật viên..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Nhóm đối tượng ATVSLĐ *</label><select required name="nhom_doi_tuong" value={(() => { const m = String(formData.nhom_doi_tuong || '').match(/\d+/); return m ? parseInt(m[0], 10) : 4; })()} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800">{nhomOptions.map(opt => { let label = `Nhóm ${opt}`; if (opt === 1) label = 'Nhóm 1 (Ban Giám Đốc)'; else if (opt === 2) label = 'Nhóm 2 (Cán bộ An toàn)'; else if (opt === 3) label = 'Nhóm 3 (Lao động nghiêm ngặt)'; else if (opt === 4) label = 'Nhóm 4 (Văn phòng, Kinh doanh...)'; else if (opt === 6) label = 'Nhóm 6 (Vệ sinh viên)'; return <option key={opt} value={opt}>{label}</option>; })}</select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm làm việc</label><input type="text" name="dia_diem_lam_viec" value={formData.dia_diem_lam_viec || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Showroom Bình Dương..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc *</label><input type="date" required name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label>
-                  <input 
-                    type="text" 
-                    name="ngach_luong" 
-                    value={hideSensitiveFields ? '***' : (formData.ngach_luong || '')} 
-                    onChange={handleInputChange} 
-                    disabled={hideSensitiveFields}
-                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
-                    placeholder="Ví dụ: Chuyên viên" 
-                  />
-                </div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label><input type="text" name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Đại học, Cao đẳng..." /></div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Thu nhập (Lương đóng BH) VNĐ</label>
-                  <input 
-                    type="text" 
-                    name="thu_nhap" 
-                    value={hideSensitiveFields ? '***' : (formData.thu_nhap ? Number(formData.thu_nhap).toLocaleString('vi-VN') : '')} 
-                    onChange={handleInputChange} 
-                    disabled={hideSensitiveFields}
-                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-indigo-700 ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`} 
-                    placeholder="10.000.000" 
-                  />
-                </div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái làm việc</label><select name="trang_thai" value={formData.trang_thai || 'Đang làm việc'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Đang làm việc">Đang làm việc</option><option value="Đã thôi việc">Đã thôi việc</option></select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-              </div>
             </div>
-          </div>
-          <div className="bg-emerald-50/40 p-4 sm:p-5 rounded-xl border border-emerald-100">
-            <h4 className="font-bold text-emerald-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-emerald-500 rounded-full"></div> Bằng cấp & Chứng chỉ chuyên môn</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {CERTIFICATES.map(cert => {
-                const Icon = cert.icon;
-                return (
-                  <label key={cert.id} className="flex items-center p-2.5 border border-emerald-200 rounded-lg bg-[#FFFFF0] cursor-pointer hover:border-emerald-500 transition-colors shadow-sm">
-                    <input 
-                      type="checkbox" 
-                      name={cert.id} 
-                      checked={formData[cert.id] === true || String(formData[cert.id]).toLowerCase() === 'true'} 
-                      onChange={handleInputChange} 
-                      className="w-4 h-4 text-emerald-600 rounded border-gray-300 mr-2 focus:ring-emerald-500" 
-                    />
-                    <Icon size={16} className="text-gray-500 mr-1.5 shrink-0" />
-                    <span className="text-[11px] sm:text-xs font-bold text-gray-700 leading-tight">{cert.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-            
-            {/* Cột GPLX đặc thù */}
-            {formData.giay_phep_lai_xe !== undefined && (
-              <div className="mt-5 p-4 bg-white rounded-xl border border-gray-200 animate-in fade-in">
-                <h5 className="font-bold text-gray-700 text-xs mb-3 flex items-center gap-1.5">🚗 Chọn các hạng Giấy phép lái xe sở hữu:</h5>
-                <div className="space-y-4">
-                  {gplxGroups.map(group => (
-                    <div key={group.title} className="space-y-1.5 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{group.title}</p>
-                      <div className="flex flex-wrap gap-2.5">
-                        {group.options.map(opt => {
-                          const isChecked = currentGPLXList.includes(opt.value);
-                          return (
-                            <label key={opt.value} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${isChecked ? 'bg-blue-50 border-blue-400 text-blue-800' : 'bg-gray-50 border-gray-200 hover:bg-white text-gray-600'}`}>
-                              <input 
-                                type="checkbox" 
-                                checked={isChecked}
-                                onChange={(e) => handleGPLXChange(opt.value, e.target.checked)}
-                                className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 mr-1 focus:ring-blue-500" 
-                              />
-                              {opt.label}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="bg-gray-50 p-4 sm:p-5 rounded-xl border border-gray-200">
+              <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-gray-400 rounded-full"></div> Công việc</h4>
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {/* Dòng 1: Đơn vị công tác (50%) - Khối trực thuộc (25%) - Bộ phận làm việc (25%) */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị công tác *</label>
+                    <select required name="id_don_vi" value={formData.id_don_vi || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" style={{ fontFamily: 'monospace, sans-serif' }}>
+                      <option value="">-- Chọn Đơn vị Showroom --</option>
+                      {buildHierarchicalOptions(donViList).map(({ unit, prefix }) => (
+                        <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
+                          {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label>
+                    <select name="khoi" value={formData.khoi || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
+                      <option value="">-- Chọn Khối --</option>
+                      {khoiOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  </div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận làm việc</label><input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Hành chính, Kỹ thuật..." /></div>
 
-            {formData.cc_atvsld && (
-              <div className="mt-5 p-4 sm:p-5 bg-emerald-50 rounded-xl border border-emerald-200 animate-in fade-in slide-in-from-top-2">
-                <h5 className="font-bold text-emerald-800 text-sm mb-3 flex items-center gap-2"><ShieldCheck size={16}/> Thông tin chứng nhận ATVSLĐ</h5>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 mb-1">Loại chứng nhận (Tự động theo Nhóm)</label><input type="text" readOnly value={formData.chung_nhan || 'Vui lòng chọn Nhóm đối tượng ở phần Công việc'} className="w-full p-2.5 border border-emerald-200 rounded-lg bg-emerald-100/50 text-emerald-800 font-bold outline-none cursor-not-allowed" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Huấn luyện từ ngày</label><input type="date" name="huan_luyen_tu" value={formData.huan_luyen_tu ? formData.huan_luyen_tu.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Đến ngày</label><input type="date" name="huan_luyen_den" value={formData.huan_luyen_den ? formData.huan_luyen_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" /></div>
-                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Có giá trị đến ngày</label><input type="date" name="gia_tri_den" value={formData.gia_tri_den ? formData.gia_tri_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700" /></div>
+                  {/* Dòng 2: Phân loại nhân sự - Chức danh nghiệp vụ - Nhóm đối tượng ATVSLĐ - Địa điểm làm việc (25% mỗi mục) */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại nhân sự</label>
+                    <input
+                      type="text"
+                      name="phan_loai"
+                      list="phan-loai-suggestions"
+                      value={formData.phan_loai || ''}
+                      onChange={handleInputChange}
+                      className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"
+                      placeholder="Nhập hoặc chọn phân loại..."
+                    />
+                    <datalist id="phan-loai-suggestions">
+                      {phanLoaiSuggestions.map(opt => (
+                        <option key={opt} value={opt} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức danh nghiệp vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Nhân viên, Kỹ thuật viên..." /></div>
+                  <div className="relative" onMouseLeave={() => setShowNhomTooltip(false)}>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-gray-700">Nhóm đối tượng ATVSLĐ *</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowNhomTooltip(!showNhomTooltip)}
+                        onMouseEnter={() => setShowNhomTooltip(true)}
+                        className="text-emerald-600 hover:text-emerald-700 flex items-center justify-center w-5 h-5 bg-emerald-50 hover:bg-emerald-100 rounded-full border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
+                        title="Xem thành phần nhóm ATVSLĐ"
+                      >
+                        <Info size={13} className="shrink-0" />
+                      </button>
+                    </div>
+                    <select
+                      required
+                      name="nhom_doi_tuong"
+                      value={formData.nhom_doi_tuong || 'Nhóm 4'}
+                      onChange={(e) => {
+                        handleInputChange(e);
+                        setShowNhomTooltip(true);
+                      }}
+                      onFocus={() => setShowNhomTooltip(true)}
+                      className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800 cursor-pointer"
+                    >
+                      {nhomOptions.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+
+                    {/* TOOLTIP HIỆN ĐẠI CAO CẤP */}
+                    {showNhomTooltip && NHOM_ATVSLD_INFO[formData.nhom_doi_tuong] && (
+                      <div className="absolute left-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-start justify-between border-b border-gray-100 pb-2 mb-2.5">
+                          <div className="flex items-center gap-1.5 font-black text-emerald-800 text-xs">
+                            <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
+                            <span>{NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].title}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowNhomTooltip(false)}
+                            className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100 transition-colors shrink-0 cursor-pointer"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+
+                        <div className="space-y-2.5 text-[11px] text-gray-700 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                          {NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].both && NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].both!.length > 0 && (
+                            <div className="bg-emerald-50/60 p-2 rounded-xl border border-emerald-100">
+                              <span className="font-extrabold text-emerald-900 block mb-1">VP Công ty, Showroom:</span>
+                              <ul className="list-disc list-inside space-y-0.5 text-gray-700 font-medium">
+                                {NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].both!.map((item, idx) => (
+                                  <li key={idx} className="leading-snug">{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].vp && NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].vp.length > 0 && (
+                            <div className="bg-blue-50/50 p-2 rounded-xl border border-blue-100/60">
+                              <span className="font-extrabold text-blue-900 block mb-1">VP Công ty:</span>
+                              <ul className="list-disc list-inside space-y-0.5 text-gray-700 font-medium">
+                                {NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].vp.map((item, idx) => (
+                                  <li key={idx} className="leading-snug">{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].showroom && NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].showroom!.length > 0 && (
+                            <div className="bg-amber-50/50 p-2 rounded-xl border border-amber-100/60">
+                              <span className="font-extrabold text-amber-900 block mb-1">Showroom:</span>
+                              <ul className="list-disc list-inside space-y-0.5 text-gray-700 font-medium">
+                                {NHOM_ATVSLD_INFO[formData.nhom_doi_tuong].showroom!.map((item, idx) => (
+                                  <li key={idx} className="leading-snug">{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Mũi tên Tooltip chỉ lên trên */}
+                        <div className="absolute -top-1.5 left-6 w-3 h-3 bg-white border-t border-l border-gray-100 rotate-45"></div>
+                      </div>
+                    )}
+                  </div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm làm việc</label><input type="text" name="dia_diem_lam_viec" value={formData.dia_diem_lam_viec || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Showroom Bình Dương..." /></div>
+
+                  {/* Dòng 3: Ngày nhận việc - Ngạch lương - Trình độ học vấn - Thu nhập (25% mỗi mục) */}
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc *</label><input type="date" required name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label>
+                    <input
+                      type="text"
+                      name="ngach_luong"
+                      value={hideSensitiveFields ? '***' : (formData.ngach_luong || '')}
+                      onChange={handleInputChange}
+                      disabled={hideSensitiveFields}
+                      className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                      placeholder="Ví dụ: Chuyên viên"
+                    />
+                  </div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label><input type="text" name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Đại học, Cao đẳng..." /></div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Thu nhập (Lương đóng BH) VNĐ</label>
+                    <input
+                      type="text"
+                      name="thu_nhap"
+                      value={hideSensitiveFields ? '***' : (formData.thu_nhap ? Number(formData.thu_nhap).toLocaleString('vi-VN') : '')}
+                      onChange={handleInputChange}
+                      disabled={hideSensitiveFields}
+                      className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-indigo-700 ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                      placeholder="10.000.000"
+                    />
+                  </div>
+
+                  {/* Dòng 4: Trạng thái làm việc (25%) - Ngày nghỉ việc (25%) */}
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái làm việc</label><select name="trang_thai" value={formData.trang_thai || 'Đang làm việc'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Đang làm việc">Đang làm việc</option><option value="Đã thôi việc">Đã thôi việc</option></select></div>
+                  <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
                 </div>
               </div>
-            )}
-          </div>
-          <div className="bg-orange-50/40 p-4 sm:p-5 rounded-xl border border-orange-100">
-            <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-orange-500 rounded-full"></div> Thông tin Bổ sung</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Mô tả ngoại hình</label>
-                <textarea 
-                  name="mo_to_ngoai_hinh" 
-                  value={hideSensitiveFields ? '***' : (formData.mo_to_ngoai_hinh || '')} 
-                  onChange={handleInputChange} 
-                  disabled={hideSensitiveFields}
-                  rows={3} 
-                  className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
-                ></textarea>
+            </div>
+            <div className="bg-emerald-50/40 p-4 sm:p-5 rounded-xl border border-emerald-100">
+              <h4 className="font-bold text-emerald-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-emerald-500 rounded-full"></div> Bằng cấp & Chứng chỉ chuyên môn</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {CERTIFICATES.map(cert => {
+                  const Icon = cert.icon;
+                  return (
+                    <label key={cert.id} className="flex items-center p-2.5 border border-emerald-200 rounded-lg bg-[#FFFFF0] cursor-pointer hover:border-emerald-500 transition-colors shadow-sm">
+                      <input
+                        type="checkbox"
+                        name={cert.id}
+                        checked={formData[cert.id] === true || String(formData[cert.id]).toLowerCase() === 'true'}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 text-emerald-600 rounded border-gray-300 mr-2 focus:ring-emerald-500"
+                      />
+                      <Icon size={16} className="text-gray-500 mr-1.5 shrink-0" />
+                      <span className="text-[11px] sm:text-xs font-bold text-gray-700 leading-tight">{cert.label}</span>
+                    </label>
+                  );
+                })}
               </div>
-              <div><label className="block text-xs font-bold text-gray-700 mb-1">Ghi chú khác</label><textarea name="ghi_chu" value={formData.ghi_chu || ''} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none"></textarea></div>
+
+              {/* Cột GPLX đặc thù */}
+              {formData.giay_phep_lai_xe !== undefined && (
+                <div className="mt-5 p-4 bg-white rounded-xl border border-gray-200 animate-in fade-in">
+                  <h5 className="font-bold text-gray-700 text-xs mb-3 flex items-center gap-1.5">🚗 Chọn các hạng Giấy phép lái xe sở hữu:</h5>
+                  <div className="space-y-4">
+                    {gplxGroups.map(group => (
+                      <div key={group.title} className="space-y-1.5 border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{group.title}</p>
+                        <div className="flex flex-wrap gap-2.5">
+                          {group.options.map(opt => {
+                            const isChecked = currentGPLXList.includes(opt.value);
+                            return (
+                              <label key={opt.value} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${isChecked ? 'bg-blue-50 border-blue-400 text-blue-800' : 'bg-gray-50 border-gray-200 hover:bg-white text-gray-600'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => handleGPLXChange(opt.value, e.target.checked)}
+                                  className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 mr-1 focus:ring-blue-500"
+                                />
+                                {opt.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formData.cc_atvsld && (
+                <div className="mt-5 p-4 sm:p-5 bg-emerald-50 rounded-xl border border-emerald-200 animate-in fade-in slide-in-from-top-2">
+                  <h5 className="font-bold text-emerald-800 text-sm mb-3 flex items-center gap-2"><ShieldCheck size={16} /> Thông tin chứng nhận ATVSLĐ</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 mb-1">Loại chứng nhận (Tự động theo Nhóm)</label><input type="text" readOnly value={formData.chung_nhan || 'Vui lòng chọn Nhóm đối tượng ở phần Công việc'} className="w-full p-2.5 border border-emerald-200 rounded-lg bg-emerald-100/50 text-emerald-800 font-bold outline-none cursor-not-allowed" /></div>
+                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Huấn luyện từ ngày</label><input type="date" name="huan_luyen_tu" value={formData.huan_luyen_tu ? formData.huan_luyen_tu.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" /></div>
+                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Đến ngày</label><input type="date" name="huan_luyen_den" value={formData.huan_luyen_den ? formData.huan_luyen_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-emerald-500" /></div>
+                    <div><label className="block text-xs font-bold text-gray-700 mb-1">Có giá trị đến ngày</label><input type="date" name="gia_tri_den" value={formData.gia_tri_den ? formData.gia_tri_den.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-700" /></div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="bg-orange-50/40 p-4 sm:p-5 rounded-xl border border-orange-100">
+              <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-orange-500 rounded-full"></div> Thông tin Bổ sung</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mô tả ngoại hình</label>
+                  <textarea
+                    name="mo_to_ngoai_hinh"
+                    value={hideSensitiveFields ? '***' : (formData.mo_to_ngoai_hinh || '')}
+                    onChange={handleInputChange}
+                    disabled={hideSensitiveFields}
+                    rows={3}
+                    className={`w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none ${hideSensitiveFields ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''}`}
+                  ></textarea>
+                </div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ghi chú khác</label><textarea name="ghi_chu" value={formData.ghi_chu || ''} onChange={handleInputChange} rows={3} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] resize-none"></textarea></div>
+              </div>
             </div>
           </div>
-          </div>
-          
+
           {/* FOOTER */}
           <div className="p-5 border-t border-gray-100 flex justify-end gap-3 shrink-0 bg-white rounded-b-2xl">
             <button type="button" onClick={onClose} className="px-8 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors shadow-sm">Hủy</button>
