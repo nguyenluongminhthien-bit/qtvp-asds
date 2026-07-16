@@ -152,6 +152,28 @@ export default function PersonnelModal({
                 Thông tin cá nhân
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Mã số nhân viên */}
+<div>
+  <label className="block text-xs font-bold text-gray-700 mb-1">
+    Mã số NV
+    {mode === 'create' && <span className="text-gray-400 font-normal ml-1">(tự sinh nếu để trống)</span>}
+  </label>
+  <input
+    type="text"
+    name="ma_so_nhan_vien"
+    value={formData.ma_so_nhan_vien || ''}
+    onChange={handleInputChange}
+    readOnly={mode === 'update'}
+    className={`w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-[#05469B] font-bold tracking-wide
+      ${mode === 'update'
+        ? 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed'
+        : 'border-blue-300 bg-[#FFFFF0] text-[#05469B]'}`}
+    placeholder={mode === 'create' ? 'VD: 2601001' : ''}
+  />
+  {mode === 'update' && (
+    <p className="text-[10px] text-gray-400 mt-0.5">MSNV không thể thay đổi sau khi tạo</p>
+  )}
+</div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-gray-700 mb-1">Họ và Tên *</label>
                   <input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
