@@ -100,22 +100,21 @@ export default function PersonnelModal({
     return formData.giay_phep_lai_xe ? formData.giay_phep_lai_xe.split(',').map((s: string) => s.trim()) : [];
   }, [formData.giay_phep_lai_xe]);
 
-  const normalizedKhoi = useMemo(() => {
-    const val = String(formData.khoi || '').trim();
-    const lower = val.toLowerCase();
-    if (lower.includes('văn phòng') || lower.includes('vp')) return 'Văn phòng';
-    if (lower.includes('kinh doanh') || lower.includes('kd')) return 'Kinh doanh';
-    if (lower.includes('dịch vụ') || lower.includes('dv')) return 'Dịch vụ';
-    return val || 'Văn phòng';
-  }, [formData.khoi]);
-
   const khoiOptions = useMemo(() => {
-    const base = ['Văn phòng', 'Kinh doanh', 'Dịch vụ'];
-    if (normalizedKhoi && !base.includes(normalizedKhoi)) {
-      base.push(normalizedKhoi);
-    }
-    return base;
-  }, [normalizedKhoi]);
+  const base = [
+    'Nghiệp vụ',
+    'Kinh doanh',
+    'DVPT',
+    'Văn phòng',
+    'Dịch vụ',
+  ];
+  // Nếu NV đang có giá trị khác (dữ liệu cũ) → tự thêm vào để không mất
+  const current = String(formData.khoi || '').trim();
+  if (current && !base.includes(current)) {
+    base.push(current);
+  }
+  return base;
+}, [formData.khoi]);
 
   const phanLoaiOptions = useMemo(() => {
     const base = ['Lãnh đạo', 'PT KD Xe', 'PT KD DVPT', 'PT DVHT 1', 'PT DVHT 2', 'Hành chính NS', 'Nhân sự hỗ trợ'];
@@ -247,7 +246,7 @@ export default function PersonnelModal({
                   </select>
                 </div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận làm việc</label><input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Hành chính, Kỹ thuật..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label><select name="khoi" value={normalizedKhoi} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">{khoiOptions.map(opt => <option key={opt} value={opt}>{opt.startsWith('Khối') ? opt : `Khối ${opt}`}</option>)}</select></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label><select name="khoi" value={formData.khoi || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">{khoiOptions.map(opt => <option key={opt} value={opt}>{opt}</option>))}</select></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức danh nghiệp vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Nhân viên, Kỹ thuật viên..." /></div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại nhân sự</label>
