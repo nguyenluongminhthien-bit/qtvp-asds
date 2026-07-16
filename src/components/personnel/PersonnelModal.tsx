@@ -102,15 +102,13 @@ export default function PersonnelModal({
 
   const normalizedKhoi = useMemo(() => {
     const val = String(formData.khoi || '').trim();
-    const lower = val.toLowerCase();
-    if (lower.includes('văn phòng') || lower.includes('vp')) return 'Văn phòng';
-    if (lower.includes('kinh doanh') || lower.includes('kd')) return 'Kinh doanh';
-    if (lower.includes('dịch vụ') || lower.includes('dv')) return 'Dịch vụ';
-    return val || 'Văn phòng';
+    if (!val) return 'KD xe DL';
+    const cleanVal = val.replace(/^Khối\s+/i, '').trim();
+    return cleanVal || 'KD xe DL';
   }, [formData.khoi]);
 
   const khoiOptions = useMemo(() => {
-    const base = ['Văn phòng', 'Kinh doanh', 'Dịch vụ'];
+    const base = ['KD xe DL', 'KD xe TM & XK', 'KD DVPT', 'NV QT Chuyên ngành', 'NV QT Cơ bản'];
     if (normalizedKhoi && !base.includes(normalizedKhoi)) {
       base.push(normalizedKhoi);
     }
@@ -154,11 +152,6 @@ export default function PersonnelModal({
                 Thông tin cá nhân
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Dòng 1: Mã NV - Họ và Tên - Giới tính */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mã NV *</label>
-                  <input type="text" required name="ma_so_nhan_vien" value={formData.ma_so_nhan_vien || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
-                </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-gray-700 mb-1">Họ và Tên *</label>
                   <input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
@@ -248,9 +241,8 @@ export default function PersonnelModal({
                     ))}
                   </select>
                 </div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận làm việc</label><input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Hành chính, Kỹ thuật..." /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label><select name="khoi" value={normalizedKhoi} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">{khoiOptions.map(opt => <option key={opt} value={opt}>{opt.startsWith('Khối') ? opt : `Khối ${opt}`}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức danh nghiệp vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Nhân viên, Kỹ thuật viên..." /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận làm việc</label><input type="text" name="phong_ban" value={formData.phong_ban || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Hành chính, Kỹ thuật..." /></div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Phân loại nhân sự</label>
                   <input 
@@ -268,11 +260,10 @@ export default function PersonnelModal({
                     ))}
                   </datalist>
                 </div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức danh nghiệp vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Nhân viên, Kỹ thuật viên..." /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Nhóm đối tượng ATVSLĐ *</label><select required name="nhom_doi_tuong" value={(() => { const m = String(formData.nhom_doi_tuong || '').match(/\d+/); return m ? parseInt(m[0], 10) : 4; })()} onChange={handleInputChange} className="w-full p-2.5 border border-emerald-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-emerald-800">{nhomOptions.map(opt => { let label = `Nhóm ${opt}`; if (opt === 1) label = 'Nhóm 1 (Ban Giám Đốc)'; else if (opt === 2) label = 'Nhóm 2 (Cán bộ An toàn)'; else if (opt === 3) label = 'Nhóm 3 (Lao động nghiêm ngặt)'; else if (opt === 4) label = 'Nhóm 4 (Văn phòng, Kinh doanh...)'; else if (opt === 6) label = 'Nhóm 6 (Vệ sinh viên)'; return <option key={opt} value={opt}>{label}</option>; })}</select></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label><input type="text" name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Đại học, Cao đẳng..." /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc *</label><input type="date" required name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
-                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm làm việc</label><input type="text" name="dia_diem_lam_viec" value={formData.dia_diem_lam_viec || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Showroom Bình Dương..." /></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nhận việc *</label><input type="date" required name="ngay_nhan_vien" value={formData.ngay_nhan_vien ? formData.ngay_nhan_vien.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Ngạch lương</label>
                   <input 
@@ -285,6 +276,7 @@ export default function PersonnelModal({
                     placeholder="Ví dụ: Chuyên viên" 
                   />
                 </div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Trình độ học vấn</label><input type="text" name="trinh_do_hoc_van" value={formData.trinh_do_hoc_van || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Đại học, Cao đẳng..." /></div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Thu nhập (Lương đóng BH) VNĐ</label>
                   <input 
@@ -298,6 +290,7 @@ export default function PersonnelModal({
                   />
                 </div>
                 <div><label className="block text-xs font-bold text-gray-700 mb-1">Trạng thái làm việc</label><select name="trang_thai" value={formData.trang_thai || 'Đang làm việc'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"><option value="Đang làm việc">Đang làm việc</option><option value="Đã thôi việc">Đã thôi việc</option></select></div>
+                <div><label className="block text-xs font-bold text-gray-700 mb-1">Ngày nghỉ việc</label><input type="date" name="ngay_nghi_viec" value={formData.ngay_nghi_viec ? formData.ngay_nghi_viec.split('T')[0] : ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" /></div>
               </div>
             </div>
           </div>
