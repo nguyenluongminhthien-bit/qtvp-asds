@@ -387,7 +387,7 @@ export default function PersonnelPage() {
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.ngay_nhan_vien ? formatDate(p.ngay_nhan_vien) : '---'}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.ngay_nghi_viec ? formatDate(p.ngay_nghi_viec) : '---'}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.trang_thai)}</td>
-          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${formatVal(p.nhom_doi_tuong)}</td>
+          <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.nhom_doi_tuong ? (String(p.nhom_doi_tuong).startsWith('Nhóm') ? p.nhom_doi_tuong : `Nhóm ${p.nhom_doi_tuong}`) : ''}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.huan_luyen_tu ? formatDate(p.huan_luyen_tu) : '---'}</td>
           <td style="text-align: center; border: 1px solid #000000; padding: 5px;">${p.huan_luyen_den ? formatDate(p.huan_luyen_den) : '---'}</td>
           <td style="text-align: center; font-weight: bold; color: #b91c1c; border: 1px solid #000000; padding: 5px;">${p.gia_tri_den ? formatDate(p.gia_tri_den) : '---'}</td>
@@ -786,6 +786,11 @@ export default function PersonnelPage() {
 
     // 🟢 TỰ ĐỘNG CHUẨN HOÁ TÊN CHỨNG NHẬN ATVSLĐ TRƯỚC KHI LƯU DB
     if (finalDataToSave.nhom_doi_tuong) {
+      const nhomStr = String(finalDataToSave.nhom_doi_tuong);
+      const match = nhomStr.match(/\d+/);
+      if (match) {
+        finalDataToSave.nhom_doi_tuong = parseInt(match[0], 10);
+      }
       const nhom = String(finalDataToSave.nhom_doi_tuong);
       if (nhom === '1' || nhom === '2' || nhom === '6') finalDataToSave.chung_nhan = 'Giấy chứng nhận huấn luyện ATVSLĐ';
       else if (nhom === '3') finalDataToSave.chung_nhan = 'Thẻ An toàn lao động';
@@ -1401,37 +1406,6 @@ export default function PersonnelPage() {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Lọc theo Bộ phận */}
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
-                  <Building2 size={13} className="text-blue-500" /> Bộ phận ({availableFilterOptions.phongBanList.length})
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={filterPhongBan}
-                    onChange={(e) => setFilterPhongBan(e.target.value)}
-                    list="phong-ban-filter-list"
-                    placeholder="Gõ hoặc chọn Bộ phận..."
-                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                  />
-                  <datalist id="phong-ban-filter-list">
-                    {availableFilterOptions.phongBanList.map((item, idx) => (
-                      <option key={idx} value={item} />
-                    ))}
-                  </datalist>
-                  {filterPhongBan && (
-                    <button 
-                      type="button" 
-                      onClick={() => setFilterPhongBan('')} 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-
               {/* Lọc theo Khối */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
@@ -1463,7 +1437,68 @@ export default function PersonnelPage() {
                 </div>
               </div>
 
-              {/* Lọc theo Chức vụ */}
+              {/* Lọc theo Bộ phận */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                  <Building2 size={13} className="text-blue-500" /> Bộ phận ({availableFilterOptions.phongBanList.length})
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={filterPhongBan}
+                    onChange={(e) => setFilterPhongBan(e.target.value)}
+                    list="phong-ban-filter-list"
+                    placeholder="Gõ hoặc chọn Bộ phận..."
+                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                  />
+                  <datalist id="phong-ban-filter-list">
+                    {availableFilterOptions.phongBanList.map((item, idx) => (
+                      <option key={idx} value={item} />
+                    ))}
+                  </datalist>
+                  {filterPhongBan && (
+                    <button 
+                      type="button" 
+                      onClick={() => setFilterPhongBan('')} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Lọc theo Phân loại */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                  <Tag size={13} className="text-emerald-500" /> Chức danh ({availableFilterOptions.phanLoaiList.length})
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={filterPhanLoai}
+                    onChange={(e) => setFilterPhanLoai(e.target.value)}
+                    list="phan-loai-filter-list"
+                    placeholder="Gõ hoặc chọn Chức danh..."
+                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                  />
+                  <datalist id="phan-loai-filter-list">
+                    {availableFilterOptions.phanLoaiList.map((item, idx) => (
+                      <option key={idx} value={item} />
+                    ))}
+                  </datalist>
+                  {filterPhanLoai && (
+                    <button 
+                      type="button" 
+                      onClick={() => setFilterPhanLoai('')} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            {/* Lọc theo Chức vụ */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
                   <Briefcase size={13} className="text-orange-500" /> Chức vụ ({availableFilterOptions.chucVuList.length})
@@ -1494,37 +1529,7 @@ export default function PersonnelPage() {
                 </div>
               </div>
 
-              {/* Lọc theo Phân loại */}
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
-                  <Tag size={13} className="text-emerald-500" /> Phân loại ({availableFilterOptions.phanLoaiList.length})
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={filterPhanLoai}
-                    onChange={(e) => setFilterPhanLoai(e.target.value)}
-                    list="phan-loai-filter-list"
-                    placeholder="Gõ hoặc chọn Phân loại..."
-                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                  />
-                  <datalist id="phan-loai-filter-list">
-                    {availableFilterOptions.phanLoaiList.map((item, idx) => (
-                      <option key={idx} value={item} />
-                    ))}
-                  </datalist>
-                  {filterPhanLoai && (
-                    <button 
-                      type="button" 
-                      onClick={() => setFilterPhanLoai('')} 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
               </div>
-            </div>
           </div>
         )}
 
@@ -2480,7 +2485,7 @@ export default function PersonnelPage() {
                     <p>
                       <span className="text-gray-500 w-36 inline-block font-medium">Loại chứng nhận:</span> 
                       <span className="font-bold text-gray-900">{viewData.chung_nhan || '---'}</span> 
-                      {viewData.nhom_doi_tuong && <span className="text-[#05469B] font-bold ml-1.5">(Nhóm {viewData.nhom_doi_tuong})</span>}
+                      {viewData.nhom_doi_tuong && <span className="text-[#05469B] font-bold ml-1.5">({String(viewData.nhom_doi_tuong).startsWith('Nhóm') ? viewData.nhom_doi_tuong : `Nhóm ${viewData.nhom_doi_tuong}`})</span>}
                     </p>
                     <p>
                       <span className="text-gray-500 w-36 inline-block font-medium">Khóa huấn luyện:</span> 
@@ -2600,7 +2605,7 @@ export default function PersonnelPage() {
                             <td className="p-3">{item.phan_loai}</td>
                             <td className="p-3 font-semibold text-indigo-700">{item.khoi}</td>
                             <td className="p-3 font-semibold text-indigo-700">{item.dia_diem_lam_viec}</td>
-                            <td className="p-3 font-semibold text-emerald-600">{item.nhom_doi_tuong}</td>
+                            <td className="p-3 font-semibold text-emerald-600">{item.nhom_doi_tuong ? `Nhóm ${item.nhom_doi_tuong}` : ''}</td>
                           </tr>
                         ))}
                       </tbody>
