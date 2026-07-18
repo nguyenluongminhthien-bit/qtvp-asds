@@ -236,28 +236,6 @@ export default function PersonnelDetailCuocChart({ personnel }: Props) {
           <line x1={padLeft} y1={padTop + chartH} x2={svgWidth - padRight} y2={padTop + chartH} stroke="#D1D5DB" strokeWidth="1.5" />
           <line x1={padLeft} y1={padTop} x2={padLeft} y2={padTop + chartH} stroke="#D1D5DB" strokeWidth="1.5" />
 
-          {/* Đường định mức màu đỏ nét liền cắt ngang */}
-          {nguongDinhMuc <= maxOy && (
-            <g>
-              <line
-                x1={padLeft}
-                y1={getY(nguongDinhMuc)}
-                x2={svgWidth - padRight}
-                y2={getY(nguongDinhMuc)}
-                stroke="#EF4444"
-                strokeWidth="1.5"
-              />
-              <text
-                x={svgWidth - padRight - 4}
-                y={getY(nguongDinhMuc) - 4}
-                textAnchor="end"
-                className="fill-red-500 font-extrabold text-[9px]"
-              >
-                ĐM {formatCurrency(nguongDinhMuc)}
-              </text>
-            </g>
-          )}
-
           {/* Vẽ các cột cước từng tháng */}
           {chartData.map((d, idx) => {
             const xCenter = padLeft + idx * slotW + slotW / 2;
@@ -327,6 +305,28 @@ export default function PersonnelDetailCuocChart({ personnel }: Props) {
               </g>
             );
           })}
+
+          {/* Đường định mức màu đỏ nét liền nằm trên cùng */}
+          {nguongDinhMuc <= maxOy && (
+            <g className="pointer-events-none">
+              <line
+                x1={padLeft}
+                y1={getY(nguongDinhMuc)}
+                x2={svgWidth - padRight}
+                y2={getY(nguongDinhMuc)}
+                stroke="#EF4444"
+                strokeWidth="1.5"
+              />
+              <text
+                x={svgWidth - padRight - 4}
+                y={getY(nguongDinhMuc) - 4}
+                textAnchor="end"
+                className="fill-red-500 font-extrabold text-[9px]"
+              >
+                ĐM {formatCurrency(nguongDinhMuc)}
+              </text>
+            </g>
+          )}
         </svg>
 
         {/* Floating Tooltip hiện đại, cao cấp */}
