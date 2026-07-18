@@ -15,7 +15,7 @@ import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu } from '../../
 import Pagination from '../ui/Pagination';
 import CustomAutocomplete from '../ui/CustomAutocomplete';
 import ThueBaoDetailCuocChart from './ThueBaoDetailCuocChart';
-import BatchCostEntryModal from './BatchCostEntryModal';
+import ThueBaoCuocHistorySection from './ThueBaoCuocHistorySection';
 
 interface Props {
   personnel: Personnel[];
@@ -75,7 +75,6 @@ export default function CuocDiDongTab({
 
   // Selected State (For Left Panel vs Right Panel detail view)
   const [selectedThueBaoId, setSelectedThueBaoId] = useState<string | null>(null);
-  const [batchCostModalOpen, setBatchCostModalOpen] = useState(false);
 
   // Modals
   const [thueBaoModal, setThueBaoModal] = useState<{
@@ -1475,18 +1474,6 @@ export default function CuocDiDongTab({
                   {/* Nút hành động theo trạng thái hiện tại của thuê bao */}
                   {selectedRowDetails.tb && (
                     <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                      {/* Nút Ghi nhận cước theo tháng ngay phía trước nút Sửa thông tin */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setBatchCostModalOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg shadow-md transition-all cursor-pointer">
-                        <Zap size={13} className="text-yellow-300 fill-yellow-300" /> Ghi nhận cước theo tháng
-                      </button>
-
                       {/* Nút Sửa — luôn hiện */}
                       <button
                         onClick={() => openUpdateModal(selectedRowDetails.tb)}
@@ -1559,57 +1546,20 @@ export default function CuocDiDongTab({
                   />
                 </div>
 
-                {/* 3. LỊCH SỬ PHÁT SINH CƯỚC THÁNG phía dưới */}
-                <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs bg-gray-50/20 dark:bg-gray-900/10">
-                  <div className="bg-gray-50 dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-800 font-bold text-xs text-gray-600 dark:text-gray-300">
-                    LỊCH SỬ PHÁT SINH CƯỚC THÁNG
-                  </div>
-                  <div className="overflow-y-auto custom-scrollbar divide-y divide-gray-100 dark:divide-gray-800 max-h-[400px]">
-                    {cuocList
-                      .filter(c => c.id_thue_bao === selectedRowDetails.tb.id)
-                      .sort((a, b) => b.thang_nam.localeCompare(a.thang_nam))
-                      .map(c => {
-                        const snapDM = c.dinh_muc_snap;
-                        const cBadge = getCuocBadge(c.tong_cuoc, snapDM);
-                        return (
-                          <div key={c.id} className="p-3 flex justify-between items-center text-xs">
-                            <div>
-                              <div className="font-bold text-gray-700 dark:text-gray-300">{c.thang_nam}</div>
-                              {snapDM !== null && (
-                                <div className="text-[10px] text-gray-400">Định mức snapshot: {formatCurrency(snapDM)}đ</div>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <div className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(c.tong_cuoc)}đ</div>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${cBadge.cls} inline-block mt-0.5`}>
-                                {cBadge.label}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    {cuocList.filter(c => c.id_thue_bao === selectedRowDetails.tb.id).length === 0 && (
-                      <div className="p-4 text-center text-xs text-gray-400 italic">Chưa có dữ liệu cước của thuê bao này.</div>
-                    )}
-                  </div>
-                </div>
+                {/* 3. LỊCH SỬ PHÁT SINH CƯỚC THÁNG & CẬP NHẬT CƯỚC */}
+                <ThueBaoCuocHistorySection
+                  thueBao={selectedRowDetails.tb}
+                  cuocList={cuocList}
+                  onSaved={async () => {
+                    const fresh = await apiService.getCuocThang();
+                    setCuocList(fresh);
+                  }}
+                />
               </div>
             </div>
           </div>
         )}
       </div>
-
-      {/* --- MODAL GHI NHẬN CƯỚC HÀNG LOẠT THEO THÁNG --- */}
-      <BatchCostEntryModal
-        open={batchCostModalOpen}
-        onClose={() => setBatchCostModalOpen(false)}
-        thueBao={selectedRowDetails?.tb ?? null}
-        cuocList={cuocList}
-        onSaved={async () => {
-          const fresh = await apiService.getCuocThang();
-          setCuocList(fresh);
-        }}
-      />
 
       {/* --- MODAL THÊM / SỬA THUÊ BẠO --- */}
       {thueBaoModal.open && (
