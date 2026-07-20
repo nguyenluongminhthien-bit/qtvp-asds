@@ -304,10 +304,11 @@ export default function CuocDiDongTab({
           c => c.id_thue_bao === tb.id && c.thang_nam === filterThang
         );
         const nv = personnel.find(p => p.id === tb.id_nhan_su);
-        const simDinhMuc = tb.dinh_muc_cuoc !== undefined && tb.dinh_muc_cuoc !== null ? Number(tb.dinh_muc_cuoc) : null;
-        const dinhMuc = cuocThang?.dinh_muc_snap !== undefined && cuocThang?.dinh_muc_snap !== null
-          ? Number(cuocThang.dinh_muc_snap)
-          : simDinhMuc;
+        const rawSimDm = tb.dinh_muc_cuoc !== undefined && tb.dinh_muc_cuoc !== null ? Number(tb.dinh_muc_cuoc) : null;
+        const simDinhMuc = (rawSimDm !== null && rawSimDm > 0) ? rawSimDm : null;
+        const rawSnapDm = cuocThang?.dinh_muc_snap !== undefined && cuocThang?.dinh_muc_snap !== null ? Number(cuocThang.dinh_muc_snap) : null;
+        const snapDinhMuc = (rawSnapDm !== null && rawSnapDm > 0) ? rawSnapDm : null;
+        const dinhMuc = simDinhMuc === null ? null : (snapDinhMuc ?? simDinhMuc);
         const tongCuoc = cuocThang?.tong_cuoc ?? null;
         const vuot = dinhMuc !== null && tongCuoc !== null ? tongCuoc - dinhMuc : null;
 
@@ -382,7 +383,7 @@ export default function CuocDiDongTab({
       return { label: 'Chưa có DL', cls: 'bg-gray-150 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700' };
     }
     if (dinhMuc === null) {
-      return { label: `${formatCurrency(tongCuoc)}đ (TT)`, cls: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border border-blue-200 dark:border-blue-800' };
+      return { label: `${formatCurrency(tongCuoc)}đ (TTTT)`, cls: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border border-blue-200 dark:border-blue-800' };
     }
     const vuot = tongCuoc - dinhMuc;
     if (vuot > 0) {
@@ -428,11 +429,15 @@ export default function CuocDiDongTab({
 
     const chartPoints = months.map(mStr => {
       const c = cuocList.find(item => item.id_thue_bao === row.tb.id && item.thang_nam === mStr);
-      const simDinhMuc = row.tb.dinh_muc_cuoc !== undefined && row.tb.dinh_muc_cuoc !== null ? Number(row.tb.dinh_muc_cuoc) : null;
+      const rawSimDm = row.tb.dinh_muc_cuoc !== undefined && row.tb.dinh_muc_cuoc !== null ? Number(row.tb.dinh_muc_cuoc) : null;
+      const simDinhMuc = (rawSimDm !== null && rawSimDm > 0) ? rawSimDm : null;
+      const rawSnapDm = c?.dinh_muc_snap !== undefined && c?.dinh_muc_snap !== null ? Number(c.dinh_muc_snap) : null;
+      const snapDinhMuc = (rawSnapDm !== null && rawSnapDm > 0) ? rawSnapDm : null;
+      const dinhMuc = simDinhMuc === null ? null : (snapDinhMuc ?? simDinhMuc);
       return {
         thang: mStr,
         tongCuoc: c?.tong_cuoc ?? null,
-        dinhMuc: c?.dinh_muc_snap !== undefined && c?.dinh_muc_snap !== null ? Number(c.dinh_muc_snap) : simDinhMuc
+        dinhMuc
       };
     });
 
@@ -1049,7 +1054,7 @@ export default function CuocDiDongTab({
           cuoc_khac: row.khac,
           so_phut_goi: row.phutGoi,
           dung_luong_data: row.dungLuong,
-          dinh_muc_snap: nv?.dinh_muc_cuoc ?? null,
+          dinh_muc_snap: row.matchedTB?.dinh_muc_cuoc !== undefined && row.matchedTB?.dinh_muc_cuoc !== null ? Number(row.matchedTB.dinh_muc_cuoc) : null,
           nguoi_nhap: user?.ho_ten || 'Hệ thống'
         };
         await apiService.save(payload, row.status === 'UPDATE' ? 'update' : 'create', 'cp_cuoc_thang');
@@ -1316,7 +1321,8 @@ export default function CuocDiDongTab({
     if (!selectedRowDetails) return null;
     const { chartPoints, nv } = selectedRowDetails;
     
-    const dinhMuc = selectedRowDetails.tb.dinh_muc_cuoc !== undefined && selectedRowDetails.tb.dinh_muc_cuoc !== null ? Number(selectedRowDetails.tb.dinh_muc_cuoc) : null;
+    const rawSimDm = selectedRowDetails.tb.dinh_muc_cuoc !== undefined && selectedRowDetails.tb.dinh_muc_cuoc !== null ? Number(selectedRowDetails.tb.dinh_muc_cuoc) : null;
+    const dinhMuc = (rawSimDm !== null && rawSimDm > 0) ? rawSimDm : null;
 
     // Filter points with values
     const validDataPoints = chartPoints.map((p, idx) => ({ ...p, idx }));
@@ -1812,15 +1818,15 @@ export default function CuocDiDongTab({
                     <div className="py-2.5 flex justify-between">
                       <span className="text-gray-400 font-bold">Định mức cước SIM:</span>
                       <span className="font-bold text-gray-800 dark:text-gray-200">
-                        {selectedRowDetails.tb.dinh_muc_cuoc !== null && selectedRowDetails.tb.dinh_muc_cuoc !== undefined
+                        {selectedRowDetails.tb.dinh_muc_cuoc !== null && selectedRowDetails.tb.dinh_muc_cuoc !== undefined && Number(selectedRowDetails.tb.dinh_muc_cuoc) > 0
                           ? `${formatCurrency(selectedRowDetails.tb.dinh_muc_cuoc)}đ/tháng`
-                          : 'Mặc định (Theo NV / Thực tế)'}
+                          : <span className="text-blue-600 dark:text-blue-400 font-bold">TTTT (Thanh toán thực tế)</span>}
                       </span>
                     </div>
                     <div className="py-2.5 flex justify-between">
                       <span className="text-gray-400 font-bold">Định mức áp dụng:</span>
                       <span className="font-bold text-[#05469B] dark:text-blue-400">
-                        {selectedRowDetails.dinhMuc !== null ? `${formatCurrency(selectedRowDetails.dinhMuc)}đ/tháng` : 'Thanh toán thực tế (Không ĐM)'}
+                        {selectedRowDetails.dinhMuc !== null && selectedRowDetails.dinhMuc > 0 ? `${formatCurrency(selectedRowDetails.dinhMuc)}đ/tháng` : <span className="text-blue-600 dark:text-blue-400 font-bold">TTTT (Thanh toán thực tế)</span>}
                       </span>
                     </div>
                     <div className="py-2.5 flex justify-between">

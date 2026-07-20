@@ -23,7 +23,7 @@ export default function ThueBaoCuocHistorySection({ thueBao, cuocList, onSaved }
     if (thueBao.dinh_muc_cuoc !== null && thueBao.dinh_muc_cuoc !== undefined && Number(thueBao.dinh_muc_cuoc) > 0) {
       return Number(thueBao.dinh_muc_cuoc);
     }
-    return 200000;
+    return null;
   }, [thueBao]);
 
   // Load ban đầu hoặc khi đổi năm / đổi thuê bao
@@ -147,13 +147,13 @@ export default function ThueBaoCuocHistorySection({ thueBao, cuocList, onSaved }
         if (existing) {
           if (newVal !== existing.tong_cuoc) {
             if (newVal === null) {
-              promises.push(apiService.deleteRecord(existing.id, 'cp_cuoc_thang'));
+              promises.push(apiService.save({ id: existing.id, tong_cuoc: null, dinh_muc_snap: nguongDinhMuc }, 'update', 'cp_cuoc_thang'));
               countUpdated++;
             } else {
               promises.push(apiService.save({
                 id: existing.id,
                 tong_cuoc: newVal,
-                dinh_muc_snap: existing.dinh_muc_snap ?? nguongDinhMuc
+                dinh_muc_snap: nguongDinhMuc
               }, 'update', 'cp_cuoc_thang'));
               countUpdated++;
             }
@@ -191,8 +191,8 @@ export default function ThueBaoCuocHistorySection({ thueBao, cuocList, onSaved }
   };
 
   const totalEntered = useMemo(() => {
-    return Object.values(monthInputs).reduce((sum, str) => {
-      const raw = str.replace(/[^0-9]/g, '');
+    return Object.values(monthInputs).reduce<number>((sum: number, str: any) => {
+      const raw = String(str || '').replace(/[^0-9]/g, '');
       return sum + (raw ? Number(raw) : 0);
     }, 0);
   }, [monthInputs]);
@@ -287,7 +287,7 @@ export default function ThueBaoCuocHistorySection({ thueBao, cuocList, onSaved }
           {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
             const val = monthInputs[month] || '';
             const rawNum = Number(val.replace(/[^0-9]/g, '')) || 0;
-            const isExceeded = rawNum > nguongDinhMuc;
+            const isExceeded = nguongDinhMuc !== null && rawNum > nguongDinhMuc;
             const hasData = val.trim() !== '';
 
             return (
@@ -295,7 +295,9 @@ export default function ThueBaoCuocHistorySection({ thueBao, cuocList, onSaved }
                 key={month}
                 className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${
                   hasData
-                    ? isExceeded
+                    ? nguongDinhMuc === null
+                      ? 'bg-blue-50/40 dark:bg-blue-950/10 border-blue-200 dark:border-blue-900/50 shadow-2xs'
+                      : isExceeded
                       ? 'bg-red-50/40 dark:bg-red-950/10 border-red-200 dark:border-red-900/50 shadow-2xs'
                       : 'bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-900/50 shadow-2xs'
                     : 'bg-gray-50/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 hover:border-gray-300'
@@ -307,10 +309,14 @@ export default function ThueBaoCuocHistorySection({ thueBao, cuocList, onSaved }
                   </span>
                   {hasData ? (
                     <span className={`text-[9.5px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 ${
-                      isExceeded ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      nguongDinhMuc === null
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                        : isExceeded
+                        ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                     }`}>
-                      {isExceeded ? <AlertCircle size={10} /> : <CheckCircle2 size={10} />}
-                      {isExceeded ? 'Vượt ĐM' : 'Trong ĐM'}
+                      {nguongDinhMuc === null ? 'TTTT' : isExceeded ? <AlertCircle size={10} /> : <CheckCircle2 size={10} />}
+                      {nguongDinhMuc === null ? '' : isExceeded ? 'Vượt ĐM' : 'Trong ĐM'}
                     </span>
                   ) : (
                     <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-semibold">
@@ -338,7 +344,7 @@ export default function ThueBaoCuocHistorySection({ thueBao, cuocList, onSaved }
                 </div>
 
                 <div className="mt-1.5 flex items-center justify-between text-[10px] text-gray-400 font-medium">
-                  <span>Định mức: {formatCurrency(nguongDinhMuc)}đ</span>
+                  <span>Định mức: {nguongDinhMuc !== null ? `${formatCurrency(nguongDinhMuc)}đ` : 'TTTT (Thực tế)'}</span>
                 </div>
               </div>
             );

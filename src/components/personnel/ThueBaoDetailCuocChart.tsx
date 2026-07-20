@@ -43,7 +43,7 @@ export default function ThueBaoDetailCuocChart({ thueBao, cuocList, dinhMuc }: P
     if (thueBao.dinh_muc_cuoc !== null && thueBao.dinh_muc_cuoc !== undefined && Number(thueBao.dinh_muc_cuoc) > 0) {
       return Number(thueBao.dinh_muc_cuoc);
     }
-    return 200000;
+    return null;
   }, [thueBao.dinh_muc_cuoc, dinhMuc]);
 
   // Tính toán dữ liệu 12 tháng (Từ Tháng 1 đến Tháng 12)
@@ -85,7 +85,7 @@ export default function ThueBaoDetailCuocChart({ thueBao, cuocList, dinhMuc }: P
 
   // Giá trị lớn nhất của trục Oy để vẽ biểu đồ
   const maxOy = useMemo(() => {
-    let max = nguongDinhMuc * 1.35;
+    let max = (nguongDinhMuc || 100000) * 1.35;
     chartData.forEach(d => {
       if (d.currVal !== null && d.currVal > max) max = d.currVal * 1.15;
       if (d.prevVal !== null && d.prevVal > max) max = d.prevVal * 1.15;
@@ -119,9 +119,9 @@ export default function ThueBaoDetailCuocChart({ thueBao, cuocList, dinhMuc }: P
       diff = item.currVal - item.prevVal;
     }
 
-    let status: 'vượt' | 'trong' | 'chưa' = 'chưa';
+    let status: 'vượt' | 'trong' | 'chưa' | 'tttt' = 'chưa';
     if (item.currVal !== null) {
-      status = item.currVal > nguongDinhMuc ? 'vượt' : 'trong';
+      status = nguongDinhMuc !== null ? (item.currVal > nguongDinhMuc ? 'vượt' : 'trong') : 'tttt';
     }
 
     setTooltip({
@@ -153,10 +153,16 @@ export default function ThueBaoDetailCuocChart({ thueBao, cuocList, dinhMuc }: P
             <span className="w-3.5 h-3.5 rounded bg-[#00529C] inline-block shadow-2xs"></span>
             <span className="text-gray-800 dark:text-gray-200">Năm nay ({currYear})</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-[#EF4444] inline-block"></span>
-            <span className="text-red-600 dark:text-red-400">Định mức: {formatCurrency(nguongDinhMuc)}đ</span>
-          </div>
+          {nguongDinhMuc !== null ? (
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 bg-[#EF4444] inline-block"></span>
+              <span className="text-red-600 dark:text-red-400 font-bold">Định mức: {formatCurrency(nguongDinhMuc)}đ</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+              <span className="text-blue-700 dark:text-blue-300 font-bold text-[10.5px]">TTTT (Thanh toán thực tế)</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -269,7 +275,7 @@ export default function ThueBaoDetailCuocChart({ thueBao, cuocList, dinhMuc }: P
           })}
 
           {/* Đường định mức màu đỏ nét liền nằm trên cùng */}
-          {nguongDinhMuc <= maxOy && (
+          {nguongDinhMuc !== null && nguongDinhMuc <= maxOy && (
             <g className="pointer-events-none">
               <line
                 x1={padLeft}
@@ -353,6 +359,11 @@ export default function ThueBaoDetailCuocChart({ thueBao, cuocList, dinhMuc }: P
               {/* Trạng thái định mức */}
               <div className="pt-1.5 mt-1 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
                 <span className="text-gray-500 text-[11px]">Trạng thái ĐM:</span>
+                {tooltip.status === 'tttt' && (
+                  <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-extrabold rounded-md border border-blue-200 dark:border-blue-800 text-[10.5px]">
+                    TTTT (Thực tế)
+                  </span>
+                )}
                 {tooltip.status === 'vượt' && (
                   <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 font-extrabold rounded-md border border-red-200 dark:border-red-800 text-[10.5px] flex items-center gap-1">
                     <AlertCircle size={12} className="shrink-0" /> Vượt định mức
