@@ -1183,118 +1183,137 @@ export default function PersonnelPage() {
             </div>
           </div>
           
-          <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
-            {/* HÀNG 1: TÌM KIẾM & THAO TÁC */}
-            {/* HÀNG 1: TÌM KIẾM & NÚT TÍNH NĂNG */}
-            <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-30">
-              {/* Ô Tìm kiếm */}
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                <input 
-                  type="text" 
-                  placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." 
-                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium" 
-                  value={personnelSearchTerm} 
-                  onChange={(e) => setPersonnelSearchTerm(e.target.value)} 
-                />
-              </div>
+          {activeTab !== 'cuoc_di_dong' && (
+            <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
+              {/* HÀNG 1: TÌM KIẾM & NÚT TÍNH NĂNG */}
+              <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-30">
+                {/* Ô Tìm kiếm */}
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                  <input 
+                    type="text" 
+                    placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." 
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium" 
+                    value={personnelSearchTerm} 
+                    onChange={(e) => setPersonnelSearchTerm(e.target.value)} 
+                  />
+                </div>
 
-              {/* Nút Xóa bộ lọc nhanh nếu có lọc */}
-              {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
-                <button
-                  onClick={() => {
-                    setFilterPhongBan('');
-                    setFilterKhoi('');
-                    setFilterChucVu('');
-                    setFilterPhanLoai('');
-                  }}
-                  title="Xóa nhanh bộ lọc nâng cao"
-                  className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded border border-red-200 transition-all flex items-center gap-1 text-[11px] font-bold shadow-sm"
-                >
-                  <RotateCcw size={13} /> <span className="hidden sm:inline">Xóa bộ lọc</span>
-                  <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
-                    {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
-                  </span>
-                </button>
-              )}
-
-              {/* 🟢 NÚT "TÍNH NĂNG" DROPDOWN GỘP TẤT CẢ */}
-              <div className="relative">
-                <button 
-                  onClick={() => {
-                    setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen);
-                    setIsAddNewExpanded(false);
-                  }}
-                  className={`px-4 py-1.5 rounded text-[11px] font-bold flex items-center gap-2 border transition-all shadow-sm whitespace-nowrap ${
-                    isFeaturesDropdownOpen || showAdvancedFilters
-                      ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-md'
-                      : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <Sparkles size={15} className={isFeaturesDropdownOpen || showAdvancedFilters ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
-                  <span>Tính năng</span>
-                  {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && !showAdvancedFilters && (
-                    <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                {/* Nút Xóa bộ lọc nhanh nếu có lọc */}
+                {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
+                  <button
+                    onClick={() => {
+                      setFilterPhongBan('');
+                      setFilterKhoi('');
+                      setFilterChucVu('');
+                      setFilterPhanLoai('');
+                    }}
+                    title="Xóa nhanh bộ lọc nâng cao"
+                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded border border-red-200 transition-all flex items-center gap-1 text-[11px] font-bold shadow-sm"
+                  >
+                    <RotateCcw size={13} /> <span className="hidden sm:inline">Xóa bộ lọc</span>
+                    <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
                       {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
                     </span>
-                  )}
-                  <ChevronDown size={13} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
+                  </button>
+                )}
 
-                {/* MENU DROPDOWN TÍNH NĂNG */}
-                {isFeaturesDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[40]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
-                    
-                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-[50] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                {/* 🟢 NÚT "TÍNH NĂNG" DROPDOWN GỘP TẤT CẢ */}
+                <div className="relative">
+                  <button 
+                    onClick={() => {
+                      setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen);
+                      setIsAddNewExpanded(false);
+                    }}
+                    className={`px-4 py-1.5 rounded text-[11px] font-bold flex items-center gap-2 border transition-all shadow-sm whitespace-nowrap ${
+                      isFeaturesDropdownOpen || showAdvancedFilters
+                        ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-md'
+                        : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Sparkles size={15} className={isFeaturesDropdownOpen || showAdvancedFilters ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
+                    <span>Tính năng</span>
+                    {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && !showAdvancedFilters && (
+                      <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                        {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
+                      </span>
+                    )}
+                    <ChevronDown size={13} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* MENU DROPDOWN TÍNH NĂNG */}
+                  {isFeaturesDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[40]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
                       
-                      {/* 1. Lọc nâng cao */}
-                      <button 
-                        onClick={() => {
-                          setShowAdvancedFilters(!showAdvancedFilters);
-                          setIsFeaturesDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between transition-all ${
-                          showAdvancedFilters ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'hover:bg-gray-50 text-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className={`p-1.5 rounded-lg ${showAdvancedFilters ? 'bg-amber-500 text-white' : 'bg-blue-50 text-[#05469B]'}`}>
-                            <Filter size={14} />
+                      <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-[50] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                        
+                        {/* 1. Lọc nâng cao */}
+                        <button 
+                          onClick={() => {
+                            setShowAdvancedFilters(!showAdvancedFilters);
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between transition-all ${
+                            showAdvancedFilters ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className={`p-1.5 rounded-lg ${showAdvancedFilters ? 'bg-amber-500 text-white' : 'bg-blue-50 text-[#05469B]'}`}>
+                              <Filter size={14} />
+                            </div>
+                            <span>Lọc nâng cao</span>
                           </div>
-                          <span>Lọc nâng cao</span>
-                        </div>
-                        {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) ? (
-                          <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                            {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-semibold text-gray-400">{showAdvancedFilters ? 'Đang bật' : 'Đang ẩn'}</span>
-                        )}
-                      </button>
+                          {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) ? (
+                            <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                              {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
+                            </span>
+                          ) : (
+                            <ChevronRight size={14} className="text-gray-400" />
+                          )}
+                        </button>
 
-                      {/* 2. Thêm mới (Chỉ ADMIN) */}
-                      {user?.quyen === 'ADMIN' && (
-                        <div className="border-t border-gray-100 pt-1 mt-1">
+                        {/* 2. Thêm Nhân Sự Mới */}
+                        <div className="relative">
                           <button 
                             onClick={() => setIsAddNewExpanded(!isAddNewExpanded)}
-                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center justify-between transition-all"
+                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between hover:bg-gray-50 text-gray-700 transition-all"
                           >
                             <div className="flex items-center gap-2.5">
-                              <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-                                <Plus size={14} />
+                              <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                                <UserPlus size={14} />
                               </div>
-                              <span>Thêm mới nhân sự</span>
+                              <span>Thêm Nhân sự</span>
                             </div>
-                            <ChevronRight size={14} className={`text-gray-400 transition-transform duration-200 ${isAddNewExpanded ? 'rotate-90' : ''}`} />
+                            <ChevronRight size={14} className={`text-gray-400 transition-transform ${isAddNewExpanded ? 'rotate-90' : ''}`} />
                           </button>
 
-                          {/* Submenu Lựa chọn Thêm mới */}
                           {isAddNewExpanded && (
-                            <div className="ml-3 pl-3 border-l-2 border-indigo-100 flex flex-col gap-1 mt-1 py-1 animate-in slide-in-from-top-1 duration-150">
+                            <div className="pl-9 pr-2 py-1 flex flex-col gap-1 border-l-2 border-indigo-100 ml-5 my-1">
                               <button 
                                 onClick={() => {
-                                  openModal('create');
+                                  if (!selectedUnitFilter) {
+                                    toast.warning("Vui lòng chọn 1 Đơn vị trước khi thêm mới nhân sự!");
+                                    return;
+                                  }
+                                  const targetUnit = donViList.find(d => String(d.id) === String(selectedUnitFilter));
+                                  const defaultLegal = targetUnit ? (targetUnit.id_phap_nhan || '') : (phapNhanList[0]?.id || '');
+
+                                  setModal({
+                                    open: true,
+                                    mode: 'create',
+                                    formData: {
+                                      ma_so_nhan_vien: '', ho_ten: '', ngay_sinh: '', cmnd: '',
+                                      sdt_ca_nhan: '', sdt_cong_ty: '', email: '', email_ca_nhan: '',
+                                      id_don_vi: selectedUnitFilter,
+                                      id_phap_nhan: defaultLegal,
+                                      ten_phap_nhan: phapNhanList.find(p => p.id === defaultLegal)?.ten_cong_ty || '',
+                                      ten_don_vi: targetUnit ? targetUnit.ten_don_vi : '',
+                                      phong_ban: '', chuc_vu: '', ngach_luong: '',
+                                      ngay_nhan_viec: new Date().toISOString().split('T')[0],
+                                      gioi_tinh: 'Nam', trang_thai: 'Đang làm việc'
+                                    }
+                                  });
                                   setIsFeaturesDropdownOpen(false);
                                 }}
                                 className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
@@ -1317,49 +1336,49 @@ export default function PersonnelPage() {
                             </div>
                           )}
                         </div>
-                      )}
 
-                      {/* 3. Xuất danh bạ */}
-                      <div className="border-t border-gray-100 pt-1 mt-1">
-                        <button 
-                          onClick={() => {
-                            setIsExportModalOpen(true);
-                            setIsFeaturesDropdownOpen(false);
-                          }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center gap-2.5 transition-all"
-                        >
-                          <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
-                            <FileSpreadsheet size={14} />
-                          </div>
-                          <span>Xuất danh bạ (Excel)</span>
-                        </button>
-                      </div>
-
-                      {/* 4. Copy email theo điều kiện */}
-                      <div className="border-t border-gray-100 pt-1 mt-1">
-                        <button 
-                          onClick={() => {
-                            setIsCopyEmailDropdownOpen(true);
-                            setIsFeaturesDropdownOpen(false);
-                          }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center justify-between transition-all"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
-                              <Copy size={14} />
+                        {/* 3. Xuất danh bạ */}
+                        <div className="border-t border-gray-100 pt-1 mt-1">
+                          <button 
+                            onClick={() => {
+                              setIsExportModalOpen(true);
+                              setIsFeaturesDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center gap-2.5 transition-all"
+                          >
+                            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                              <FileSpreadsheet size={14} />
                             </div>
-                            <span>Copy email theo điều kiện</span>
-                          </div>
-                          <ChevronRight size={14} className="text-gray-400" />
-                        </button>
-                      </div>
+                            <span>Xuất danh bạ (Excel)</span>
+                          </button>
+                        </div>
 
-                    </div>
-                  </>
-                )}
+                        {/* 4. Copy email theo điều kiện */}
+                        <div className="border-t border-gray-100 pt-1 mt-1">
+                          <button 
+                            onClick={() => {
+                              setIsCopyEmailDropdownOpen(true);
+                              setIsFeaturesDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center justify-between transition-all"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
+                                <Copy size={14} />
+                              </div>
+                              <span>Copy email theo điều kiện</span>
+                            </div>
+                            <ChevronRight size={14} className="text-gray-400" />
+                          </button>
+                        </div>
+
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* 🟢 BỘ LỌC NÂNG CAO (BO PHAN, KHOI, CHUC VU, PHAN LOAI) */}
