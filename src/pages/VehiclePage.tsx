@@ -517,100 +517,104 @@ export default function VehiclePage() {
       />
 
       {/* --- CỘT PHẢI (DANH SÁCH XE) --- */}
-      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 w-full flex flex-col">
-        <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''} shrink-0`}>
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            {isListCollapsed && (
-              <button 
-                onClick={() => setIsListCollapsed(false)} 
-                className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
-                title="Mở bộ lọc đơn vị"
-              >
-                <PanelLeftOpen size={18} />
-              </button>
-            )}
-            <div>
-              <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Car size={28} /> Quản lý Đội xe</h2>
-              <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredCars.length} xe)</p>
-            </div>
-          </div>
-          <div className="flex w-full sm:w-auto gap-3">
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input type="text" placeholder="Tìm Biển số, Hiệu xe..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={carSearchTerm} onChange={(e) => setCarSearchTerm(e.target.value)} />
-            </div>
-            <button onClick={() => openCarModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Thêm Xe Mới</button>
-          </div>
-        </div>
-
-        {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm shrink-0"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
-
-        {/* 🟢 THANH CẢNH BÁO HẠN ĐĂNG KIỂM & BẢO HIỂM XE */}
-        {expiringCars.length > 0 && !isDismissed && (
-          <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''} shrink-0`}>
-            <div className="bg-red-50 border border-red-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="flex justify-between items-center p-3 sm:p-4">
-                <div 
-                  className="flex items-center gap-2 text-red-700 cursor-pointer flex-1"
-                  onClick={() => setIsWarningOpen(!isWarningOpen)}
+      <div className="flex-1 min-w-0 max-w-full overflow-hidden p-4 sm:p-6 relative transition-all duration-300 w-full flex flex-col">
+        
+        {/* FIXED HEADER & WARNINGS */}
+        <div className="shrink-0 flex flex-col z-10">
+          <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              {isListCollapsed && (
+                <button 
+                  onClick={() => setIsListCollapsed(false)} 
+                  className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
+                  title="Mở bộ lọc đơn vị"
                 >
-                  <AlertCircle size={18} className={expiringCars.some(i => i.diffDays < 0) ? "animate-pulse shrink-0" : "shrink-0"} />
-                  <h3 className="font-bold text-sm">
-                    {expiringCars.length} hạng mục xe sắp / đã quá hạn ĐK & Bảo hiểm
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2 text-gray-400 shrink-0">
-                  <button onClick={() => setIsWarningOpen(!isWarningOpen)} className="p-1 hover:text-red-600 hover:bg-red-100 rounded transition-colors" title="Xem chi tiết">
-                    {isWarningOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </button>
-                  <div className="w-px h-4 bg-gray-300"></div>
-                  <button onClick={(e) => { e.stopPropagation(); setIsDismissed(true); }} className="p-1 hover:text-red-600 hover:bg-red-100 rounded transition-colors" title="Đóng cảnh báo">
-                    <X size={16} />
-                  </button>
-                </div>
+                  <PanelLeftOpen size={18} />
+                </button>
+              )}
+              <div>
+                <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Car size={28} /> Quản lý Đội xe</h2>
+                <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredCars.length} xe)</p>
               </div>
+            </div>
+            <div className="flex w-full sm:w-auto gap-3">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input type="text" placeholder="Tìm Biển số, Hiệu xe..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={carSearchTerm} onChange={(e) => setCarSearchTerm(e.target.value)} />
+              </div>
+              <button onClick={() => openCarModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Thêm Xe Mới</button>
+            </div>
+          </div>
 
-              {isWarningOpen && (
-                <div className="border-t border-red-100 bg-white">
-                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                    <table className="w-full text-left text-sm">
-                      <tbody className="divide-y divide-gray-100">
-                        {expiringCars.map((warn, idx) => (
-                          <tr key={idx} className="hover:bg-red-50/30 transition-colors">
-                            <td className="p-3 w-28">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${warn.diffDays < 0 ? 'bg-red-100 text-red-700 border-red-200' : warn.diffDays === 0 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
-                                {warn.diffDays < 0 ? 'QUÁ HẠN' : warn.diffDays === 0 ? 'HÔM NAY' : 'SẮP HẾT HẠN'}
-                              </span>
-                            </td>
-                            <td className="p-3 font-semibold text-gray-800">
-                              {warn.type}
-                              <span className="text-gray-400 mx-2">—</span>
-                              <span className="text-[#05469B] font-bold">{warn.name}</span>
-                            </td>
-                            <td className="p-3 text-gray-600 text-xs w-48">
-                              {warn.unitName}
-                            </td>
-                            <td className="p-3 text-right font-bold text-gray-700 text-xs w-32">
-                              {warn.dateStr}
-                              {warn.diffDays > 0 && <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Còn {warn.diffDays} ngày</span>}
-                              {warn.diffDays < 0 && <span className="block text-[10px] font-normal text-red-500 mt-0.5">Trễ {Math.abs(warn.diffDays)} ngày</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm shrink-0"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
+
+          {/* 🟢 THANH CẢNH BÁO HẠN ĐĂNG KIỂM & BẢO HIỂM XE */}
+          {expiringCars.length > 0 && !isDismissed && (
+            <div className={`mb-6 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
+              <div className="bg-red-50 border border-red-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="flex justify-between items-center p-3 sm:p-4">
+                  <div 
+                    className="flex items-center gap-2 text-red-700 cursor-pointer flex-1"
+                    onClick={() => setIsWarningOpen(!isWarningOpen)}
+                  >
+                    <AlertCircle size={18} className={expiringCars.some(i => i.diffDays < 0) ? "animate-pulse shrink-0" : "shrink-0"} />
+                    <h3 className="font-bold text-sm">
+                      {expiringCars.length} hạng mục xe sắp / đã quá hạn ĐK & Bảo hiểm
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-400 shrink-0">
+                    <button onClick={() => setIsWarningOpen(!isWarningOpen)} className="p-1 hover:text-red-600 hover:bg-red-100 rounded transition-colors" title="Xem chi tiết">
+                      {isWarningOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                    <div className="w-px h-4 bg-gray-300"></div>
+                    <button onClick={(e) => { e.stopPropagation(); setIsDismissed(true); }} className="p-1 hover:text-red-600 hover:bg-red-100 rounded transition-colors" title="Đóng cảnh báo">
+                      <X size={16} />
+                    </button>
                   </div>
                 </div>
-              )}
+
+                {isWarningOpen && (
+                  <div className="border-t border-red-100 bg-white">
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                      <table className="w-full text-left text-sm">
+                        <tbody className="divide-y divide-gray-100">
+                          {expiringCars.map((warn, idx) => (
+                            <tr key={idx} className="hover:bg-red-50/30 transition-colors">
+                              <td className="p-3 w-28">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${warn.diffDays < 0 ? 'bg-red-100 text-red-700 border-red-200' : warn.diffDays === 0 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                                  {warn.diffDays < 0 ? 'QUÁ HẠN' : warn.diffDays === 0 ? 'HÔM NAY' : 'SẮP HẾT HẠN'}
+                                </span>
+                              </td>
+                              <td className="p-3 font-semibold text-gray-800">
+                                {warn.type}
+                                <span className="text-gray-400 mx-2">—</span>
+                                <span className="text-[#05469B] font-bold">{warn.name}</span>
+                              </td>
+                              <td className="p-3 text-gray-600 text-xs w-48">
+                                {warn.unitName}
+                              </td>
+                              <td className="p-3 text-right font-bold text-gray-700 text-xs w-32">
+                                {warn.dateStr}
+                                {warn.diffDays > 0 && <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Còn {warn.diffDays} ngày</span>}
+                                {warn.diffDays < 0 && <span className="block text-[10px] font-normal text-red-500 mt-0.5">Trễ {Math.abs(warn.diffDays)} ngày</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* BẢNG DỮ LIỆU CHÍNH */}
-        <div className={`flex flex-col flex-1 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+        <div className={`flex flex-col flex-1 min-h-0 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
           
           {/* BẢNG DỮ LIỆU PC */}
-          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full flex-1 overflow-x-auto custom-scrollbar">
+          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 w-full flex-1 min-h-0 overflow-auto custom-scrollbar">
             <table className="w-full table-fixed text-left border-collapse min-w-[1100px] text-[12px]">
               <thead className="sticky top-0 bg-[#f8fafc] z-10">
                 <tr className="border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
@@ -779,7 +783,7 @@ export default function VehiclePage() {
           </div>
 
           {/* 🟢 VIEW TRÊN MOBILE: THẺ CARD DỌC */}
-          <div className="block md:hidden space-y-4 custom-scrollbar">
+          <div className="block md:hidden flex-1 min-h-0 overflow-y-auto space-y-4 custom-scrollbar">
             {filteredCars.length === 0 ? (
               <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center text-gray-400 italic">Không có xe nào trong danh sách hiển thị.</div>
             ) : (
@@ -860,15 +864,17 @@ export default function VehiclePage() {
           </div>
 
           {/* 🟢 GIAO DIỆN PHÂN TRANG (PAGINATION BAR) */}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            rowsPerPage={rowsPerPage}
-            totalRows={filteredCars.length}
-            onPageChange={setCurrentPage}
-            onRowsPerPageChange={(rows) => { setRowsPerPage(rows); setCurrentPage(1); }}
-            itemName="xe"
-          />
+          <div className="shrink-0 pt-2">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              rowsPerPage={rowsPerPage}
+              totalRows={filteredCars.length}
+              onPageChange={setCurrentPage}
+              onRowsPerPageChange={(rows) => { setRowsPerPage(rows); setCurrentPage(1); }}
+              itemName="xe"
+            />
+          </div>
 
         </div>
       </div>

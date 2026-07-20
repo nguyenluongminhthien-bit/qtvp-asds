@@ -1480,27 +1480,28 @@ export default function CuocDiDongTab({
   return (
     <div className="flex flex-col flex-1 h-full min-h-0">
       
-      {/* TOOLBAR FILTER & ACTIONS */}
-      <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-3 shrink-0 shadow-sm">
-        
-        {/* HÀNG 1: CÁC BỘ LỌC VÀ Ô TÌM KIẾM */}
-        <div className="flex flex-wrap items-center gap-3.5">
-          <div>
+      {/* TOOLBAR FILTER & ACTIONS: TẤT CẢ TRÊN CÙNG 1 DÒNG */}
+      <div className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0 shadow-sm overflow-x-auto custom-scrollbar">
+        <div className="flex items-end justify-between gap-2.5 xl:gap-3.5 min-w-max w-full">
+          
+          {/* 1. KỲ CƯỚC */}
+          <div className="shrink-0">
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kỳ cước</label>
             <input
               type="month"
               value={filterThang}
               onChange={(e) => { setFilterThang(e.target.value); setCurrentPage(1); }}
-              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-[#FFFFF0] dark:bg-gray-900 font-bold outline-none focus:ring-2 focus:ring-[#05469B]"
+              className="px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs bg-[#FFFFF0] dark:bg-gray-900 font-bold outline-none focus:ring-2 focus:ring-[#05469B] h-8.5"
             />
           </div>
 
-          <div>
+          {/* 2. PHÁP NHÂN */}
+          <div className="shrink-0">
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Pháp nhân</label>
             <select
               value={filterPhapNhan}
               onChange={(e) => { setFilterPhapNhan(e.target.value); setCurrentPage(1); }}
-              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B] max-w-[200px]"
+              className="px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B] max-w-[180px] xl:max-w-[200px] truncate h-8.5"
             >
               <option value="">-- Tất cả Pháp nhân --</option>
               {filteredPhapNhansForFilter.map(pn => (
@@ -1508,12 +1509,14 @@ export default function CuocDiDongTab({
               ))}
             </select>
           </div>
-          <div>
+
+          {/* 3. LOẠI THUÊ BAO */}
+          <div className="shrink-0">
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Loại thuê bao</label>
             <select
               value={filterLoai}
               onChange={(e) => { setFilterLoai(e.target.value); setCurrentPage(1); }}
-              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B]"
+              className="px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B] h-8.5"
             >
               <option value="">-- Tất cả --</option>
               <option value="Cá nhân">Cá nhân</option>
@@ -1521,12 +1524,14 @@ export default function CuocDiDongTab({
               <option value="Hotline">Hotline</option>
             </select>
           </div>
-          <div>
+
+          {/* 4. TRẠNG THÁI */}
+          <div className="shrink-0">
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Trạng thái</label>
             <select
               value={filterTrangThai}
               onChange={(e) => { setFilterTrangThai(e.target.value); setCurrentPage(1); }}
-              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B]"
+              className="px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B] h-8.5"
             >
               <option value="Đang hoạt động">Đang hoạt động</option>
               <option value="Tạm ngưng">Tạm ngưng</option>
@@ -1535,12 +1540,14 @@ export default function CuocDiDongTab({
               <option value="">Tất cả trạng thái</option>
             </select>
           </div>
-          <div>
+
+          {/* 5. KIỂM SOÁT ĐỊNH MỨC */}
+          <div className="shrink-0">
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kiểm soát định mức</label>
             <select
               value={filterVuot}
               onChange={(e) => { setFilterVuot(e.target.value); setCurrentPage(1); }}
-              className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B]"
+              className="px-2.5 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs bg-white dark:bg-gray-900 font-medium outline-none focus:ring-2 focus:ring-[#05469B] h-8.5"
             >
               <option value="">-- Kiểm soát ĐM --</option>
               <option value="vuot">SIM Vượt định mức</option>
@@ -1548,72 +1555,70 @@ export default function CuocDiDongTab({
               <option value="khong_dm">SIM Thanh toán thực tế</option>
             </select>
           </div>
-          <div>
+
+          {/* 6. TÌM KIẾM */}
+          <div className="flex-1 min-w-[160px] max-w-[220px]">
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tìm kiếm</label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
+              <Search className="absolute left-2.5 top-2.5 text-gray-400" size={15} />
               <input
                 type="text"
                 placeholder="Tìm SĐT, Họ tên, MSNV..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                className="pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] w-[200px]"
+                className="pl-8 pr-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] w-full h-8.5"
               />
             </div>
           </div>
-        </div>
 
-        {/* HÀNG 2: THÊM MỚI SIM BÊN TRÁI ➔ NÚT NHẬP CƯỚC EXCEL PHÍA ĐỐI DIỆN BÊN PHẢI */}
-        <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-gray-100 dark:border-gray-700">
-          
-          {/* BÊN TRÁI: NÚT THÊM MỚI SIM (DROPDOWN 2 LỰA CHỌN TRÊN 1 DÒNG KHÔNG XUỐNG DÒNG) */}
-          <div className="relative">
+          {/* 7. NÚT THÊM (VÙNG Ô XANH) */}
+          <div className="relative shrink-0">
             <button
               onClick={() => setShowAddSimDropdown(!showAddSimDropdown)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1.5 px-4 h-8.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all whitespace-nowrap"
             >
-              <Plus size={16} />
-              Thêm Mới SIM
-              <ChevronDown size={14} className={`transition-transform duration-200 ${showAddSimDropdown ? 'rotate-180' : ''}`} />
+              <Plus size={15} />
+              Thêm
+              <ChevronDown size={13} className={`transition-transform duration-200 ${showAddSimDropdown ? 'rotate-180' : ''}`} />
             </button>
 
             {showAddSimDropdown && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowAddSimDropdown(false)}></div>
-                <div className="absolute left-0 top-full mt-2 min-w-[240px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-2 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute right-0 top-full mt-1.5 min-w-[230px] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-1.5 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
                   <button
                     onClick={() => {
                       openCreateModal();
                       setShowAddSimDropdown(false);
                     }}
-                    className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
+                    className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
                   >
-                    <Plus size={15} /> Thêm mới thủ công 1 SIM
+                    <Plus size={15} /> 1. Thêm Sim
                   </button>
                   <button
                     onClick={() => {
                       setBatchSimModal({ open: true, rawText: '', allowOverwrite: true, previewRows: [], isSubmitting: false });
                       setShowAddSimDropdown(false);
                     }}
-                    className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
+                    className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
                   >
-                    <UserPlus size={15} /> Thêm mới hàng loạt
+                    <UserPlus size={15} /> 2. Thêm hàng loạt Sim
+                  </button>
+                  <button
+                    onClick={() => {
+                      setImportModal(true);
+                      setShowAddSimDropdown(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs hover:bg-blue-50 dark:hover:bg-blue-950/30 text-[#05469B] dark:text-blue-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
+                  >
+                    <FileSpreadsheet size={15} /> 3. Cập nhật cước
                   </button>
                 </div>
               </>
             )}
           </div>
 
-          {/* PHÍA ĐỐI DIỆN GÓC BÊN PHẢI: NÚT NHẬP CƯỚC EXCEL */}
-          <button
-            onClick={() => setImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#05469B] hover:bg-[#04367a] text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0 whitespace-nowrap"
-          >
-            <FileSpreadsheet size={16} />
-            Nhập Cước Excel
-          </button>
         </div>
-
       </div>
 
       {/* SUMMARY STATS BAR */}
