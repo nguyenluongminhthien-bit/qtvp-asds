@@ -3,7 +3,7 @@ import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
   Users, Activity, FileSpreadsheet, Briefcase, Calendar,
   ChevronLeft, ChevronRight, Phone, TrendingUp, CheckCircle2, History, Link2, ExternalLink,
-  Pencil, ArrowLeftRight, UserPlus, PauseCircle, PlayCircle, XCircle, Zap
+  Pencil, ArrowLeftRight, UserPlus, PauseCircle, PlayCircle, XCircle, Zap, ChevronDown
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { Personnel, DonVi, ThueBao, CuocThang, LichSuNSD } from '../../types';
@@ -154,6 +154,40 @@ export default function CuocDiDongTab({
   const [importRawText, setImportRawText] = useState('');
   const [importPreview, setImportPreview] = useState<ImportRow[]>([]);
   const [importing, setImporting] = useState(false);
+
+  // Batch SIM Creation States
+  const [showAddSimDropdown, setShowAddSimDropdown] = useState(false);
+  const [batchSimModal, setBatchSimModal] = useState<{
+    open: boolean;
+    rawText: string;
+    allowOverwrite: boolean;
+    previewRows: {
+      stt: string;
+      msnv: string;
+      hoTenExcel: string;
+      soDienThoai: string;
+      dinhMuc: number | null;
+      ngayCap: string;
+      nhaMang: string;
+      loaiThueBao: string;
+      idDonVi: string;
+      tenDonVi: string;
+      idPhapNhan: string;
+      tenPhapNhan: string;
+      matchedPersonnel: Personnel | null;
+      sdtCtyNote?: string;
+      isDuplicate: boolean;
+      status: 'VALID' | 'WARNING_NO_NV' | 'UPDATE_EXISTING' | 'ERROR_DUPLICATE' | 'INVALID';
+      errorMessage?: string;
+    }[];
+    isSubmitting: boolean;
+  }>({
+    open: false,
+    rawText: '',
+    allowOverwrite: true,
+    previewRows: [],
+    isSubmitting: false
+  });
 
   // Chart Tooltip state
   const [chartTooltip, setChartTooltip] = useState<{
@@ -552,11 +586,40 @@ export default function CuocDiDongTab({
       }
 
       await apiService.save(payload, mode, 'dm_thue_bao');
+
+      // 🟢 TỰ ĐỘNG ĐỒNG BỘ SDT CÔNG TY SANG HỒ SƠ NHÂN SỰ
+      if (payload.id_nhan_su && payload.so_dien_thoai) {
+        await syncPersonnelCompanyPhone(payload.id_nhan_su, payload.so_dien_thoai);
+      }
+
       toast.success(isCreate ? 'Thêm mới thuê bao thành công!' : 'Cập nhật thuê bao thành công!');
       setThueBaoModal(prev => ({ ...prev, open: false }));
       loadData();
     } catch (err: any) {
       toast.error('Lỗi khi lưu dữ liệu thuê bao: ' + err.message);
+    }
+  };
+
+  // ── Hàm helper: Tự động đồng bộ SDT SIM sang sdt_cong_ty của Nhân sự ──
+  const syncPersonnelCompanyPhone = async (idNhanSu: string | null | undefined, newPhone: string | null) => {
+    if (!idNhanSu) return;
+    const person = personnel.find(p => String(p.id) === String(idNhanSu));
+    if (!person) return;
+
+    const currentCtyPhone = parsePhoneNumberWithZero(person.sdt_cong_ty || '');
+    const targetPhone = newPhone ? parsePhoneNumberWithZero(newPhone) : '';
+
+    if (currentCtyPhone !== targetPhone) {
+      try {
+        await apiService.save(
+          { ...person, sdt_cong_ty: targetPhone },
+          'update',
+          'ns_dich_vu'
+        );
+        person.sdt_cong_ty = targetPhone;
+      } catch (err) {
+        console.error('Lỗi đồng bộ SĐT Cty cho Nhân sự:', err);
+      }
     }
   };
 
@@ -625,6 +688,12 @@ export default function CuocDiDongTab({
         lich_su_nsd: lichSuMoi,
         updated_at: new Date().toISOString(),
       }, 'update', 'dm_thue_bao');
+
+      // 🟢 Xóa SĐT Công ty khỏi hồ sơ nhân sự khi thu hồi SIM
+      if (thueBao.id_nhan_su) {
+        await syncPersonnelCompanyPhone(thueBao.id_nhan_su, '');
+      }
+
       toast.success(`Đã thu hồi SIM ${thueBao.so_dien_thoai}`);
       setThuHoiModal({ open: false, thueBao: null, lyDo: '' });
       setSelectedThueBaoId(null);
@@ -670,6 +739,12 @@ export default function CuocDiDongTab({
         lich_su_nsd: lichSuMoi,
         updated_at: new Date().toISOString(),
       }, 'update', 'dm_thue_bao');
+
+      // 🟢 Cập nhật SĐT Công ty cho Nhân sự được tái cấp SIM
+      if (nvMoi.id) {
+        await syncPersonnelCompanyPhone(nvMoi.id, thueBao.so_dien_thoai);
+      }
+
       toast.success(`Đã tái cấp SIM ${thueBao.so_dien_thoai} cho ${nvMoi.ho_ten}`);
       setTaiCapModal({ open: false, thueBao: null, nvMoi: null, ngayTaiCap: '', lyDo: '' });
       setSelectedThueBaoId(null);
@@ -987,6 +1062,253 @@ export default function CuocDiDongTab({
     }
   };
 
+  // ── LOGIC THÊM SIM / THUÊ BAO HÀNG LOẠT (COPY/PASTE EXCEL) ──────────
+  const parsePhoneNumberWithZero = (phoneStr: string): string => {
+    if (!phoneStr) return '';
+    let clean = String(phoneStr).replace(/[^0-9]/g, '');
+    if (clean.length === 9) {
+      clean = '0' + clean;
+    }
+    return clean;
+  };
+
+  const parseDateDDMMYYYY = (dateStr: string): string => {
+    if (!dateStr || !String(dateStr).trim()) return new Date().toISOString().split('T')[0];
+    const cleanStr = String(dateStr).trim().split(' ')[0];
+    if (cleanStr.includes('/')) {
+      const parts = cleanStr.split('/');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        if (year.length === 4) {
+          return `${year}-${month}-${day}`;
+        }
+      }
+    }
+    if (cleanStr.includes('-')) {
+      const parts = cleanStr.split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        return cleanStr;
+      }
+    }
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const getDefaultUnitAndLegalEntity = (
+    unitFilter: string | null,
+    donViList: DonVi[],
+    phapNhanList: any[]
+  ) => {
+    let targetUnitId = unitFilter && unitFilter !== 'ALL' ? unitFilter : '';
+    if (!targetUnitId && donViList.length > 0) {
+      targetUnitId = donViList[0].id;
+    }
+    const foundUnit = donViList.find(d => String(d.id) === String(targetUnitId));
+    const unitName = foundUnit ? foundUnit.ten_don_vi : '';
+
+    let targetPnId = foundUnit?.id_phap_nhan || '';
+    let foundPn = phapNhanList.find(p => String(p.id) === String(targetPnId));
+    if (!foundPn && phapNhanList.length > 0) {
+      foundPn = phapNhanList[0];
+      targetPnId = foundPn.id;
+    }
+    const pnName = foundPn ? (foundPn.ten_cong_ty || foundPn.ten_phap_nhan) : '';
+
+    return {
+      idDonVi: targetUnitId,
+      tenDonVi: unitName,
+      idPhapNhan: targetPnId,
+      tenPhapNhan: pnName
+    };
+  };
+
+  const handleParseBatchSIM = () => {
+    if (!batchSimModal.rawText.trim()) {
+      toast.error('Vui lòng dán dữ liệu danh sách SIM từ Excel vào ô!');
+      return;
+    }
+
+    const defaultLoc = getDefaultUnitAndLegalEntity(selectedUnitFilter, donViList, phapNhanList);
+    const existingPhoneSet = new Set(thueBaoList.map(tb => parsePhoneNumberWithZero(tb.so_dien_thoai)));
+    const batchPhoneSet = new Set<string>();
+
+    const lines = batchSimModal.rawText.split('\n').filter(l => l.trim());
+    const parsedRows: any[] = [];
+
+    lines.forEach((line) => {
+      const cols = line.split('\t').map(c => c.trim());
+
+      // Bỏ qua dòng tiêu đề nếu khớp các tên cột Excel
+      if (
+        cols.some(c => /^(stt|msnv|họ|tên|chức vụ-bp|số đt|định mức|thời gian cấp)$/i.test(c.toLowerCase()))
+      ) {
+        return;
+      }
+
+      // Đọc các cột theo đúng vị trí của file Excel:
+      // Col 0: STT
+      // Col 1: MSNV
+      // Col 2: Họ
+      // Col 3: Tên
+      // Col 4: CHỨC VỤ-BP
+      // Col 5: SỐ ĐT
+      // Col 6: ĐỊNH MỨC
+      // Col 7: Thời gian cấp (ví dụ: 31/03/2016 10:46:42)
+      const stt = cols[0] || '';
+      const msnv = cols[1] || '';
+      const ho = cols[2] || '';
+      const ten = cols[3] || '';
+      const hoTenExcel = `${ho} ${ten}`.trim();
+      const rawPhone = cols[5] || '';
+      const sdt = parsePhoneNumberWithZero(rawPhone);
+      const rawDinhMuc = parseNum(cols[6]);
+      const rawDate = cols[7] || '';
+      const ngayCap = parseDateDDMMYYYY(rawDate);
+
+      // Khớp nhân sự theo MSNV
+      const matchedPersonnel = personnel.find(p =>
+        msnv && String(p.ma_so_nhan_vien || '').trim().toLowerCase() === msnv.trim().toLowerCase()
+      ) || null;
+
+      const dinhMuc = rawDinhMuc > 0
+        ? rawDinhMuc
+        : (matchedPersonnel?.dinh_muc_cuoc || null);
+
+      let existingSimInDB = thueBaoList.find(tb => parsePhoneNumberWithZero(tb.so_dien_thoai) === sdt);
+      let isDuplicateInBatch = false;
+      let errorMessage = '';
+
+      if (!sdt) {
+        errorMessage = 'Thiếu Số Điện thoại';
+      } else if (batchPhoneSet.has(sdt)) {
+        isDuplicateInBatch = true;
+        errorMessage = 'SĐT bị dán trùng 2 lần trong file dán';
+      } else {
+        batchPhoneSet.add(sdt);
+      }
+
+      // Đối chiếu với SDT Cty sẵn có trong Hồ sơ Nhân sự
+      let sdtCtyNote = '';
+      if (matchedPersonnel) {
+        const existingCtyPhone = parsePhoneNumberWithZero(matchedPersonnel.sdt_cong_ty || '');
+        if (existingCtyPhone && existingCtyPhone === sdt) {
+          sdtCtyNote = 'Đã có sẵn SĐT Cty trong Hồ sơ (Khớp chuẩn)';
+        } else if (existingCtyPhone && existingCtyPhone !== sdt) {
+          sdtCtyNote = `Đổi SĐT Cty: ${formatPhoneNumber(existingCtyPhone)} ➔ ${formatPhoneNumber(sdt)}`;
+        } else {
+          sdtCtyNote = 'Tự động cập nhật SĐT Cty mới';
+        }
+      } else if (sdt) {
+        const otherPerson = personnel.find(p => parsePhoneNumberWithZero(p.sdt_cong_ty || '') === sdt);
+        if (otherPerson) {
+          sdtCtyNote = `Trùng SĐT Cty của NV ${otherPerson.ho_ten} (${otherPerson.ma_so_nhan_vien})`;
+        }
+      }
+
+      let status: 'VALID' | 'WARNING_NO_NV' | 'UPDATE_EXISTING' | 'ERROR_DUPLICATE' | 'INVALID' = 'VALID';
+      if (!sdt) {
+        status = 'INVALID';
+      } else if (isDuplicateInBatch) {
+        status = 'ERROR_DUPLICATE';
+      } else if (existingSimInDB) {
+        if (batchSimModal.allowOverwrite) {
+          status = 'UPDATE_EXISTING';
+          errorMessage = 'SIM đã tồn tại ➔ Sẽ cập nhật/ghi đè thông tin mới';
+        } else {
+          status = 'ERROR_DUPLICATE';
+          errorMessage = 'SĐT đã tồn tại trên CSDL';
+        }
+      } else if (!matchedPersonnel) {
+        status = 'WARNING_NO_NV';
+        errorMessage = 'Chưa khớp MSNV';
+      }
+
+      parsedRows.push({
+        stt,
+        msnv,
+        hoTenExcel,
+        soDienThoai: sdt,
+        dinhMuc,
+        ngayCap,
+        nhaMang: 'Mobifone',
+        loaiThueBao: 'Cá nhân',
+        idDonVi: defaultLoc.idDonVi,
+        tenDonVi: defaultLoc.tenDonVi,
+        idPhapNhan: defaultLoc.idPhapNhan,
+        tenPhapNhan: defaultLoc.tenPhapNhan,
+        matchedPersonnel,
+        sdtCtyNote,
+        isDuplicate: isDuplicateInBatch || (Boolean(existingSimInDB) && !batchSimModal.allowOverwrite),
+        status,
+        errorMessage
+      });
+    });
+
+    if (parsedRows.length === 0) {
+      toast.error('Không tìm thấy dòng dữ liệu SIM hợp lệ nào từ chuỗi dán!');
+      return;
+    }
+
+    setBatchSimModal(prev => ({ ...prev, previewRows: parsedRows }));
+  };
+
+  const handleConfirmBatchSIM = async () => {
+    const validRows = batchSimModal.previewRows.filter(r => r.status !== 'ERROR_DUPLICATE' && r.status !== 'INVALID');
+    if (validRows.length === 0) {
+      toast.error('Không có dòng SIM hợp lệ để lưu!');
+      return;
+    }
+
+    setBatchSimModal(prev => ({ ...prev, isSubmitting: true }));
+    try {
+      for (const row of validRows) {
+        const isUpdateMode = row.status === 'UPDATE_EXISTING';
+        const existingSim = isUpdateMode ? thueBaoList.find(tb => parsePhoneNumberWithZero(tb.so_dien_thoai) === row.soDienThoai) : null;
+
+        const payload: Partial<ThueBao> = {
+          id: existingSim?.id || `DM-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+          so_dien_thoai: row.soDienThoai,
+          loai_thue_bao: row.loaiThueBao || 'Cá nhân',
+          nha_mang: row.nhaMang || 'Mobifone',
+          id_nhan_su: row.matchedPersonnel?.id || null,
+          ma_so_nv: row.matchedPersonnel?.ma_so_nhan_vien || row.msnv || '',
+          ho_ten_nv: row.matchedPersonnel?.ho_ten || row.hoTenExcel || '',
+          ten_bo_phan: row.matchedPersonnel?.phong_ban || '',
+          id_don_vi: row.idDonVi,
+          id_phap_nhan: row.idPhapNhan,
+          ten_phap_nhan: row.tenPhapNhan,
+          ngay_cap: row.ngayCap || new Date().toISOString().split('T')[0],
+          trang_thai: 'Đang hoạt động',
+          dinh_muc_cuoc: row.dinhMuc,
+          lich_su_nsd: existingSim?.lich_su_nsd || [
+            {
+              ho_ten: row.matchedPersonnel?.ho_ten || row.hoTenExcel || 'Khai báo mới',
+              ma_so_nv: row.matchedPersonnel?.ma_so_nhan_vien || row.msnv || '',
+              tu_ngay: row.ngayCap || new Date().toISOString().split('T')[0],
+              den_ngay: '',
+              ly_do: 'Khai báo cấp phát mới hàng loạt',
+              nguoi_ghi: user?.ho_ten || 'Hệ thống'
+            }
+          ]
+        };
+        await apiService.save(payload, isUpdateMode ? 'update' : 'create', 'dm_thue_bao');
+
+        // 🟢 Đồng bộ SĐT Cty vào Hồ sơ nhân sự khi khai báo SIM mới hàng loạt
+        if (row.matchedPersonnel?.id) {
+          await syncPersonnelCompanyPhone(row.matchedPersonnel.id, row.soDienThoai);
+        }
+      }
+      toast.success(`Đã thêm mới thành công ${validRows.length} thuê bao!`);
+      setBatchSimModal({ open: false, rawText: '', previewRows: [], isSubmitting: false });
+      loadData();
+    } catch (err: any) {
+      toast.error('Lỗi khi lưu danh sách SIM: ' + err.message);
+    } finally {
+      setBatchSimModal(prev => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
   // Render SVG Line Chart (Clean custom SVG inline, no dependencies)
   const renderSVGChart = () => {
     if (!selectedRowDetails) return null;
@@ -1165,8 +1487,10 @@ export default function CuocDiDongTab({
   return (
     <div className="flex flex-col flex-1 h-full min-h-0">
       
-      {/* TOOLBAR FILTER */}
-      <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-sm">
+      {/* TOOLBAR FILTER & ACTIONS */}
+      <div className="bg-white dark:bg-gray-800 p-4 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-3 shrink-0 shadow-sm">
+        
+        {/* HÀNG 1: CÁC BỘ LỌC VÀ Ô TÌM KIẾM */}
         <div className="flex flex-wrap items-center gap-3.5">
           <div>
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kỳ cước</label>
@@ -1240,27 +1564,63 @@ export default function CuocDiDongTab({
                 placeholder="Tìm SĐT, Họ tên, MSNV..."
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                className="pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] w-[220px]"
+                className="pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-[#05469B] w-[200px]"
               />
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* HÀNG 2: THÊM MỚI SIM BÊN TRÁI ➔ NÚT NHẬP CƯỚC EXCEL PHÍA ĐỐI DIỆN BÊN PHẢI */}
+        <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-gray-100 dark:border-gray-700">
+          
+          {/* BÊN TRÁI: NÚT THÊM MỚI SIM (DROPDOWN 2 LỰA CHỌN TRÊN 1 DÒNG KHÔNG XUỐNG DÒNG) */}
+          <div className="relative">
+            <button
+              onClick={() => setShowAddSimDropdown(!showAddSimDropdown)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0 whitespace-nowrap"
+            >
+              <Plus size={16} />
+              Thêm Mới SIM
+              <ChevronDown size={14} className={`transition-transform duration-200 ${showAddSimDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showAddSimDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowAddSimDropdown(false)}></div>
+                <div className="absolute left-0 top-full mt-2 min-w-[240px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-2 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
+                  <button
+                    onClick={() => {
+                      openCreateModal();
+                      setShowAddSimDropdown(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
+                  >
+                    <Plus size={15} /> Thêm mới thủ công 1 SIM
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBatchSimModal({ open: true, rawText: '', allowOverwrite: true, previewRows: [], isSubmitting: false });
+                      setShowAddSimDropdown(false);
+                    }}
+                    className="w-full text-left px-3.5 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
+                  >
+                    <UserPlus size={15} /> Thêm mới hàng loạt
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* PHÍA ĐỐI DIỆN GÓC BÊN PHẢI: NÚT NHẬP CƯỚC EXCEL */}
           <button
             onClick={() => setImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0"
+            className="flex items-center gap-2 px-4 py-2 bg-[#05469B] hover:bg-[#04367a] text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0 whitespace-nowrap"
           >
-            <FileSpreadsheet size={15} />
+            <FileSpreadsheet size={16} />
             Nhập Cước Excel
           </button>
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all shrink-0"
-          >
-            <Plus size={15} />
-            Thêm Thuê Bao
-          </button>
         </div>
+
       </div>
 
       {/* SUMMARY STATS BAR */}
@@ -1357,7 +1717,7 @@ export default function CuocDiDongTab({
                             {row.tb.loai_thue_bao}
                           </span>
                         </td>
-                        <td className="p-3.5 font-bold text-[#05469B] dark:text-blue-400 tabular-nums font-mono">{row.tb.so_dien_thoai}</td>
+                        <td className="p-3.5 font-bold text-[#05469B] dark:text-blue-400 tabular-nums font-mono">{formatPhoneNumber(row.tb.so_dien_thoai)}</td>
                         <td className="p-3.5">
                           {row.tb.loai_thue_bao === 'Cá nhân' ? (
                             <div className="flex flex-col">
@@ -1431,7 +1791,7 @@ export default function CuocDiDongTab({
                 <div className="bg-blue-50/30 dark:bg-gray-950/20 rounded-xl p-4 border border-blue-100/50 dark:border-gray-800">
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <div className="text-2xl font-black text-[#05469B] dark:text-blue-400 tracking-wide font-mono">{selectedRowDetails.tb.so_dien_thoai}</div>
+                      <div className="text-2xl font-black text-[#05469B] dark:text-blue-400 tracking-wide font-mono">{formatPhoneNumber(selectedRowDetails.tb.so_dien_thoai)}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold">{selectedRowDetails.tb.nha_mang}</div>
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${getTrangThaiBadge(selectedRowDetails.tb.trang_thai)}`}>
@@ -1896,7 +2256,7 @@ export default function CuocDiDongTab({
             <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
               <h3 className="text-xl font-bold text-[#05469B] dark:text-blue-400 flex items-center gap-2">
                 <History size={22}/>
-                Lịch Sử Người Sử Dụng: {lichSuModal.thueBao.so_dien_thoai}
+                Lịch Sử Người Sử Dụng: {formatPhoneNumber(lichSuModal.thueBao.so_dien_thoai)}
               </h3>
               <button
                 onClick={() => setLichSuModal(prev => ({ ...prev, open: false }))}
@@ -2194,7 +2554,7 @@ export default function CuocDiDongTab({
                           <tr key={idx} className={row.status === 'SKIP' ? 'bg-red-50/20' : ''}>
                             <td className="p-2.5 text-center text-gray-400 font-bold">{idx + 1}</td>
                             <td className="p-2.5 font-bold font-mono">{row.msnv || '---'}</td>
-                            <td className="p-2.5 font-mono">{row.sdt || row.matchedTB?.so_dien_thoai || '---'}</td>
+                            <td className="p-2.5 font-mono">{formatPhoneNumber(row.sdt || row.matchedTB?.so_dien_thoai || '') || '---'}</td>
                             <td className="p-2.5">{row.matchedTB?.ho_ten_nv || <span className="text-red-400 font-semibold italic">Không khớp</span>}</td>
                             <td className="p-2.5 text-right font-bold tabular-nums">{formatCurrency(row.tongCuoc)}đ</td>
                             <td className="p-2.5 text-center">
@@ -2273,7 +2633,7 @@ export default function CuocDiDongTab({
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               SĐT: <span className="font-bold text-gray-700 dark:text-gray-200">
-                {thuHoiModal.thueBao.so_dien_thoai}
+                {formatPhoneNumber(thuHoiModal.thueBao.so_dien_thoai)}
               </span>
               {' '}— NV: <span className="font-bold text-gray-700 dark:text-gray-200">
                 {thuHoiModal.thueBao.ho_ten_nv || '—'}
@@ -2335,7 +2695,7 @@ export default function CuocDiDongTab({
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               SĐT: <span className="font-bold text-gray-700 dark:text-gray-200">
-                {taiCapModal.thueBao.so_dien_thoai}
+                {formatPhoneNumber(taiCapModal.thueBao.so_dien_thoai)}
               </span>
             </p>
 
@@ -2423,6 +2783,253 @@ export default function CuocDiDongTab({
                 Xác nhận Tái cấp
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Khai Báo SIM / Thuê Bao Hàng Loạt (Copy/Paste Excel) */}
+      {batchSimModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col animate-in zoom-in duration-200 overflow-hidden border border-gray-200 dark:border-gray-700">
+            
+            {/* HEADER */}
+            <div className="flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-700 bg-indigo-700 text-white shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/10 rounded-xl">
+                  <UserPlus size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Khai Báo SIM / Thuê Bao Hàng Loạt từ Excel</h3>
+                  <p className="text-xs text-indigo-100 mt-0.5">Copy & dán trực tiếp dữ liệu theo thứ tự cột: MSNV | Họ | Tên | SỐ ĐT | ĐỊNH MỨC | Thời gian cấp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchSimModal({ open: false, rawText: '', previewRows: [], isSubmitting: false })}
+                className="hover:bg-white/20 p-2 rounded-full transition-colors text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* BODY SCROLLABLE */}
+            <div className="overflow-y-auto flex-1 p-6 custom-scrollbar space-y-5">
+              
+              {/* HUỚNG DẪN & NHẬP CHUỖI DÁN */}
+              <div className="bg-indigo-50/70 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                <label className="block text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
+                  <FileSpreadsheet size={16} /> 1. Dán dữ liệu từ Excel (Ctrl + V)
+                </label>
+                <textarea
+                  rows={4}
+                  value={batchSimModal.rawText}
+                  onChange={(e) => setBatchSimModal(prev => ({ ...prev, rawText: e.target.value }))}
+                  placeholder={`Dán các dòng từ Excel vào đây...\nVí dụ:\n1\tNV001\tNguyễn\tVăn A\tChuyên viên\t938903526\t200000\t31/03/2016 10:46:42`}
+                  className="w-full p-3 font-mono text-xs border border-indigo-200 dark:border-indigo-800 rounded-lg bg-white dark:bg-gray-900 outline-none focus:ring-2 focus:ring-indigo-500 custom-scrollbar resize-none"
+                />
+                <div className="mt-3 flex justify-between items-center flex-wrap gap-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-indigo-950 dark:text-indigo-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={batchSimModal.allowOverwrite}
+                      onChange={(e) => setBatchSimModal(prev => ({ ...prev, allowOverwrite: e.target.checked }))}
+                      className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                    />
+                    <span>Cho phép Cập nhật / Ghi đè thông tin nếu SĐT đã có sẵn trên CSDL</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleParseBatchSIM}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-md transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <Zap size={14} /> Kiểm tra & Phân tích
+                  </button>
+                </div>
+              </div>
+
+              {/* BẢNG PREVIEW KẾT QUẢ ĐỐI CHIẾU */}
+              {batchSimModal.previewRows.length > 0 && (
+                <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                  <div className="bg-gray-100 dark:bg-gray-800 p-3 font-bold text-xs text-gray-700 dark:text-gray-200 flex justify-between items-center flex-wrap gap-2">
+                    <span>2. DANH SÁCH THUÊ BAO CHUẨN BỊ THÊM ({batchSimModal.previewRows.length} DÒNG)</span>
+                    <div className="flex gap-3 text-[11px] flex-wrap">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">🟢 {batchSimModal.previewRows.filter(r => r.status === 'VALID').length} Hợp lệ</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-extrabold">🟡 {batchSimModal.previewRows.filter(r => r.status === 'WARNING_NO_NV').length} Chưa khớp NV</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-extrabold">🔄 {batchSimModal.previewRows.filter(r => r.status === 'UPDATE_EXISTING').length} Ghi đè SIM cũ</span>
+                      <span className="text-red-600 dark:text-red-400 font-extrabold">🔴 {batchSimModal.previewRows.filter(r => r.status === 'ERROR_DUPLICATE' || r.status === 'INVALID').length} Trùng/Lỗi</span>
+                    </div>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="sticky top-0 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 font-bold text-gray-600 dark:text-gray-300 z-10">
+                        <tr>
+                          <th className="p-2.5 text-center w-10">STT</th>
+                          <th className="p-2.5 w-24">MSNV</th>
+                          <th className="p-2.5 w-28">SĐT chuẩn</th>
+                          <th className="p-2.5">Nhân sự khớp CSDL</th>
+                          <th className="p-2.5 w-28 text-right">Định mức</th>
+                          <th className="p-2.5 w-28 text-center">Ngày cấp SIM</th>
+                          <th className="p-2.5 w-28">Nhà mạng</th>
+                          <th className="p-2.5 w-28">Phân loại</th>
+                          <th className="p-2.5 w-36">Pháp nhân sở hữu</th>
+                          <th className="p-2.5 text-center w-32">Trạng thái đối soát</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                        {batchSimModal.previewRows.map((row, idx) => (
+                          <tr
+                            key={idx}
+                            className={`hover:bg-blue-50/30 transition-colors ${
+                              row.status === 'ERROR_DUPLICATE' || row.status === 'INVALID'
+                                ? 'bg-red-50/40 dark:bg-red-950/30'
+                                : row.status === 'WARNING_NO_NV'
+                                ? 'bg-amber-50/40 dark:bg-amber-950/30'
+                                : row.status === 'UPDATE_EXISTING'
+                                ? 'bg-blue-50/40 dark:bg-blue-950/30'
+                                : ''
+                            }`}
+                          >
+                            <td className="p-2.5 text-center text-gray-400 font-bold">{idx + 1}</td>
+                            <td className="p-2.5 font-bold font-mono text-gray-800 dark:text-gray-200">{row.msnv || '---'}</td>
+                            <td className="p-2.5 font-bold font-mono text-indigo-700 dark:text-indigo-400 tabular-nums">
+                              {row.soDienThoai ? formatPhoneNumber(row.soDienThoai) : <span className="text-red-500">Trống</span>}
+                            </td>
+                            <td className="p-2.5">
+                              {row.matchedPersonnel ? (
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-gray-800 dark:text-gray-200">{row.matchedPersonnel.ho_ten}</span>
+                                  <span className="text-[10px] text-gray-400">{row.matchedPersonnel.phong_ban || '---'}</span>
+                                  {row.sdtCtyNote && (
+                                    <span className="text-[9.5px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                                      📱 {row.sdtCtyNote}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col">
+                                  <span className="text-amber-700 dark:text-amber-400 font-semibold italic">
+                                    {row.hoTenExcel ? `${row.hoTenExcel} (Không khớp NV)` : 'Chưa có thông tin'}
+                                  </span>
+                                  {row.sdtCtyNote && (
+                                    <span className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                                      📱 {row.sdtCtyNote}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-right font-bold tabular-nums">
+                              {row.dinhMuc !== null ? `${formatCurrency(row.dinhMuc)}đ` : <span className="text-gray-400 italic">Thực tế</span>}
+                            </td>
+                            <td className="p-2.5 text-center font-mono text-gray-600 dark:text-gray-300">
+                              {row.ngayCap ? new Date(row.ngayCap).toLocaleDateString('vi-VN') : '---'}
+                            </td>
+                            <td className="p-2.5">
+                              <select
+                                value={row.nhaMang}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setBatchSimModal(prev => ({
+                                    ...prev,
+                                    previewRows: prev.previewRows.map((r, i) => i === idx ? { ...r, nhaMang: val } : r)
+                                  }));
+                                }}
+                                className="p-1 border border-gray-200 dark:border-gray-700 rounded text-[11px] bg-white dark:bg-gray-800 font-semibold"
+                              >
+                                <option value="Mobifone">Mobifone</option>
+                                <option value="Viettel">Viettel</option>
+                                <option value="Vinaphone">Vinaphone</option>
+                              </select>
+                            </td>
+                            <td className="p-2.5">
+                              <select
+                                value={row.loaiThueBao}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setBatchSimModal(prev => ({
+                                    ...prev,
+                                    previewRows: prev.previewRows.map((r, i) => i === idx ? { ...r, loaiThueBao: val } : r)
+                                  }));
+                                }}
+                                className="p-1 border border-gray-200 dark:border-gray-700 rounded text-[11px] bg-white dark:bg-gray-800 font-semibold"
+                              >
+                                <option value="Cá nhân">Cá nhân</option>
+                                <option value="Bộ phận dùng chung">Dùng chung</option>
+                                <option value="Hotline">Hotline</option>
+                              </select>
+                            </td>
+                            <td className="p-2.5">
+                              <select
+                                value={row.idPhapNhan}
+                                onChange={(e) => {
+                                  const pnId = e.target.value;
+                                  const pnObj = phapNhanList.find(p => String(p.id) === String(pnId));
+                                  const pnName = pnObj ? (pnObj.ten_cong_ty || pnObj.ten_phap_nhan) : '';
+                                  setBatchSimModal(prev => ({
+                                    ...prev,
+                                    previewRows: prev.previewRows.map((r, i) => i === idx ? { ...r, idPhapNhan: pnId, tenPhapNhan: pnName } : r)
+                                  }));
+                                }}
+                                className="p-1 border border-gray-200 dark:border-gray-700 rounded text-[11px] bg-white dark:bg-gray-800 font-semibold truncate max-w-[140px]"
+                              >
+                                {phapNhanList.map(pn => (
+                                  <option key={pn.id} value={pn.id}>{pn.ten_cong_ty || pn.ten_phap_nhan}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <span className={`text-[9.5px] font-black px-2 py-0.5 rounded-full border ${
+                                row.status === 'VALID'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : row.status === 'WARNING_NO_NV'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : row.status === 'UPDATE_EXISTING'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
+                              }`}>
+                                {row.status === 'VALID'
+                                  ? '🟢 Hợp lệ'
+                                  : row.status === 'WARNING_NO_NV'
+                                  ? '🟡 Chưa khớp NV'
+                                  : row.status === 'UPDATE_EXISTING'
+                                  ? '🔄 Ghi đè SIM cũ'
+                                  : `🔴 ${row.errorMessage || 'Lỗi'}`}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* FOOTER FIXED */}
+            <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end gap-3 shrink-0 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setBatchSimModal({ open: false, rawText: '', previewRows: [], isSubmitting: false })}
+                className="px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 rounded-xl font-bold transition-all shadow-xs text-xs"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBatchSIM}
+                disabled={
+                  batchSimModal.isSubmitting ||
+                  batchSimModal.previewRows.filter(r => r.status !== 'ERROR_DUPLICATE' && r.status !== 'INVALID').length === 0
+                }
+                className="px-8 py-2.5 text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all text-xs"
+              >
+                {batchSimModal.isSubmitting ? <Loader2 className="animate-spin w-4 h-4" /> : <Save size={16}/>}
+                Xác Nhận Lưu ({batchSimModal.previewRows.filter(r => r.status !== 'ERROR_DUPLICATE' && r.status !== 'INVALID').length} Thuê Bao)
+              </button>
+            </div>
+
           </div>
         </div>
       )}
