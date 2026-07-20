@@ -50,6 +50,15 @@ const normalizeSignerName = (name: string) => {
   return normalized;
 };
 
+// HÀM KIỂM TRA TRẠNG THÁI HIỆU LỰC BỊ THAY THẾ (TƯƠNG THÍCH DỮ LIỆU CŨ VÀ MỚI)
+const isReplacedStatus = (status: string) => {
+  return status === 'Được thay thế bằng VB' || status === 'Thay thế VB khác';
+};
+
+const isExpiredOrReplaced = (status: string) => {
+  return status === 'Hết hiệu lực' || isReplacedStatus(status);
+};
+
 // HÀM LẤY NHÃN HIỂN THỊ ĐỘNG CHO NƠI GỬI/NHẬN
 const getNoiGuiNhanLabel = (phanLoai: string) => {
   switch(phanLoai) {
@@ -429,7 +438,11 @@ export default function DocumentPage() {
       result = result.filter(item => item.nguoi_ky && normalizeSignerName(item.nguoi_ky) === selectedSigner);
     }
     if (selectedStatus !== 'all') {
-      result = result.filter(item => item.hieu_luc === selectedStatus);
+      if (isReplacedStatus(selectedStatus)) {
+        result = result.filter(item => isReplacedStatus(item.hieu_luc));
+      } else {
+        result = result.filter(item => item.hieu_luc === selectedStatus);
+      }
     }
     if (selectedDateFrom) {
       result = result.filter(item => item.ngay_ban_hanh && item.ngay_ban_hanh >= selectedDateFrom);
@@ -520,7 +533,7 @@ export default function DocumentPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.id_don_vi) return toast.warning("Vui lòng chọn Đơn vị ban hành/lưu trữ!");
-    if (formData.hieu_luc === 'Thay thế VB khác' && !formData.van_ban_thay_the) return toast.warning("Vui lòng dán Link văn bản bị thay thế!");
+    if (isReplacedStatus(formData.hieu_luc) && !formData.van_ban_thay_the) return toast.warning("Vui lòng dán Link hoặc nhập thông tin Văn bản mới thay thế!");
     
     let finalData = { ...formData };
     
@@ -574,7 +587,7 @@ export default function DocumentPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    if (name === 'hieu_luc' && value !== 'Thay thế VB khác') {
+    if (name === 'hieu_luc' && !isReplacedStatus(value)) {
       setFormData((prev: any) => ({ ...prev, [name]: value, van_ban_thay_the: '' }));
     } else if (name === 'msnv_nguoi_lay_so') {
       const cleanVal = String(value || '').trim().toLowerCase();
@@ -604,9 +617,9 @@ export default function DocumentPage() {
     }
     if (item.hieu_luc === newStatus) return;
     
-    // Yêu cầu mở modal nếu chọn "Thay thế VB khác" để nhập link
-    if (newStatus === 'Thay thế VB khác') {
-      toast.warning("Vui lòng chọn nút 'Sửa' để cập nhật Link văn bản thay thế!");
+    // Yêu cầu mở modal nếu chọn trạng thái bị thay thế để nhập link
+    if (isReplacedStatus(newStatus)) {
+      toast.warning("Vui lòng chọn nút 'Sửa' để cập nhật Link/Mã văn bản mới thay thế!");
       return;
     }
 
@@ -922,7 +935,7 @@ export default function DocumentPage() {
                           <option value="all">Tất cả trạng thái</option>
                           <option value="Còn hiệu lực">Còn hiệu lực</option>
                           <option value="Hết hiệu lực">Hết hiệu lực</option>
-                          <option value="Thay thế VB khác">Thay thế VB khác</option>
+                          <option value="Được thay thế bằng VB">Được thay thế bằng VB</option>
                         </select>
                       </div>
 
@@ -1021,7 +1034,7 @@ export default function DocumentPage() {
     paginatedDocs.map((item) => (
       <tr 
         key={item.id} 
-        className={`transition-all duration-200 group ${item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-50/80 opacity-60 hover:opacity-100 hover:bg-gray-100 grayscale-[20%]' : 'bg-white hover:bg-blue-50/50'}`}
+        className={`transition-all duration-200 group ${isExpiredOrReplaced(item.hieu_luc) ? 'bg-gray-50/80 opacity-60 hover:opacity-100 hover:bg-gray-100 grayscale-[20%]' : 'bg-white hover:bg-blue-50/50'}`}
       >
         {/* 1. Số hiệu / Phân loại (Đã có nhãn MỚI VÀ NGHIỆP VỤ) */}
         <td className="py-2.5 px-3">
@@ -1081,17 +1094,17 @@ export default function DocumentPage() {
         <td className="py-2.5 px-3">
           <div className="relative group w-full max-w-[120px]">
             <select
-              value={item.hieu_luc}
+              value={isReplacedStatus(item.hieu_luc) ? 'Được thay thế bằng VB' : item.hieu_luc}
               disabled={!canEditOrDeleteDocument(item)}
               onChange={(e) => handleQuickUpdateStatus(item, e.target.value)}
               className={`w-full appearance-none pl-2 pr-5 py-1 rounded-md text-[10px] font-bold text-center border shadow-sm
                 ${!canEditOrDeleteDocument(item) ? 'cursor-not-allowed opacity-80 ' : 'cursor-pointer '}
                 ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border-green-200' : 
-                  item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-yellow-50 text-yellow-700 border-yellow-300'}`}
+                  isReplacedStatus(item.hieu_luc) ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-500 border-gray-300'}`}
             >
               <option value="Còn hiệu lực">Còn hiệu lực</option>
               <option value="Hết hiệu lực">Hết hiệu lực</option>
-              <option value="Thay thế VB khác">Thay thế VB khác</option>
+              <option value="Được thay thế bằng VB">Được thay thế bằng VB</option>
             </select>
           </div>
         </td>
@@ -1126,14 +1139,14 @@ export default function DocumentPage() {
                 <div 
                   key={item.id} 
                   className={`p-4 rounded-2xl relative overflow-hidden active:scale-[0.98] transition-all duration-200
-                    ${item.hieu_luc === 'Hết hiệu lực'
+                    ${isExpiredOrReplaced(item.hieu_luc)
                       ? 'bg-gray-50 border border-gray-200 opacity-60 grayscale-[20%]'
                       : 'bg-white shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-gray-100'
                     }`}
                 >
                   
                   {/* Đường kẻ màu bên trái thể hiện hiệu lực */}
-                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-emerald-500' : item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-400' : 'bg-yellow-400'}`}></div>
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-emerald-500' : isReplacedStatus(item.hieu_luc) ? 'bg-orange-400' : 'bg-gray-400'}`}></div>
                   
                   <div className="flex justify-between items-start mb-2 pl-2">
                     <div className="flex items-center flex-wrap gap-1.5">
@@ -1173,23 +1186,23 @@ export default function DocumentPage() {
                       <div className="flex w-full items-center gap-2">
                         <span className={`flex-1 py-2 px-2 rounded-lg text-[11px] font-bold border text-center truncate
                           ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border-green-200' :
-                            item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-yellow-50 text-yellow-700 border-yellow-300'}`}>
-                          {item.hieu_luc || 'Còn hiệu lực'} (Chỉ xem)
+                            isReplacedStatus(item.hieu_luc) ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-500 border-gray-300'}`}>
+                          {isReplacedStatus(item.hieu_luc) ? 'Được thay thế bằng VB' : (item.hieu_luc || 'Còn hiệu lực')} (Chỉ xem)
                         </span>
                         <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg flex justify-center items-center border border-emerald-200"><Eye size={14}/></button>
                       </div>
                     ) : (
                       <>
                         <select
-                          value={item.hieu_luc}
+                          value={isReplacedStatus(item.hieu_luc) ? 'Được thay thế bằng VB' : item.hieu_luc}
                           onChange={(e) => handleQuickUpdateStatus(item, e.target.value)}
                           className={`flex-1 py-2 px-1 rounded-lg text-[11px] font-bold border text-center outline-none cursor-pointer truncate
                             ${item.hieu_luc === 'Còn hiệu lực' ? 'bg-green-50 text-green-700 border-green-200' :
-                              item.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-300' : 'bg-yellow-50 text-yellow-700 border-yellow-300'}`}
+                              isReplacedStatus(item.hieu_luc) ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-500 border-gray-300'}`}
                         >
                           <option value="Còn hiệu lực">Còn hiệu lực</option>
                           <option value="Hết hiệu lực">Hết hiệu lực</option>
-                          <option value="Thay thế VB khác">Thay thế...</option>
+                          <option value="Được thay thế bằng VB">Được thay thế bằng VB</option>
                         </select>
                         <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg flex justify-center items-center border border-emerald-200" title="Xem"><Eye size={14}/></button>
                         <button onClick={() => openModal('update', item)} className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg flex justify-center items-center border border-blue-200" title="Sửa"><Edit size={14}/></button>
@@ -1411,19 +1424,19 @@ export default function DocumentPage() {
                     </div>
                     <div className="md:col-span-5 min-w-0">
                       <label className="block text-[11px] font-bold text-gray-700 mb-1">Tình trạng Hiệu lực *</label>
-                      <select required name="hieu_luc" value={formData.hieu_luc || 'Còn hiệu lực'} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-[#05469B]">
+                      <select required name="hieu_luc" value={isReplacedStatus(formData.hieu_luc) ? 'Được thay thế bằng VB' : (formData.hieu_luc || 'Còn hiệu lực')} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-bold text-[#05469B]">
                         <option value="Còn hiệu lực">Còn hiệu lực</option>
                         <option value="Hết hiệu lực">Hết hiệu lực</option>
-                        <option value="Thay thế VB khác">Thay thế VB khác</option>
+                        <option value="Được thay thế bằng VB">Được thay thế bằng VB</option>
                       </select>
                     </div>
 
-                    {formData.hieu_luc === 'Thay thế VB khác' && (
+                    {isReplacedStatus(formData.hieu_luc) && (
                       <div className="md:col-span-10 bg-orange-50 p-4 rounded-lg border border-orange-300 mt-2 min-w-0 animate-in fade-in zoom-in duration-200">
-                        <label className="block text-[11px] font-bold text-orange-800 mb-1">Link Văn bản bị thay thế (Dán link vào đây) *</label>
+                        <label className="block text-[11px] font-bold text-orange-800 mb-1">Link/Mã Văn bản mới thay thế (Dán link vào đây) *</label>
                         <div className="relative">
                           <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500" size={16} />
-                          <input type="url" required name="van_ban_thay_the" value={formData.van_ban_thay_the || ''} onChange={handleInputChange} className="w-full pl-9 pr-4 py-2.5 border border-orange-300 rounded-lg bg-white outline-none focus:ring-2 focus:ring-orange-500 text-blue-600 text-sm font-medium break-all" placeholder="Dán link Google Drive của văn bản cũ..." />
+                          <input type="text" required name="van_ban_thay_the" value={formData.van_ban_thay_the || ''} onChange={handleInputChange} className="w-full pl-9 pr-4 py-2.5 border border-orange-300 rounded-lg bg-white outline-none focus:ring-2 focus:ring-orange-500 text-blue-600 text-sm font-medium break-all" placeholder="Dán link Google Drive hoặc mã số của văn bản mới thay thế..." />
                         </div>
                       </div>
                     )}
@@ -1491,8 +1504,8 @@ export default function DocumentPage() {
                     </span>
                   )}
                   
-                  <span className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold border ${viewData.hieu_luc === 'Còn hiệu lực' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : viewData.hieu_luc === 'Hết hiệu lực' ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
-                    {viewData.hieu_luc}
+                  <span className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold border ${viewData.hieu_luc === 'Còn hiệu lực' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isReplacedStatus(viewData.hieu_luc) ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                    {isReplacedStatus(viewData.hieu_luc) ? 'Được thay thế bằng VB' : viewData.hieu_luc}
                   </span>
                 </div>
                 <h2 className={`text-lg md:text-3xl font-black leading-tight mt-3 md:mt-4 break-words ${isMatDocument(viewData.mat) ? 'text-red-700' : 'text-gray-800'}`}>{viewData.tieu_de}</h2>
@@ -1578,9 +1591,9 @@ export default function DocumentPage() {
                     <ExternalLink size={18} className="md:w-5 md:h-5"/> Mở File Văn Bản
                   </a>
                 )}
-                {viewData.hieu_luc === 'Thay thế VB khác' && viewData.van_ban_thay_the && (
-                  <a href={viewData.van_ban_thay_the} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-2 py-3.5 md:py-4 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 rounded-xl font-bold transition-colors shadow-sm text-sm md:text-base">
-                    <ExternalLink size={18} className="md:w-5 md:h-5"/> Xem Văn bản bị thay thế
+                {isReplacedStatus(viewData.hieu_luc) && viewData.van_ban_thay_the && (
+                  <a href={viewData.van_ban_thay_the} target="_blank" rel="noreferrer" className="flex-1 flex items-center justify-center gap-2 py-3.5 md:py-4 bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 rounded-xl font-bold transition-colors shadow-sm text-sm md:text-base">
+                    <ExternalLink size={18} className="md:w-5 md:h-5"/> Xem Văn bản mới thay thế
                   </a>
                 )}
               </div>
