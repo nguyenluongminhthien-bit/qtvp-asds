@@ -304,7 +304,10 @@ export default function CuocDiDongTab({
           c => c.id_thue_bao === tb.id && c.thang_nam === filterThang
         );
         const nv = personnel.find(p => p.id === tb.id_nhan_su);
-        const dinhMuc = cuocThang?.dinh_muc_snap ?? tb.dinh_muc_cuoc ?? nv?.dinh_muc_cuoc ?? null;
+        const simDinhMuc = tb.dinh_muc_cuoc !== undefined && tb.dinh_muc_cuoc !== null ? Number(tb.dinh_muc_cuoc) : null;
+        const dinhMuc = cuocThang?.dinh_muc_snap !== undefined && cuocThang?.dinh_muc_snap !== null
+          ? Number(cuocThang.dinh_muc_snap)
+          : simDinhMuc;
         const tongCuoc = cuocThang?.tong_cuoc ?? null;
         const vuot = dinhMuc !== null && tongCuoc !== null ? tongCuoc - dinhMuc : null;
 
@@ -425,10 +428,11 @@ export default function CuocDiDongTab({
 
     const chartPoints = months.map(mStr => {
       const c = cuocList.find(item => item.id_thue_bao === row.tb.id && item.thang_nam === mStr);
+      const simDinhMuc = row.tb.dinh_muc_cuoc !== undefined && row.tb.dinh_muc_cuoc !== null ? Number(row.tb.dinh_muc_cuoc) : null;
       return {
         thang: mStr,
         tongCuoc: c?.tong_cuoc ?? null,
-        dinhMuc: c?.dinh_muc_snap ?? row.nv?.dinh_muc_cuoc ?? null
+        dinhMuc: c?.dinh_muc_snap !== undefined && c?.dinh_muc_snap !== null ? Number(c.dinh_muc_snap) : simDinhMuc
       };
     });
 
@@ -510,7 +514,7 @@ export default function CuocDiDongTab({
           ho_ten_nv: p.ho_ten,
           id_don_vi: p.id_don_vi,
           ten_bo_phan: p.chuc_vu,
-          dinh_muc_cuoc: p.dinh_muc_cuoc !== undefined && p.dinh_muc_cuoc !== null ? Number(p.dinh_muc_cuoc) : null
+          dinh_muc_cuoc: prev.data.dinh_muc_cuoc !== undefined && prev.data.dinh_muc_cuoc !== null ? prev.data.dinh_muc_cuoc : null
         },
         showReasonInput: isNVChanged
       };
@@ -1171,9 +1175,7 @@ export default function CuocDiDongTab({
         msnv && String(p.ma_so_nhan_vien || '').trim().toLowerCase() === msnv.trim().toLowerCase()
       ) || null;
 
-      const dinhMuc = rawDinhMuc > 0
-        ? rawDinhMuc
-        : (matchedPersonnel?.dinh_muc_cuoc || null);
+      const dinhMuc = rawDinhMuc > 0 ? rawDinhMuc : null;
 
       let existingSimInDB = thueBaoList.find(tb => parsePhoneNumberWithZero(tb.so_dien_thoai) === sdt);
       let isDuplicateInBatch = false;
@@ -1314,7 +1316,7 @@ export default function CuocDiDongTab({
     if (!selectedRowDetails) return null;
     const { chartPoints, nv } = selectedRowDetails;
     
-    const dinhMuc = chartPoints[0]?.dinhMuc ?? nv?.dinh_muc_cuoc ?? null;
+    const dinhMuc = selectedRowDetails.tb.dinh_muc_cuoc !== undefined && selectedRowDetails.tb.dinh_muc_cuoc !== null ? Number(selectedRowDetails.tb.dinh_muc_cuoc) : null;
 
     // Filter points with values
     const validDataPoints = chartPoints.map((p, idx) => ({ ...p, idx }));
