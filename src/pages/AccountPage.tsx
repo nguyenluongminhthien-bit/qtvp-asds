@@ -96,6 +96,12 @@ export default function AccountPage() {
     return false;
   }, [currentUser, donViList]);
 
+  const isAdmin = useMemo(() => {
+    if (!currentUser) return false;
+    const userQuyen = String(currentUser.quyen || (currentUser as any).role || '').trim().toUpperCase();
+    return userQuyen === 'ADMIN';
+  }, [currentUser]);
+
   const myDonViId = useMemo(() => {
     if (!currentUser) return '';
     return String(currentUser.id_don_vi || (currentUser as any).idDonVi || '').trim();
@@ -257,7 +263,9 @@ export default function AccountPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input type="text" placeholder="Tìm tài khoản, họ tên..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          <button onClick={() => openModal('create')} className="flex items-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all"><Plus size={20} /> Cấp tài khoản</button>
+          {isAdmin && (
+            <button onClick={() => openModal('create')} className="flex items-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all"><Plus size={20} /> Cấp tài khoản</button>
+          )}
         </div>
       </div>
 
@@ -305,9 +313,9 @@ export default function AccountPage() {
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       {canEditAccount(user) && (
-                        <button onClick={() => openModal('update', user)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Sửa thông tin / Đổi mật khẩu"><Edit size={16}/></button>
+                        <button onClick={() => openModal('update', user)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title={isAdmin ? "Sửa thông tin / Đổi mật khẩu" : "Đổi mật khẩu"}><Edit size={16}/></button>
                       )}
-                      {canDeleteAccount(user) && (
+                      {isAdmin && canDeleteAccount(user) && (
                         <button onClick={() => {setItemToDelete(user.id); setIsConfirmOpen(true)}} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors" title="Xóa tài khoản"><Trash2 size={16}/></button>
                       )}
                     </div>
@@ -324,7 +332,7 @@ export default function AccountPage() {
           {/* 🟢 MỞ RỘNG MODAL THÀNH max-w-4xl ĐỂ CHỨA CHECKBOX */}
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl animate-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[95vh]">
             <div className="flex justify-between items-center p-5 border-b bg-[#05469B] text-white shrink-0">
-              <h3 className="text-xl font-bold flex items-center gap-2"><UserCog size={24}/> {modalMode === 'create' ? 'Cấp tài khoản mới' : 'Cập nhật tài khoản'}</h3>
+              <h3 className="text-xl font-bold flex items-center gap-2"><UserCog size={24}/> {modalMode === 'create' ? 'Cấp tài khoản mới' : isAdmin ? 'Cập nhật tài khoản' : 'Đổi mật khẩu & Thông tin tài khoản'}</h3>
               <button onClick={() => setIsModalOpen(false)} disabled={submitting} className="hover:bg-white/20 p-1.5 rounded-full transition-colors"><X size={20} /></button>
             </div>
             
@@ -335,12 +343,12 @@ export default function AccountPage() {
                 <div>
                   <h4 className="font-bold text-[#05469B] mb-3 flex items-center gap-2 border-b pb-2"><Shield size={18}/> 1. Thông tin Hành chính & Đăng nhập</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1">Mã User *</label><input type="text" required name="id" value={formData.id || ''} onChange={e=>setFormData({...formData, id: e.target.value})} disabled={modalMode==='update'} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] disabled:opacity-70" placeholder="VD: U01"/></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1">Họ và Tên *</label><input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={e=>setFormData({...formData, ho_ten: e.target.value})} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"/></div>
+                    <div><label className="block text-xs font-bold text-gray-600 mb-1">Mã User *</label><input type="text" required name="id" value={formData.id || ''} onChange={e=>setFormData({...formData, id: e.target.value})} disabled={modalMode==='update' || !isAdmin} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] disabled:opacity-70 font-medium" placeholder="VD: U01"/></div>
+                    <div><label className="block text-xs font-bold text-gray-600 mb-1">Họ và Tên *</label><input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={e=>setFormData({...formData, ho_ten: e.target.value})} disabled={!isAdmin && String(formData.id) !== String(currentUser?.id)} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"/></div>
                     
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Tên đăng nhập (Email) *</label>
-                      <div className="relative"><Mail className="absolute left-3 top-3 text-gray-400" size={18}/><input type="text" required name="user_name" value={formData.user_name || ''} onChange={e=>setFormData({...formData, user_name: e.target.value})} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-medium"/></div>
+                      <div className="relative"><Mail className="absolute left-3 top-3 text-gray-400" size={18}/><input type="text" required name="user_name" value={formData.user_name || ''} onChange={e=>setFormData({...formData, user_name: e.target.value})} disabled={!isAdmin} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"/></div>
                     </div>
 
                     <div>
@@ -373,7 +381,7 @@ export default function AccountPage() {
                           name="id_don_vi" 
                           value={formData.id_don_vi || ''} 
                           onChange={e=>setFormData({...formData, id_don_vi: e.target.value})} 
-                          disabled={!isHOAdmin && modalMode === 'update' && String(formData.id) === String(currentUser?.id)}
+                          disabled={!isAdmin}
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B]"
                           style={{ fontFamily: 'monospace, sans-serif' }}
                         >
@@ -396,84 +404,89 @@ export default function AccountPage() {
                           name="quyen" 
                           value={formData.quyen || 'USER'} 
                           onChange={e=>setFormData({...formData, quyen: e.target.value})} 
-                          disabled={!isHOAdmin && (modalMode === 'update' && String(formData.id) === String(currentUser?.id))}
+                          disabled={!isAdmin}
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
                         >
                           <option value="USER">USER (Được quyền Thêm/Sửa/Xóa của mình)</option>
                           <option value="viewer_hanche">VIEWER HẠN CHẾ (Chỉ xem, cấm click chi tiết)</option>
-                          {isHOAdmin && <option value="ADMIN">ADMIN (Quản trị toàn quyền)</option>}
+                          {isAdmin && <option value="ADMIN">ADMIN (Quản trị toàn quyền)</option>}
                         </select>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* MODULE TRUY CẬP */}
-                <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
-                  <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2"><CheckSquare size={18}/> 2. Phân quyền Truy cập Module (Thanh Menu)</h4>
-                  
-                  <div className="mb-4 pb-4 border-b border-blue-200">
-                    <label className="flex items-center gap-2 cursor-pointer w-max hover:bg-blue-100 p-2 rounded transition-colors">
-                      <input 
-                        type="checkbox" 
-                        checked={formData.quyen_truy_cap === 'ALL'}
-                        onChange={(e) => setFormData(prev => ({ ...prev, quyen_truy_cap: e.target.checked ? 'ALL' : '' }))}
-                        className="w-5 h-5 text-red-600 border-red-300 focus:ring-red-500 rounded"
-                      />
-                      <span className="font-black text-red-600 text-sm">ALL (Cấp Đặc quyền Xem toàn bộ Hệ thống)</span>
-                    </label>
-                  </div>
+                {/* HIỂN THỊ PHẦN 2 VÀ PHẦN 3 CHỈ KHI LÀ ADMIN */}
+                {isAdmin && (
+                  <>
+                    {/* MODULE TRUY CẬP */}
+                    <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+                      <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2"><CheckSquare size={18}/> 2. Phân quyền Truy cập Module (Thanh Menu)</h4>
+                      
+                      <div className="mb-4 pb-4 border-b border-blue-200">
+                        <label className="flex items-center gap-2 cursor-pointer w-max hover:bg-blue-100 p-2 rounded transition-colors">
+                          <input 
+                            type="checkbox" 
+                            checked={formData.quyen_truy_cap === 'ALL'}
+                            onChange={(e) => setFormData(prev => ({ ...prev, quyen_truy_cap: e.target.checked ? 'ALL' : '' }))}
+                            className="w-5 h-5 text-red-600 border-red-300 focus:ring-red-500 rounded"
+                          />
+                          <span className="font-black text-red-600 text-sm">ALL (Cấp Đặc quyền Xem toàn bộ Hệ thống)</span>
+                        </label>
+                      </div>
 
-                  {formData.quyen_truy_cap !== 'ALL' && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {MODULE_LIST.map(module => {
-                        const isChecked = formData.quyen_truy_cap?.split(',').map(m => m.trim()).includes(module.id);
-                        return (
-                          <label key={module.id} className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isChecked ? 'bg-white border-[#05469B] shadow-sm' : 'bg-white/50 border-gray-200 hover:bg-white'}`}>
-                            <input 
-                              type="checkbox" 
-                              checked={isChecked}
-                              onChange={() => handleToggleModule(module.id)}
-                              className="w-4 h-4 text-[#05469B] rounded focus:ring-[#05469B]"
-                            />
-                            <span className={`text-sm font-medium ${isChecked ? 'text-[#05469B]' : 'text-gray-600'}`}>{module.icon} {module.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* MA TRẬN QUYỀN CHI TIẾT */}
-                <div className="bg-orange-50/30 p-5 rounded-xl border border-orange-100">
-                  <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><ListChecks size={18}/> 3. Cấu hình Đặc quyền Chi tiết (Ma trận Quyền)</h4>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(ADVANCED_PERMISSIONS).map(([moduleName, options]) => (
-                      <div key={moduleName} className="bg-white p-4 rounded-lg border border-orange-100 shadow-sm">
-                        <h5 className="font-bold text-gray-700 mb-3 uppercase text-xs border-b pb-2">
-                          {moduleName === 'VanBan' ? '📑 Module Văn bản' : moduleName === 'NhanSu' ? '👥 Module Nhân sự' : '💻 Module Thiết bị'}
-                        </h5>
-                        <div className="flex flex-col gap-2">
-                          {options.map(opt => {
-                            const isChecked = formData.quyen_chi_tiet?.includes(opt.id);
+                      {formData.quyen_truy_cap !== 'ALL' && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {MODULE_LIST.map(module => {
+                            const isChecked = formData.quyen_truy_cap?.split(',').map(m => m.trim()).includes(module.id);
                             return (
-                              <label key={opt.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${isChecked ? 'bg-orange-50 text-orange-800 font-bold' : 'hover:bg-gray-50 text-gray-600'}`}>
+                              <label key={module.id} className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isChecked ? 'bg-white border-[#05469B] shadow-sm' : 'bg-white/50 border-gray-200 hover:bg-white'}`}>
                                 <input 
                                   type="checkbox" 
                                   checked={isChecked}
-                                  onChange={() => handleToggleAdvancedRule(opt.id)}
-                                  className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                  onChange={() => handleToggleModule(module.id)}
+                                  className="w-4 h-4 text-[#05469B] rounded focus:ring-[#05469B]"
                                 />
-                                <span className="text-xs">{opt.label}</span>
+                                <span className={`text-sm font-medium ${isChecked ? 'text-[#05469B]' : 'text-gray-600'}`}>{module.icon} {module.label}</span>
                               </label>
                             );
                           })}
                         </div>
+                      )}
+                    </div>
+
+                    {/* MA TRẬN QUYỀN CHI TIẾT */}
+                    <div className="bg-orange-50/30 p-5 rounded-xl border border-orange-100">
+                      <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><ListChecks size={18}/> 3. Cấu hình Đặc quyền Chi tiết (Ma trận Quyền)</h4>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {Object.entries(ADVANCED_PERMISSIONS).map(([moduleName, options]) => (
+                          <div key={moduleName} className="bg-white p-4 rounded-lg border border-orange-100 shadow-sm">
+                            <h5 className="font-bold text-gray-700 mb-3 uppercase text-xs border-b pb-2">
+                              {moduleName === 'VanBan' ? '📑 Module Văn bản' : moduleName === 'NhanSu' ? '👥 Module Nhân sự' : '💻 Module Thiết bị'}
+                            </h5>
+                            <div className="flex flex-col gap-2">
+                              {options.map(opt => {
+                                const isChecked = formData.quyen_chi_tiet?.includes(opt.id);
+                                return (
+                                  <label key={opt.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${isChecked ? 'bg-orange-50 text-[#c2410c] font-bold' : 'hover:bg-gray-50 text-gray-600'}`}>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={isChecked}
+                                      onChange={() => handleToggleAdvancedRule(opt.id)}
+                                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                    />
+                                    <span className="text-xs">{opt.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  </>
+                )}
 
               </form>
             </div>
