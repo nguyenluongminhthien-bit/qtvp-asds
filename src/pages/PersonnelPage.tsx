@@ -1154,419 +1154,422 @@ export default function PersonnelPage() {
       />
 
       {/* 🟢 NỘI DUNG CHÍNH (CỘT PHẢI) */}
-      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col">
-        <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
-          <div className="flex items-center gap-2.5">
-            {isListCollapsed && (
-              <button 
-                onClick={() => setIsListCollapsed(false)} 
-                className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
-                title="Mở bộ lọc đơn vị"
-              >
-                <PanelLeftOpen size={18} />
-              </button>
-            )}
-            <div>
-              <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
-              <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span>Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredPersonnel.length} nhân sự)</span>
-                {filteredPersonnel.length > 0 && (
-                  <button 
-                    type="button"
-                    onClick={() => handleSelectAll(!isAllSelected)}
-                    className="text-xs text-[#05469B] hover:text-[#05469B]/80 font-extrabold underline transition-colors"
-                  >
-                    {isAllSelected ? '✕ Hủy chọn tất cả' : '✓ Chọn tất cả đã lọc'}
-                  </button>
-                )}
-              </p>
+      <div className="flex-1 min-w-0 max-w-full overflow-hidden p-4 sm:p-6 relative transition-all duration-300 flex flex-col">
+        {/* 🟢 KHU VỰC TIÊU ĐỀ & BỘ LỌC & TAB CỐ ĐỊNH (FIXED TOP SECTION) */}
+        <div className="shrink-0 z-20 flex flex-col">
+          <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
+            <div className="flex items-center gap-2.5">
+              {isListCollapsed && (
+                <button 
+                  onClick={() => setIsListCollapsed(false)} 
+                  className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
+                  title="Mở bộ lọc đơn vị"
+                >
+                  <PanelLeftOpen size={18} />
+                </button>
+              )}
+              <div>
+                <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
+                <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredPersonnel.length} nhân sự)</span>
+                  {filteredPersonnel.length > 0 && (
+                    <button 
+                      type="button"
+                      onClick={() => handleSelectAll(!isAllSelected)}
+                      className="text-xs text-[#05469B] hover:text-[#05469B]/80 font-extrabold underline transition-colors"
+                    >
+                      {isAllSelected ? '✕ Hủy chọn tất cả' : '✓ Chọn tất cả đã lọc'}
+                    </button>
+                  )}
+                </p>
+              </div>
             </div>
-          </div>
-          
-          {activeTab !== 'cuoc_di_dong' && (
-            <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
-              {/* HÀNG 1: TÌM KIẾM & NÚT TÍNH NĂNG */}
-              <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-30">
-                {/* Ô Tìm kiếm */}
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                  <input 
-                    type="text" 
-                    placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." 
-                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium" 
-                    value={personnelSearchTerm} 
-                    onChange={(e) => setPersonnelSearchTerm(e.target.value)} 
-                  />
-                </div>
+            
+            {activeTab !== 'cuoc_di_dong' && (
+              <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
+                {/* HÀNG 1: TÌM KIẾM & NÚT TÍNH NĂNG */}
+                <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-30">
+                  {/* Ô Tìm kiếm */}
+                  <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                    <input 
+                      type="text" 
+                      placeholder="Tìm Mã NV, Họ Tên, Chức vụ..." 
+                      className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium" 
+                      value={personnelSearchTerm} 
+                      onChange={(e) => setPersonnelSearchTerm(e.target.value)} 
+                    />
+                  </div>
 
-                {/* Nút Xóa bộ lọc nhanh nếu có lọc */}
-                {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
-                  <button
-                    onClick={() => {
-                      setFilterPhongBan('');
-                      setFilterKhoi('');
-                      setFilterChucVu('');
-                      setFilterPhanLoai('');
-                    }}
-                    title="Xóa nhanh bộ lọc nâng cao"
-                    className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded border border-red-200 transition-all flex items-center gap-1 text-[11px] font-bold shadow-sm"
-                  >
-                    <RotateCcw size={13} /> <span className="hidden sm:inline">Xóa bộ lọc</span>
-                    <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
-                      {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
-                    </span>
-                  </button>
-                )}
-
-                {/* 🟢 NÚT "TÍNH NĂNG" DROPDOWN GỘP TẤT CẢ */}
-                <div className="relative">
-                  <button 
-                    onClick={() => {
-                      setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen);
-                      setIsAddNewExpanded(false);
-                    }}
-                    className={`px-4 py-1.5 rounded text-[11px] font-bold flex items-center gap-2 border transition-all shadow-sm whitespace-nowrap ${
-                      isFeaturesDropdownOpen || showAdvancedFilters
-                        ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-md'
-                        : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Sparkles size={15} className={isFeaturesDropdownOpen || showAdvancedFilters ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
-                    <span>Tính năng</span>
-                    {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && !showAdvancedFilters && (
-                      <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                  {/* Nút Xóa bộ lọc nhanh nếu có lọc */}
+                  {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
+                    <button
+                      onClick={() => {
+                        setFilterPhongBan('');
+                        setFilterKhoi('');
+                        setFilterChucVu('');
+                        setFilterPhanLoai('');
+                      }}
+                      title="Xóa nhanh bộ lọc nâng cao"
+                      className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded border border-red-200 transition-all flex items-center gap-1 text-[11px] font-bold shadow-sm"
+                    >
+                      <RotateCcw size={13} /> <span className="hidden sm:inline">Xóa bộ lọc</span>
+                      <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
                         {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
                       </span>
-                    )}
-                    <ChevronDown size={13} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {/* MENU DROPDOWN TÍNH NĂNG */}
-                  {isFeaturesDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0 z-[40]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
-                      
-                      <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-[50] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
-                        
-                        {/* 1. Lọc nâng cao */}
-                        <button 
-                          onClick={() => {
-                            setShowAdvancedFilters(!showAdvancedFilters);
-                            setIsFeaturesDropdownOpen(false);
-                          }}
-                          className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between transition-all ${
-                            showAdvancedFilters ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'hover:bg-gray-50 text-gray-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className={`p-1.5 rounded-lg ${showAdvancedFilters ? 'bg-amber-500 text-white' : 'bg-blue-50 text-[#05469B]'}`}>
-                              <Filter size={14} />
-                            </div>
-                            <span>Lọc nâng cao</span>
-                          </div>
-                          {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) ? (
-                            <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                              {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
-                            </span>
-                          ) : (
-                            <ChevronRight size={14} className="text-gray-400" />
-                          )}
-                        </button>
-
-                        {/* 2. Thêm Nhân Sự Mới */}
-                        <div className="relative">
-                          <button 
-                            onClick={() => setIsAddNewExpanded(!isAddNewExpanded)}
-                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between hover:bg-gray-50 text-gray-700 transition-all"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
-                                <UserPlus size={14} />
-                              </div>
-                              <span>Thêm Nhân sự</span>
-                            </div>
-                            <ChevronRight size={14} className={`text-gray-400 transition-transform ${isAddNewExpanded ? 'rotate-90' : ''}`} />
-                          </button>
-
-                          {isAddNewExpanded && (
-                            <div className="pl-9 pr-2 py-1 flex flex-col gap-1 border-l-2 border-indigo-100 ml-5 my-1">
-                              <button 
-                                onClick={() => {
-                                  if (!selectedUnitFilter) {
-                                    toast.warning("Vui lòng chọn 1 Đơn vị trước khi thêm mới nhân sự!");
-                                    return;
-                                  }
-                                  const targetUnit = donViList.find(d => String(d.id) === String(selectedUnitFilter));
-                                  const defaultLegal = targetUnit ? (targetUnit.id_phap_nhan || '') : (phapNhanList[0]?.id || '');
-
-                                  setModal({
-                                    open: true,
-                                    mode: 'create',
-                                    formData: {
-                                      ma_so_nhan_vien: '', ho_ten: '', ngay_sinh: '', cmnd: '',
-                                      sdt_ca_nhan: '', sdt_cong_ty: '', email: '', email_ca_nhan: '',
-                                      id_don_vi: selectedUnitFilter,
-                                      id_phap_nhan: defaultLegal,
-                                      ten_phap_nhan: phapNhanList.find(p => p.id === defaultLegal)?.ten_cong_ty || '',
-                                      ten_don_vi: targetUnit ? targetUnit.ten_don_vi : '',
-                                      phong_ban: '', chuc_vu: '', ngach_luong: '',
-                                      ngay_nhan_viec: new Date().toISOString().split('T')[0],
-                                      gioi_tinh: 'Nam', trang_thai: 'Đang làm việc'
-                                    }
-                                  });
-                                  setIsFeaturesDropdownOpen(false);
-                                }}
-                                className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
-                              >
-                                <UserPlus size={13} /> Thêm từng đối tượng
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  if (!selectedUnitFilter) {
-                                    toast.warning("Vui lòng chọn 1 Đơn vị trước khi nhập hàng loạt!");
-                                    return;
-                                  }
-                                  setIsBulkImportOpen(true);
-                                  setIsFeaturesDropdownOpen(false);
-                                }}
-                                className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
-                              >
-                                <ClipboardPaste size={13} /> Thêm hàng loạt (Excel)
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 3. Xuất danh bạ */}
-                        <div className="border-t border-gray-100 pt-1 mt-1">
-                          <button 
-                            onClick={() => {
-                              setIsExportModalOpen(true);
-                              setIsFeaturesDropdownOpen(false);
-                            }}
-                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center gap-2.5 transition-all"
-                          >
-                            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
-                              <FileSpreadsheet size={14} />
-                            </div>
-                            <span>Xuất danh bạ (Excel)</span>
-                          </button>
-                        </div>
-
-                        {/* 4. Copy email theo điều kiện */}
-                        <div className="border-t border-gray-100 pt-1 mt-1">
-                          <button 
-                            onClick={() => {
-                              setIsCopyEmailDropdownOpen(true);
-                              setIsFeaturesDropdownOpen(false);
-                            }}
-                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center justify-between transition-all"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
-                                <Copy size={14} />
-                              </div>
-                              <span>Copy email theo điều kiện</span>
-                            </div>
-                            <ChevronRight size={14} className="text-gray-400" />
-                          </button>
-                        </div>
-
-                      </div>
-                    </>
+                    </button>
                   )}
+
+                  {/* 🟢 NÚT "TÍNH NĂNG" DROPDOWN GỘP TẤT CẢ */}
+                  <div className="relative">
+                    <button 
+                      onClick={() => {
+                        setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen);
+                        setIsAddNewExpanded(false);
+                      }}
+                      className={`px-4 py-1.5 rounded text-[11px] font-bold flex items-center gap-2 border transition-all shadow-sm whitespace-nowrap ${
+                        isFeaturesDropdownOpen || showAdvancedFilters
+                          ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-md'
+                          : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Sparkles size={15} className={isFeaturesDropdownOpen || showAdvancedFilters ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
+                      <span>Tính năng</span>
+                      {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && !showAdvancedFilters && (
+                        <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                          {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
+                        </span>
+                      )}
+                      <ChevronDown size={13} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* MENU DROPDOWN TÍNH NĂNG */}
+                    {isFeaturesDropdownOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[40]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
+                        
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-[50] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                          
+                          {/* 1. Lọc nâng cao */}
+                          <button 
+                            onClick={() => {
+                              setShowAdvancedFilters(!showAdvancedFilters);
+                              setIsFeaturesDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between transition-all ${
+                              showAdvancedFilters ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className={`p-1.5 rounded-lg ${showAdvancedFilters ? 'bg-amber-500 text-white' : 'bg-blue-50 text-[#05469B]'}`}>
+                                <Filter size={14} />
+                              </div>
+                              <span>Lọc nâng cao</span>
+                            </div>
+                            {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) ? (
+                              <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                                {[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length}
+                              </span>
+                            ) : (
+                              <ChevronRight size={14} className="text-gray-400" />
+                            )}
+                          </button>
+
+                          {/* 2. Thêm Nhân Sự Mới */}
+                          <div className="relative">
+                            <button 
+                              onClick={() => setIsAddNewExpanded(!isAddNewExpanded)}
+                              className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center justify-between hover:bg-gray-50 text-gray-700 transition-all"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                                  <UserPlus size={14} />
+                                </div>
+                                <span>Thêm Nhân sự</span>
+                              </div>
+                              <ChevronRight size={14} className={`text-gray-400 transition-transform ${isAddNewExpanded ? 'rotate-90' : ''}`} />
+                            </button>
+
+                            {isAddNewExpanded && (
+                              <div className="pl-9 pr-2 py-1 flex flex-col gap-1 border-l-2 border-indigo-100 ml-5 my-1">
+                                <button 
+                                  onClick={() => {
+                                    if (!selectedUnitFilter) {
+                                      toast.warning("Vui lòng chọn 1 Đơn vị trước khi thêm mới nhân sự!");
+                                      return;
+                                    }
+                                    const targetUnit = donViList.find(d => String(d.id) === String(selectedUnitFilter));
+                                    const defaultLegal = targetUnit ? (targetUnit.id_phap_nhan || '') : (phapNhanList[0]?.id || '');
+
+                                    setModal({
+                                      open: true,
+                                      mode: 'create',
+                                      formData: {
+                                        ma_so_nhan_vien: '', ho_ten: '', ngay_sinh: '', cmnd: '',
+                                        sdt_ca_nhan: '', sdt_cong_ty: '', email: '', email_ca_nhan: '',
+                                        id_don_vi: selectedUnitFilter,
+                                        id_phap_nhan: defaultLegal,
+                                        ten_phap_nhan: phapNhanList.find(p => p.id === defaultLegal)?.ten_cong_ty || '',
+                                        ten_don_vi: targetUnit ? targetUnit.ten_don_vi : '',
+                                        phong_ban: '', chuc_vu: '', ngach_luong: '',
+                                        ngay_nhan_viec: new Date().toISOString().split('T')[0],
+                                        gioi_tinh: 'Nam', trang_thai: 'Đang làm việc'
+                                      }
+                                    });
+                                    setIsFeaturesDropdownOpen(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
+                                >
+                                  <UserPlus size={13} /> Thêm từng đối tượng
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    if (!selectedUnitFilter) {
+                                      toast.warning("Vui lòng chọn 1 Đơn vị trước khi nhập hàng loạt!");
+                                      return;
+                                    }
+                                    setIsBulkImportOpen(true);
+                                    setIsFeaturesDropdownOpen(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
+                                >
+                                  <ClipboardPaste size={13} /> Thêm hàng loạt (Excel)
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 3. Xuất danh bạ */}
+                          <div className="border-t border-gray-100 pt-1 mt-1">
+                            <button 
+                              onClick={() => {
+                                setIsExportModalOpen(true);
+                                setIsFeaturesDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center gap-2.5 transition-all"
+                            >
+                              <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                                <FileSpreadsheet size={14} />
+                              </div>
+                              <span>Xuất danh bạ (Excel)</span>
+                            </button>
+                          </div>
+
+                          {/* 4. Copy email theo điều kiện */}
+                          <div className="border-t border-gray-100 pt-1 mt-1">
+                            <button 
+                              onClick={() => {
+                                setIsCopyEmailDropdownOpen(true);
+                                setIsFeaturesDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-50 text-gray-700 flex items-center justify-between transition-all"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
+                                  <Copy size={14} />
+                                </div>
+                                <span>Copy email theo điều kiện</span>
+                              </div>
+                              <ChevronRight size={14} className="text-gray-400" />
+                            </button>
+                          </div>
+
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 🟢 BỘ LỌC NÂNG CAO (BO PHAN, KHOI, CHUC VU, PHAN LOAI) */}
+          {showAdvancedFilters && (
+            <div className={`bg-white p-4 rounded-2xl border border-gray-200 shadow-sm mb-4 transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
+                    <Filter size={16} className="shrink-0" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-wider text-[#05469B]">Bộ lọc nâng cao</span>
+                  {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
+                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full animate-in fade-in duration-200">
+                      Đang lọc ({[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length} tiêu chí)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
+                    <button
+                      onClick={() => {
+                        setFilterPhongBan('');
+                        setFilterKhoi('');
+                        setFilterChucVu('');
+                        setFilterPhanLoai('');
+                      }}
+                      className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-all"
+                    >
+                      <RotateCcw size={13} /> Xóa bộ lọc
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowAdvancedFilters(false)}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                    title="Ẩn khung bộ lọc"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Lọc theo Khối */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                    <Layers size={13} className="text-purple-500" /> Khối ({availableFilterOptions.khoiList.length})
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={filterKhoi}
+                      onChange={(e) => setFilterKhoi(e.target.value)}
+                      list="khoi-filter-list"
+                      placeholder="Gõ hoặc chọn Khối..."
+                      className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                    />
+                    <datalist id="khoi-filter-list">
+                      {availableFilterOptions.khoiList.map((item, idx) => (
+                        <option key={idx} value={item} />
+                      ))}
+                    </datalist>
+                    {filterKhoi && (
+                      <button 
+                        type="button" 
+                        onClick={() => setFilterKhoi('')} 
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lọc theo Bộ phận */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                    <Building2 size={13} className="text-blue-500" /> Bộ phận ({availableFilterOptions.phongBanList.length})
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={filterPhongBan}
+                      onChange={(e) => setFilterPhongBan(e.target.value)}
+                      list="phong-ban-filter-list"
+                      placeholder="Gõ hoặc chọn Bộ phận..."
+                      className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                    />
+                    <datalist id="phong-ban-filter-list">
+                      {availableFilterOptions.phongBanList.map((item, idx) => (
+                        <option key={idx} value={item} />
+                      ))}
+                    </datalist>
+                    {filterPhongBan && (
+                      <button 
+                        type="button" 
+                        onClick={() => setFilterPhongBan('')} 
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lọc theo Chức danh */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                    <Tag size={13} className="text-emerald-500" /> Chức danh ({availableFilterOptions.phanLoaiList.length})
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={filterPhanLoai}
+                      onChange={(e) => setFilterPhanLoai(e.target.value)}
+                      list="phan-loai-filter-list"
+                      placeholder="Gõ hoặc chọn Chức danh..."
+                      className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                    />
+                    <datalist id="phan-loai-filter-list">
+                      {availableFilterOptions.phanLoaiList.map((item, idx) => (
+                        <option key={idx} value={item} />
+                      ))}
+                    </datalist>
+                    {filterPhanLoai && (
+                      <button 
+                        type="button" 
+                        onClick={() => setFilterPhanLoai('')} 
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lọc theo Chức vụ */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
+                    <Briefcase size={13} className="text-orange-500" /> Chức vụ ({availableFilterOptions.chucVuList.length})
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={filterChucVu}
+                      onChange={(e) => setFilterChucVu(e.target.value)}
+                      list="chuc-vu-filter-list"
+                      placeholder="Gõ hoặc chọn Chức vụ..."
+                      className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
+                    />
+                    <datalist id="chuc-vu-filter-list">
+                      {availableFilterOptions.chucVuList.map((item, idx) => (
+                        <option key={idx} value={item} />
+                      ))}
+                    </datalist>
+                    {filterChucVu && (
+                      <button 
+                        type="button" 
+                        onClick={() => setFilterChucVu('')} 
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           )}
-        </div>
 
-        {/* 🟢 BỘ LỌC NÂNG CAO (BO PHAN, KHOI, CHUC VU, PHAN LOAI) */}
-        {showAdvancedFilters && (
-          <div className={`bg-white p-4 rounded-2xl border border-gray-200 shadow-sm mb-4 transition-all duration-300 animate-in fade-in slide-in-from-top-2 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-blue-50 text-[#05469B] rounded-lg">
-                  <Filter size={16} className="shrink-0" />
-                </div>
-                <span className="text-xs font-black uppercase tracking-wider text-[#05469B]">Bộ lọc nâng cao</span>
-                {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
-                  <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full animate-in fade-in duration-200">
-                    Đang lọc ({[filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai].filter(Boolean).length} tiêu chí)
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {(filterPhongBan || filterKhoi || filterChucVu || filterPhanLoai) && (
-                  <button
-                    onClick={() => {
-                      setFilterPhongBan('');
-                      setFilterKhoi('');
-                      setFilterChucVu('');
-                      setFilterPhanLoai('');
-                    }}
-                    className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-all"
-                  >
-                    <RotateCcw size={13} /> Xóa bộ lọc
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowAdvancedFilters(false)}
-                  className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                  title="Ẩn khung bộ lọc"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Lọc theo Khối */}
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
-                  <Layers size={13} className="text-purple-500" /> Khối ({availableFilterOptions.khoiList.length})
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={filterKhoi}
-                    onChange={(e) => setFilterKhoi(e.target.value)}
-                    list="khoi-filter-list"
-                    placeholder="Gõ hoặc chọn Khối..."
-                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                  />
-                  <datalist id="khoi-filter-list">
-                    {availableFilterOptions.khoiList.map((item, idx) => (
-                      <option key={idx} value={item} />
-                    ))}
-                  </datalist>
-                  {filterKhoi && (
-                    <button 
-                      type="button" 
-                      onClick={() => setFilterKhoi('')} 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Lọc theo Bộ phận */}
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
-                  <Building2 size={13} className="text-blue-500" /> Bộ phận ({availableFilterOptions.phongBanList.length})
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={filterPhongBan}
-                    onChange={(e) => setFilterPhongBan(e.target.value)}
-                    list="phong-ban-filter-list"
-                    placeholder="Gõ hoặc chọn Bộ phận..."
-                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                  />
-                  <datalist id="phong-ban-filter-list">
-                    {availableFilterOptions.phongBanList.map((item, idx) => (
-                      <option key={idx} value={item} />
-                    ))}
-                  </datalist>
-                  {filterPhongBan && (
-                    <button 
-                      type="button" 
-                      onClick={() => setFilterPhongBan('')} 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Lọc theo Chức danh */}
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
-                  <Tag size={13} className="text-emerald-500" /> Chức danh ({availableFilterOptions.phanLoaiList.length})
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={filterPhanLoai}
-                    onChange={(e) => setFilterPhanLoai(e.target.value)}
-                    list="phan-loai-filter-list"
-                    placeholder="Gõ hoặc chọn Chức danh..."
-                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                  />
-                  <datalist id="phan-loai-filter-list">
-                    {availableFilterOptions.phanLoaiList.map((item, idx) => (
-                      <option key={idx} value={item} />
-                    ))}
-                  </datalist>
-                  {filterPhanLoai && (
-                    <button 
-                      type="button" 
-                      onClick={() => setFilterPhanLoai('')} 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Lọc theo Chức vụ */}
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1.5">
-                  <Briefcase size={13} className="text-orange-500" /> Chức vụ ({availableFilterOptions.chucVuList.length})
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={filterChucVu}
-                    onChange={(e) => setFilterChucVu(e.target.value)}
-                    list="chuc-vu-filter-list"
-                    placeholder="Gõ hoặc chọn Chức vụ..."
-                    className="w-full text-xs font-semibold bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pr-7 text-gray-700 focus:bg-white focus:ring-2 focus:ring-[#05469B]/20 focus:border-[#05469B] outline-none transition-all cursor-pointer"
-                  />
-                  <datalist id="chuc-vu-filter-list">
-                    {availableFilterOptions.chucVuList.map((item, idx) => (
-                      <option key={idx} value={item} />
-                    ))}
-                  </datalist>
-                  {filterChucVu && (
-                    <button 
-                      type="button" 
-                      onClick={() => setFilterChucVu('')} 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+          {/* 🟢 KHU VỰC CHUYỂN TAB */}
+          <div className={`border-b border-gray-200 mb-4 flex gap-6 px-1 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''} shrink-0`}>
+            <button onClick={() => setActiveTab('info')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'info' ? 'text-[#05469B]' : 'text-gray-400 hover:text-gray-700'}`}>
+              <Users size={18} /> Danh sách Thông tin
+              {activeTab === 'info' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-left-2 duration-300"></div>}
+            </button>
+            <button onClick={() => setActiveTab('stats')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'stats' ? 'text-[#05469B]' : 'text-gray-400 hover:text-gray-700'}`}>
+              <BarChart3 size={18} /> Thống kê Phân tích
+              {activeTab === 'stats' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
+            </button>
+            <button onClick={() => setActiveTab('cuoc')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'cuoc' ? 'text-[#05469B]' : 'text-gray-400 hover:text-gray-700'}`}>
+              <Phone size={18} /> Cước ĐTDĐ
+              {activeTab === 'cuoc' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
+            </button>
           </div>
-        )}
-
-        {/* 🟢 KHU VỰC CHUYỂN TAB */}
-        <div className={`border-b border-gray-200 mb-4 flex gap-6 px-1 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''} shrink-0`}>
-          <button onClick={() => setActiveTab('info')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'info' ? 'text-[#05469B]' : 'text-gray-400 hover:text-gray-700'}`}>
-            <Users size={18} /> Danh sách Thông tin
-            {activeTab === 'info' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-left-2 duration-300"></div>}
-          </button>
-          <button onClick={() => setActiveTab('stats')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'stats' ? 'text-[#05469B]' : 'text-gray-400 hover:text-gray-700'}`}>
-            <BarChart3 size={18} /> Thống kê Phân tích
-            {activeTab === 'stats' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
-          </button>
-          <button onClick={() => setActiveTab('cuoc')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'cuoc' ? 'text-[#05469B]' : 'text-gray-400 hover:text-gray-700'}`}>
-            <Phone size={18} /> Cước ĐTDĐ
-            {activeTab === 'cuoc' && <div className="absolute bottom-0 left-0 w-full h-1 bg-[#05469B] rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
-          </button>
         </div>
 
         {/* 🟢 TAB THÔNG TIN */}
         {activeTab === 'info' && (
-          <div className={`flex flex-col flex-1 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+          <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
             
             {selectedPersonnelIds.length > 0 && (
               <div className="mb-3 px-4 py-3 bg-[#f0fdf4] border border-emerald-200 rounded-xl flex items-center justify-between shadow-sm animate-in slide-in-from-top-2 duration-200">
@@ -1592,7 +1595,7 @@ export default function PersonnelPage() {
             )}
 
             {/* VIEW TRÊN PC: BẢNG DỮ LIỆU CHÍNH */}
-            <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full flex-1 overflow-x-auto custom-scrollbar">
+            <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 w-full flex-1 min-h-0 overflow-auto custom-scrollbar">
               <table className="w-full min-w-[900px] table-fixed text-left border-collapse text-[11.5px]">
                 <thead className="sticky top-0 bg-[#f8fafc] z-10 text-[11.5px]">
                   <tr className="border-b border-gray-200 font-bold text-gray-600 uppercase tracking-wider">
@@ -1701,7 +1704,7 @@ export default function PersonnelPage() {
             </div>
 
             {/* 🟢 VIEW TRÊN MOBILE: THẺ CARD DỌC */}
-            <div className="block md:hidden flex-1 overflow-y-auto pb-4 space-y-4 custom-scrollbar">
+            <div className="block md:hidden flex-1 min-h-0 overflow-y-auto pb-4 space-y-4 custom-scrollbar">
               {paginatedPersonnel.length === 0 ? (
                 <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center text-gray-400 italic">Không tìm thấy nhân sự.</div>
               ) : (
@@ -1825,7 +1828,7 @@ export default function PersonnelPage() {
           const maxAge = Math.max(0, ...(Object.values(stats.ageGroups) as number[]));
 
           return (
-            <div className={`flex-1 overflow-y-auto custom-scrollbar transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+            <div className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
               
               {/* DÒNG 1: 4 CHỈ SỐ KPI */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -2609,7 +2612,7 @@ export default function PersonnelPage() {
               {bulkImportData.length > 0 && (
                 <div className="mt-4">
                   <h4 className="font-bold mb-2">Xem trước ({bulkImportData.length} người)</h4>
-                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto custom-scrollbar">
+                  <div className="border border-gray-200 rounded-xl max-h-64 overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-gray-100 sticky top-0 font-bold">
                         <tr>
