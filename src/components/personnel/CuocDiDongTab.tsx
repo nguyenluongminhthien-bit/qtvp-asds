@@ -11,7 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toast } from '../../utils/toast';
 import { formatCurrencySpace, formatPhoneNumber } from '../../utils/formatters';
 const formatCurrency = formatCurrencySpace;
-import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu } from '../../utils/hierarchy';
+import { buildHierarchicalOptions, getUnitEmoji, sortDonViByThuTu, getAllSubordinateIds } from '../../utils/hierarchy';
 import Pagination from '../ui/Pagination';
 import CustomAutocomplete from '../ui/CustomAutocomplete';
 import ThueBaoDetailCuocChart from './ThueBaoDetailCuocChart';
@@ -71,7 +71,7 @@ export default function CuocDiDongTab({
   const [filterVuot, setFilterVuot] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 30;
+  const [pageSize, setPageSize] = useState(10);
 
   // Selected State (For Left Panel vs Right Panel detail view)
   const [selectedThueBaoId, setSelectedThueBaoId] = useState<string | null>(null);
@@ -234,47 +234,29 @@ export default function CuocDiDongTab({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Filter legal entities based on selected Unit for filter toolbar
+  // Lọc pháp nhân cho thanh bộ lọc và căn cứ chuẩn theo Đơn vị đang được lựa chọn bên Bộ lọc Đơn vị
   const filteredPhapNhansForFilter = useMemo(() => {
-    if (!selectedUnitFilter) return phapNhanList;
+    if (!selectedUnitFilter || selectedUnitFilter === 'ALL') return phapNhanList;
     const unitIdsSet = new Set<string>(selectedUnitSubordinates);
-    const selectedUnit = donViList.find(d => d.id === selectedUnitFilter);
-    if (selectedUnit) {
-      let currentUnit = selectedUnit;
-      let iterations = 0;
-      while (currentUnit && currentUnit.cap_quan_ly && currentUnit.cap_quan_ly !== 'HO' && iterations < 10) {
-        unitIdsSet.add(currentUnit.cap_quan_ly);
-        const parent = donViList.find(d => d.id === currentUnit.cap_quan_ly);
-        if (!parent) break;
-        currentUnit = parent;
-        iterations++;
-      }
-    }
-    return phapNhanList.filter(pn => unitIdsSet.has(pn.id_don_vi));
-  }, [selectedUnitFilter, selectedUnitSubordinates, phapNhanList, donViList]);
-
-  // Filter legal entities based on selected Unit for modal form
-  const modalPhapNhanOptions = useMemo(() => {
-    const unitId = thueBaoModal.data.id_don_vi;
-    if (!unitId) return phapNhanList;
-    
-    const selectedUnit = donViList.find(d => d.id === unitId);
-    if (!selectedUnit) return phapNhanList;
-
-    const ancestorIds: string[] = [unitId];
-    let currentUnit = selectedUnit;
-    let iterations = 0;
-    while (currentUnit && currentUnit.cap_quan_ly && currentUnit.cap_quan_ly !== 'HO' && iterations < 10) {
-      ancestorIds.push(currentUnit.cap_quan_ly);
-      const parent = donViList.find(d => d.id === currentUnit.cap_quan_ly);
-      if (!parent) break;
-      currentUnit = parent;
-      iterations++;
-    }
-
-    const filtered = phapNhanList.filter(pn => ancestorIds.includes(pn.id_don_vi));
+    unitIdsSet.add(selectedUnitFilter);
+    const filtered = phapNhanList.filter(pn => unitIdsSet.has(pn.id_don_vi) || String(pn.id_don_vi) === String(selectedUnitFilter));
     return filtered.length > 0 ? filtered : phapNhanList;
-  }, [thueBaoModal.data.id_don_vi, phapNhanList, donViList]);
+  }, [selectedUnitFilter, selectedUnitSubordinates, phapNhanList]);
+
+  // Lọc pháp nhân cho form Thêm mới / Cập nhật căn cứ theo Đơn vị đang được lựa chọn bên Bộ lọc Đơn vị
+  const modalPhapNhanOptions = useMemo(() => {
+    if (selectedUnitFilter && selectedUnitFilter !== 'ALL') {
+      return filteredPhapNhansForFilter;
+    }
+    const unitId = thueBaoModal.data.id_don_vi;
+    if (!unitId || unitId === 'ALL') return phapNhanList;
+
+    const subIds = getAllSubordinateIds(unitId, donViList);
+    const unitIdsSet = new Set<string>(subIds);
+    unitIdsSet.add(unitId);
+    const filtered = phapNhanList.filter(pn => unitIdsSet.has(pn.id_don_vi) || String(pn.id_don_vi) === String(unitId));
+    return filtered.length > 0 ? filtered : phapNhanList;
+  }, [selectedUnitFilter, filteredPhapNhansForFilter, thueBaoModal.data.id_don_vi, phapNhanList, donViList]);
 
   // Auto-set id_phap_nhan in modal if there's exactly 1 option
   useEffect(() => {
@@ -344,11 +326,11 @@ export default function CuocDiDongTab({
   }, [thueBaoList, cuocList, personnel, filterThang, filterPhapNhan, filterLoai, filterTrangThai, filterVuot, searchTerm, allowedDonViIds, selectedUnitFilter, selectedUnitSubordinates]);
 
   // Pagination Logic
-  const totalPages = Math.ceil(tableRows.length / PAGE_SIZE);
+  const totalPages = Math.ceil(tableRows.length / pageSize);
   const paginatedRows = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return tableRows.slice(start, start + PAGE_SIZE);
-  }, [tableRows, currentPage]);
+    const start = (currentPage - 1) * pageSize;
+    return tableRows.slice(start, start + pageSize);
+  }, [tableRows, currentPage, pageSize]);
 
   // Overall Statistics from Filtered Data
   const stats = useMemo(() => {
@@ -1117,8 +1099,11 @@ export default function CuocDiDongTab({
     const unitName = foundUnit ? foundUnit.ten_don_vi : '';
 
     let targetPnId = foundUnit?.id_phap_nhan || '';
-    let foundPn = phapNhanList.find(p => String(p.id) === String(targetPnId));
-    if (!foundPn && phapNhanList.length > 0) {
+    let foundPn = filteredPhapNhansForFilter.find(p => String(p.id) === String(targetPnId));
+    if (!foundPn && filteredPhapNhansForFilter.length > 0) {
+      foundPn = filteredPhapNhansForFilter[0];
+      targetPnId = foundPn.id;
+    } else if (!foundPn && phapNhanList.length > 0) {
       foundPn = phapNhanList[0];
       targetPnId = foundPn.id;
     }
@@ -1661,14 +1646,14 @@ export default function CuocDiDongTab({
             <p className="text-xl font-black text-red-600 dark:text-red-400 leading-none">{stats.vuotCount} SIM</p>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:bg-gray-800 flex items-center gap-3 shadow-xs">
           <div className="w-9 h-9 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0"><CheckCircle2 size={18}/></div>
           <div>
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Trong Định Mức</p>
             <p className="text-xl font-black text-teal-600 dark:text-teal-400 leading-none">{stats.trongCount} SIM</p>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:bg-gray-800 flex items-center gap-3 shadow-xs">
           <div className="w-9 h-9 rounded-full bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 flex items-center justify-center shrink-0"><Activity size={18}/></div>
           <div>
             <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Chưa Có Dữ Liệu</p>
@@ -1694,24 +1679,24 @@ export default function CuocDiDongTab({
                 <span className="text-sm font-bold">Không tìm thấy thuê bao điện thoại nào.</span>
               </div>
             ) : (
-              <table className="w-full text-left text-sm border-collapse min-w-[700px]">
+              <table className="w-full text-left text-sm border-collapse min-w-[1150px]">
                 <thead className="sticky top-0 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 z-10">
                   <tr>
-                    <th className="p-3.5 text-center w-12">STT</th>
-                    <th className="p-3.5 w-24">Phân Loại</th>
-                    <th className="p-3.5 w-32">Số Điện Thoại</th>
-                    <th className="p-3.5">Người Quản Lý / Bộ phận</th>
-                    <th className="p-3.5 w-40">Đơn vị</th>
-                    <th className="p-3.5 w-40">Pháp Nhân</th>
-                    <th className="p-3.5 w-32 text-right">Tổng Cước</th>
-                    <th className="p-3.5 w-40 text-center">Tình Trạng Cước</th>
+                    <th className="px-2 py-3 text-center w-10 shrink-0">STT</th>
+                    <th className="px-2.5 py-3 w-24 shrink-0">Phân Loại</th>
+                    <th className="px-2.5 py-3 w-28 shrink-0">Số Điện Thoại</th>
+                    <th className="px-3 py-3 min-w-[300px]">Người Quản Lý / Bộ phận</th>
+                    <th className="px-3 py-3 min-w-[180px]">Đơn vị</th>
+                    <th className="px-3 py-3 min-w-[220px]">Pháp Nhân</th>
+                    <th className="px-3 py-3 w-32 text-right shrink-0">Tổng Cước</th>
+                    <th className="px-3 py-3 w-36 text-center shrink-0">Tình Trạng Cước</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {paginatedRows.map((row, idx) => {
                     const isSelected = row.tb.id === selectedThueBaoId;
                     const badge = getCuocBadge(row.tongCuoc, row.dinhMuc);
-                    const orderIndex = (currentPage - 1) * PAGE_SIZE + idx + 1;
+                    const orderIndex = (currentPage - 1) * pageSize + idx + 1;
 
                     return (
                       <tr
@@ -1719,33 +1704,33 @@ export default function CuocDiDongTab({
                         className={`cursor-pointer hover:bg-blue-50/40 dark:hover:bg-gray-700/30 transition-all ${isSelected ? 'bg-blue-50 dark:bg-gray-800/80 font-medium' : ''}`}
                         onClick={() => setSelectedThueBaoId(isSelected ? null : row.tb.id)}
                       >
-                        <td className="p-3.5 text-center text-xs font-bold text-gray-400 dark:text-gray-500">{orderIndex}</td>
-                        <td className="p-3.5">
+                        <td className="px-2 py-2.5 text-center text-xs font-bold text-gray-400 dark:text-gray-500 whitespace-nowrap">{orderIndex}</td>
+                        <td className="px-2.5 py-2.5 whitespace-nowrap">
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide ${row.tb.loai_thue_bao === 'Cá nhân' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400' : row.tb.loai_thue_bao === 'Hotline' ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400' : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'}`}>
                             {row.tb.loai_thue_bao}
                           </span>
                         </td>
-                        <td className="p-3.5 font-bold text-[#05469B] dark:text-blue-400 tabular-nums font-mono">{formatPhoneNumber(row.tb.so_dien_thoai)}</td>
-                        <td className="p-3.5">
+                        <td className="px-2.5 py-2.5 font-bold text-[#05469B] dark:text-blue-400 tabular-nums font-mono whitespace-nowrap">{formatPhoneNumber(row.tb.so_dien_thoai)}</td>
+                        <td className="px-3 py-2.5 min-w-[300px]">
                           {row.tb.loai_thue_bao === 'Cá nhân' ? (
                             <div className="flex flex-col">
-                              <span className="font-bold text-gray-800 dark:text-gray-200">{row.tb.ho_ten_nv}</span>
-                              <span className="text-[10.5px] text-gray-400 dark:text-gray-500 font-bold">{row.tb.ma_so_nv} {row.tb.ten_bo_phan ? `| ${row.tb.ten_bo_phan}` : ''}</span>
+                              <span className="font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap">{row.tb.ho_ten_nv}</span>
+                              <span className="text-[10.5px] text-gray-400 dark:text-gray-500 font-bold whitespace-nowrap">{row.tb.ma_so_nv} {row.tb.ten_bo_phan ? `| ${row.tb.ten_bo_phan}` : ''}</span>
                             </div>
                           ) : (
                             <div className="flex flex-col">
-                              <span className="font-bold text-gray-800 dark:text-gray-200">{row.tb.ten_bo_phan || 'Chưa định nghĩa bộ phận'}</span>
-                              {row.tb.ho_ten_nv && <span className="text-[10.5px] text-gray-400 dark:text-gray-500">Phụ trách: {row.tb.ho_ten_nv} ({row.tb.ma_so_nv})</span>}
+                              <span className="font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap">{row.tb.ten_bo_phan || 'Chưa định nghĩa bộ phận'}</span>
+                              {row.tb.ho_ten_nv && <span className="text-[10.5px] text-gray-400 dark:text-gray-500 whitespace-nowrap">Phụ trách: {row.tb.ho_ten_nv} ({row.tb.ma_so_nv})</span>}
                             </div>
                           )}
                         </td>
-                        <td className="p-3.5 text-xs text-gray-600 dark:text-gray-400 font-semibold">{donViList.find(d => d.id === row.tb.id_don_vi)?.ten_don_vi || '---'}</td>
-                        <td className="p-3.5 text-xs text-gray-600 dark:text-gray-400 truncate max-w-[150px] font-bold">{row.tb.ten_phap_nhan || '---'}</td>
-                        <td className="p-3.5 text-right font-bold tabular-nums">
+                        <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400 font-semibold min-w-[180px]">{donViList.find(d => d.id === row.tb.id_don_vi)?.ten_don_vi || '---'}</td>
+                        <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400 font-bold min-w-[220px]">{row.tb.ten_phap_nhan || '---'}</td>
+                        <td className="px-3 py-2.5 text-right font-bold tabular-nums whitespace-nowrap">
                           {row.tongCuoc !== null ? `${formatCurrency(row.tongCuoc)}đ` : <span className="text-gray-300 dark:text-gray-700 font-normal">--</span>}
                         </td>
-                        <td className="p-3.5 text-center">
-                          <span className={`text-[10.5px] font-bold px-2 py-0.8 rounded-lg ${badge.cls}`}>
+                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                          <span className={`text-[10.5px] font-bold px-2 py-0.8 rounded-lg inline-block ${badge.cls}`}>
                             {badge.label}
                           </span>
                         </td>
@@ -1756,10 +1741,10 @@ export default function CuocDiDongTab({
                 {/* Fixed Total Sum Row */}
                 <tfoot className="sticky bottom-0 bg-gray-50 dark:bg-gray-800 border-t-2 border-gray-200 dark:border-gray-700 z-10">
                   <tr className="font-bold text-xs text-gray-700 dark:text-gray-200 text-left">
-                    <td colSpan={5} className="p-3.5 text-right text-gray-500 uppercase tracking-wider">Tổng trang đang xem:</td>
-                    <td className="p-3.5 text-xs font-normal text-gray-400 tabular-nums">ĐM: {formatCurrency(pageSums.dinhMuc)}đ</td>
-                    <td className="p-3.5 text-right font-black text-indigo-600 dark:text-indigo-400 tabular-nums text-sm">{formatCurrency(pageSums.cuoc)}đ</td>
-                    <td className="p-3.5 text-center font-black text-red-600 dark:text-red-400 tabular-nums">Vượt: +{formatCurrency(pageSums.vuot)}đ</td>
+                    <td colSpan={5} className="px-3 py-2.5 text-right text-gray-500 uppercase tracking-wider">Tổng trang đang xem:</td>
+                    <td className="px-3 py-2.5 text-xs font-normal text-gray-400 tabular-nums">ĐM: {formatCurrency(pageSums.dinhMuc)}đ</td>
+                    <td className="px-3 py-2.5 text-right font-black text-indigo-600 dark:text-indigo-400 tabular-nums text-sm">{formatCurrency(pageSums.cuoc)}đ</td>
+                    <td className="px-3 py-2.5 text-center font-black text-red-600 dark:text-red-400 tabular-nums">Vượt: +{formatCurrency(pageSums.vuot)}đ</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1769,10 +1754,13 @@ export default function CuocDiDongTab({
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            rowsPerPage={PAGE_SIZE}
+            rowsPerPage={pageSize}
             totalRows={tableRows.length}
             onPageChange={setCurrentPage}
-            onRowsPerPageChange={() => {}}
+            onRowsPerPageChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
             itemName="thuê bao"
           />
         </div>
@@ -2972,7 +2960,7 @@ export default function CuocDiDongTab({
                                 value={row.idPhapNhan}
                                 onChange={(e) => {
                                   const pnId = e.target.value;
-                                  const pnObj = phapNhanList.find(p => String(p.id) === String(pnId));
+                                  const pnObj = filteredPhapNhansForFilter.find(p => String(p.id) === String(pnId)) || phapNhanList.find(p => String(p.id) === String(pnId));
                                   const pnName = pnObj ? (pnObj.ten_cong_ty || pnObj.ten_phap_nhan) : '';
                                   setBatchSimModal(prev => ({
                                     ...prev,
@@ -2981,7 +2969,7 @@ export default function CuocDiDongTab({
                                 }}
                                 className="p-1 border border-gray-200 dark:border-gray-700 rounded text-[11px] bg-white dark:bg-gray-800 font-semibold truncate max-w-[140px]"
                               >
-                                {phapNhanList.map(pn => (
+                                {filteredPhapNhansForFilter.map(pn => (
                                   <option key={pn.id} value={pn.id}>{pn.ten_cong_ty || pn.ten_phap_nhan}</option>
                                 ))}
                               </select>
