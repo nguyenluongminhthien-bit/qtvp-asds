@@ -17,7 +17,6 @@ import { formatPhoneNumber, getDirectImageLink, formatCurrencySpace as formatCur
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
 import { useAllowedUnits } from '../hooks/useAllowedUnits';
-import { useDebounce } from '../hooks/useDebounce';
 import PersonnelModal from '../components/personnel/PersonnelModal';
 import CuocDiDongTab from '../components/personnel/CuocDiDongTab';
 import PersonnelDetailCuocChart from '../components/personnel/PersonnelDetailCuocChart';
@@ -47,7 +46,6 @@ export default function PersonnelPage() {
   const [error, setError] = useState<string | null>(null);
   
   const [personnelSearchTerm, setPersonnelSearchTerm] = useState('');
-  const debouncedPersonnelSearchTerm = useDebounce(personnelSearchTerm, 250);
   const [filterPhongBan, setFilterPhongBan] = useState<string>('');
   const [filterKhoi, setFilterKhoi] = useState<string>('');
   const [filterChucVu, setFilterChucVu] = useState<string>('');
@@ -259,17 +257,21 @@ export default function PersonnelPage() {
     let result = data.filter(item => allowedDonViIds.includes(item.id_don_vi));
     if (selectedUnitFilter) result = result.filter(item => selectedUnitSubordinates.includes(item.id_don_vi));
     
-    if (debouncedPersonnelSearchTerm) {
-      const cleanSearch = stripAccents(debouncedPersonnelSearchTerm);
-      const digitsSearch = debouncedPersonnelSearchTerm.replace(/\D/g, '');
+    if (personnelSearchTerm) {
+      const cleanSearch = stripAccents(personnelSearchTerm);
+      const digitsSearch = personnelSearchTerm.replace(/\D/g, '');
       
       result = result.filter(item => {
         const cleanPhone1 = String(item.sdt_ca_nhan || '').replace(/\D/g, '');
         const cleanPhone2 = String(item.sdt_cong_ty || '').replace(/\D/g, '');
-        const donViName = donViMap[String(item.id_don_vi)] || '';
-        const itemKey = stripAccents(`${item.ma_so_nhan_vien || ''} ${item.ho_ten || ''} ${donViName} ${item.chuc_vu || ''} ${item.phong_ban || ''} ${item.sdt_ca_nhan || ''} ${item.sdt_cong_ty || ''}`);
         
-        return itemKey.includes(cleanSearch) || 
+        return stripAccents(item.ma_so_nhan_vien || '').includes(cleanSearch) || 
+               stripAccents(item.ho_ten || '').includes(cleanSearch) || 
+               stripAccents(donViMap[String(item.id_don_vi)] || '').includes(cleanSearch) ||
+               stripAccents(item.chuc_vu || '').includes(cleanSearch) ||
+               stripAccents(item.phong_ban || '').includes(cleanSearch) ||
+               stripAccents(item.sdt_ca_nhan || '').includes(cleanSearch) ||
+               stripAccents(item.sdt_cong_ty || '').includes(cleanSearch) ||
                (digitsSearch !== '' && (cleanPhone1.includes(digitsSearch) || cleanPhone2.includes(digitsSearch)));
       });
     }
@@ -309,7 +311,7 @@ export default function PersonnelPage() {
       const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
       return timeA - timeB; 
     });
-  }, [data, debouncedPersonnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, selectedUnitSubordinates, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
+  }, [data, personnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, selectedUnitSubordinates, filterPhongBan, filterKhoi, filterChucVu, filterPhanLoai]);
 
   const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<string[]>([]);
 
