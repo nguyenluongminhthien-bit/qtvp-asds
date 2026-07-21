@@ -3,7 +3,7 @@ import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
   Users, Activity, FileSpreadsheet, Briefcase, Calendar,
   ChevronLeft, ChevronRight, Phone, TrendingUp, CheckCircle2, History, Link2, ExternalLink,
-  Pencil, ArrowLeftRight, UserPlus, PauseCircle, PlayCircle, XCircle, Zap, ChevronDown
+  Pencil, ArrowLeftRight, UserPlus, PauseCircle, PlayCircle, XCircle, Zap, ChevronDown, Sparkles
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { Personnel, DonVi, ThueBao, CuocThang, LichSuNSD } from '../../types';
@@ -164,7 +164,7 @@ export default function CuocDiDongTab({
   const [importing, setImporting] = useState(false);
 
   // Batch SIM Creation States
-  const [showAddSimDropdown, setShowAddSimDropdown] = useState(false);
+  const [showAddSimModal, setShowAddSimModal] = useState(false);
   const [batchSimModal, setBatchSimModal] = useState<{
     open: boolean;
     rawText: string;
@@ -1601,50 +1601,15 @@ export default function CuocDiDongTab({
           </div>
 
           {/* 7. NÚT THÊM (VÙNG Ô XANH) */}
-          <div className="relative shrink-0">
+          <div className="shrink-0">
             <button
-              onClick={() => setShowAddSimDropdown(!showAddSimDropdown)}
-              className="flex items-center gap-1.5 px-4 h-8.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all whitespace-nowrap"
+              type="button"
+              onClick={() => setShowAddSimModal(true)}
+              className="flex items-center gap-1.5 px-4 h-8.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg transition-all whitespace-nowrap cursor-pointer"
             >
-              <Plus size={15} />
-              Thêm
-              <ChevronDown size={13} className={`transition-transform duration-200 ${showAddSimDropdown ? 'rotate-180' : ''}`} />
+              <Plus size={16} />
+              <span>+ Thêm Mới SIM</span>
             </button>
-
-            {showAddSimDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowAddSimDropdown(false)}></div>
-                <div className="absolute right-0 top-full mt-1.5 min-w-[230px] bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-1.5 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-150">
-                  <button
-                    onClick={() => {
-                      openCreateModal();
-                      setShowAddSimDropdown(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
-                  >
-                    <Plus size={15} /> 1. Thêm Sim
-                  </button>
-                  <button
-                    onClick={() => {
-                      setBatchSimModal({ open: true, rawText: '', allowOverwrite: true, previewRows: [], isSubmitting: false });
-                      setShowAddSimDropdown(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
-                  >
-                    <UserPlus size={15} /> 2. Thêm hàng loạt Sim
-                  </button>
-                  <button
-                    onClick={() => {
-                      setImportModal(true);
-                      setShowAddSimDropdown(false);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs hover:bg-blue-50 dark:hover:bg-blue-950/30 text-[#05469B] dark:text-blue-400 flex items-center gap-2.5 transition-all whitespace-nowrap"
-                  >
-                    <FileSpreadsheet size={15} /> 3. Cập nhật cước
-                  </button>
-                </div>
-              </>
-            )}
           </div>
 
         </div>
@@ -2625,6 +2590,134 @@ export default function CuocDiDongTab({
           </div>
         </div>
       )}
+      {/* 🟢 MODAL NỔI TRỰC QUAN CHỌN TÍNH NĂNG THÊM SIM */}
+      {showAddSimModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-xl w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 flex flex-col gap-6">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl border border-emerald-100 dark:border-emerald-900/50">
+                  <Sparkles size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                    Chọn Tính Năng Thêm / Cập Nhật SIM
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                    Vui lòng chọn 1 trong 3 phương thức thao tác bên dưới:
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddSimModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* 3 Options Grid Cards */}
+            <div className="flex flex-col gap-3.5">
+              {/* Option 1: Thêm mới thủ công 1 SIM */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddSimModal(false);
+                  openCreateModal();
+                }}
+                className="group p-4 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/50 rounded-2xl text-left transition-all duration-200 flex items-start gap-4 hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+              >
+                <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-md shrink-0 group-hover:scale-110 transition-transform">
+                  <Plus size={22} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-black text-emerald-800 dark:text-emerald-300">
+                      1. Thêm mới thủ công 1 SIM
+                    </h4>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 group-hover:translate-x-1 transition-transform">
+                      Thực hiện &rarr;
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium leading-relaxed">
+                    Khai báo thông tin chi tiết cho 1 số điện thoại mới (Nhà mạng, Pháp nhân, Định mức, Nhân sự sở hữu).
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Thêm mới hàng loạt SIM (Excel) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddSimModal(false);
+                  setBatchSimModal({ open: true, rawText: '', allowOverwrite: true, previewRows: [], isSubmitting: false });
+                }}
+                className="group p-4 bg-indigo-50/50 hover:bg-indigo-50 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-900/50 rounded-2xl text-left transition-all duration-200 flex items-start gap-4 hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+              >
+                <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-md shrink-0 group-hover:scale-110 transition-transform">
+                  <UserPlus size={22} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-black text-indigo-800 dark:text-indigo-300">
+                      2. Thêm mới hàng loạt SIM (Copy/Paste Excel)
+                    </h4>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 transition-transform">
+                      Thực hiện &rarr;
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium leading-relaxed">
+                    Dán nhanh danh sách nhiều SIM từ Excel. Hệ thống tự động kiểm tra đối soát SĐT, MSNV và cập nhật danh bạ.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3: Cập nhật cước Excel */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddSimModal(false);
+                  setImportModal(true);
+                }}
+                className="group p-4 bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-950/20 dark:hover:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-2xl text-left transition-all duration-200 flex items-start gap-4 hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+              >
+                <div className="p-3 bg-[#05469B] text-white rounded-xl shadow-md shrink-0 group-hover:scale-110 transition-transform">
+                  <FileSpreadsheet size={22} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-black text-[#05469B] dark:text-blue-300">
+                      3. Cập nhật cước Excel (Nhập cước tháng)
+                    </h4>
+                    <span className="text-xs font-bold text-[#05469B] dark:text-blue-400 group-hover:translate-x-1 transition-transform">
+                      Thực hiện &rarr;
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium leading-relaxed">
+                    Dán dữ liệu cước hàng tháng xuất từ nhà mạng (Viettel, Mobifone, VinaPhone) để tính toán cước phát sinh và vượt định mức.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={() => setShowAddSimModal(false)}
+                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Đóng Cửa Sổ
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Custom Confirm Modal đồng bộ giao diện ứng dụng */}
       {confirmModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">

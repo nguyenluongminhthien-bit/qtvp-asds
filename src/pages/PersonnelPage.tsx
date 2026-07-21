@@ -739,8 +739,28 @@ export default function PersonnelPage() {
   };
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
-    if (item) { setModal({ isOpen: true, mode, formData: { ...item } }); } 
-    else { setModal({ isOpen: true, mode, formData: { id_don_vi: selectedUnitFilter || '' } }); }
+    if (item) { 
+      setModal({ isOpen: true, mode, formData: { ...item } }); 
+    } else { 
+      const defaultUnitId = selectedUnitFilter || allowedDonViIds[0] || (donViList[0]?.id ? String(donViList[0].id) : '');
+      const targetUnit = donViList.find(d => String(d.id) === String(defaultUnitId));
+      const defaultLegal = targetUnit ? (targetUnit.id_phap_nhan || '') : (phapNhanList[0]?.id || '');
+      setModal({ 
+        isOpen: true, 
+        mode, 
+        formData: {
+          ma_so_nhan_vien: '', ho_ten: '', ngay_sinh: '', cmnd: '',
+          sdt_ca_nhan: '', sdt_cong_ty: '', email: '', email_ca_nhan: '',
+          id_don_vi: defaultUnitId,
+          id_phap_nhan: defaultLegal,
+          ten_phap_nhan: phapNhanList.find(p => p.id === defaultLegal)?.ten_cong_ty || '',
+          ten_don_vi: targetUnit ? targetUnit.ten_don_vi : '',
+          phong_ban: '', chuc_vu: '', ngach_luong: '',
+          ngay_nhan_viec: new Date().toISOString().split('T')[0],
+          gioi_tinh: 'Nam', trang_thai: 'Đang làm việc'
+        } 
+      }); 
+    }
     setError(null);
   };
 
@@ -1294,44 +1314,19 @@ export default function PersonnelPage() {
                               <div className="pl-9 pr-2 py-1 flex flex-col gap-1 border-l-2 border-indigo-100 ml-5 my-1">
                                 <button 
                                   onClick={() => {
-                                    if (!selectedUnitFilter) {
-                                      toast.warning("Vui lòng chọn 1 Đơn vị trước khi thêm mới nhân sự!");
-                                      return;
-                                    }
-                                    const targetUnit = donViList.find(d => String(d.id) === String(selectedUnitFilter));
-                                    const defaultLegal = targetUnit ? (targetUnit.id_phap_nhan || '') : (phapNhanList[0]?.id || '');
-
-                                    setModal({
-                                      open: true,
-                                      mode: 'create',
-                                      formData: {
-                                        ma_so_nhan_vien: '', ho_ten: '', ngay_sinh: '', cmnd: '',
-                                        sdt_ca_nhan: '', sdt_cong_ty: '', email: '', email_ca_nhan: '',
-                                        id_don_vi: selectedUnitFilter,
-                                        id_phap_nhan: defaultLegal,
-                                        ten_phap_nhan: phapNhanList.find(p => p.id === defaultLegal)?.ten_cong_ty || '',
-                                        ten_don_vi: targetUnit ? targetUnit.ten_don_vi : '',
-                                        phong_ban: '', chuc_vu: '', ngach_luong: '',
-                                        ngay_nhan_viec: new Date().toISOString().split('T')[0],
-                                        gioi_tinh: 'Nam', trang_thai: 'Đang làm việc'
-                                      }
-                                    });
+                                    openModal('create');
                                     setIsFeaturesDropdownOpen(false);
                                   }}
-                                  className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
+                                  className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all cursor-pointer"
                                 >
                                   <UserPlus size={13} /> Thêm từng đối tượng
                                 </button>
                                 <button 
                                   onClick={() => {
-                                    if (!selectedUnitFilter) {
-                                      toast.warning("Vui lòng chọn 1 Đơn vị trước khi nhập hàng loạt!");
-                                      return;
-                                    }
                                     setIsBulkImportOpen(true);
                                     setIsFeaturesDropdownOpen(false);
                                   }}
-                                  className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all"
+                                  className="w-full text-left px-3 py-2 rounded-lg font-semibold text-xs hover:bg-indigo-50 text-indigo-700 flex items-center gap-2 transition-all cursor-pointer"
                                 >
                                   <ClipboardPaste size={13} /> Thêm hàng loạt (Excel)
                                 </button>
@@ -2480,6 +2475,9 @@ export default function PersonnelPage() {
 
                 {/* Khối Biểu đồ Cước (65%) */}
                 <div className="lg:w-[65%] flex-1 flex flex-col min-w-0">
+                  <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2">
+                    <Phone size={18} className="text-[#05469B]"/> TỔNG HỢP CƯỚC ĐTDĐ
+                  </h4>
                   <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs flex-1 flex flex-col">
                     <PersonnelDetailCuocChart personnel={viewData} />
                   </div>
