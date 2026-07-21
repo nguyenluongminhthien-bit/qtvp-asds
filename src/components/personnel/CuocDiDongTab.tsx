@@ -27,9 +27,16 @@ interface Props {
 }
 
 interface ImportRow {
-  msnv: string;
+  msnv?: string;
+  sdt: string;
+  dinhMucExcel?: number | null;
+  cuoc?: number;
+  khuyenMai?: number;
+  thue?: number;
+  dieuChinh?: number;
+  no?: number;
+  cuocSuDung?: number;
   tongCuoc: number;
-  sdt?: string;
   noiMang?: number;
   ngoaiMang?: number;
   cuocData?: number;
@@ -46,6 +53,46 @@ interface ImportRow {
 const getCurrMonth = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const parsePhoneNumberWithZero = (phoneStr?: string | null): string => {
+  if (!phoneStr) return '';
+  let clean = String(phoneStr).replace(/[^0-9]/g, '');
+  if (clean.length === 9) {
+    clean = '0' + clean;
+  }
+  return clean;
+};
+
+const parseDateDDMMYYYY = (dateStr?: string | null): string => {
+  if (!dateStr || !String(dateStr).trim()) return new Date().toISOString().split('T')[0];
+  const cleanStr = String(dateStr).trim().split(' ')[0];
+  if (cleanStr.includes('/')) {
+    const parts = cleanStr.split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      const year = parts[2];
+      if (year.length === 4) {
+        return `${year}-${month}-${day}`;
+      }
+    }
+  }
+  if (cleanStr.includes('-')) {
+    const parts = cleanStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return cleanStr;
+    }
+  }
+  return new Date().toISOString().split('T')[0];
+};
+
+const parseNum = (s?: string | null): number =>
+  parseFloat(String(s || '0').replace(/[^0-9.]/g, '')) || 0;
+
+const parseExcelNum = (s?: string | null): number => {
+  if (!s || s === '-' || s.trim() === '-' || s.trim() === '---') return 0;
+  return parseFloat(String(s).replace(/[^0-9.-]/g, '')) || 0;
 };
 
 export default function CuocDiDongTab({
@@ -291,7 +338,10 @@ export default function CuocDiDongTab({
       .filter(tb => allowedDonViIds.includes(tb.id_don_vi))
       .map(tb => {
         const cuocThang = cuocList.find(
-          c => c.id_thue_bao === tb.id && c.thang_nam === filterThang
+          c => c.thang_nam === filterThang && (
+            (c.id_thue_bao && String(c.id_thue_bao) === String(tb.id)) ||
+            (c.so_dien_thoai && parsePhoneNumberWithZero(c.so_dien_thoai) === parsePhoneNumberWithZero(tb.so_dien_thoai))
+          )
         );
         const nv = personnel.find(p => p.id === tb.id_nhan_su);
         const rawSimDm = tb.dinh_muc_cuoc !== undefined && tb.dinh_muc_cuoc !== null ? Number(tb.dinh_muc_cuoc) : null;
@@ -982,59 +1032,96 @@ export default function CuocDiDongTab({
     setHistSearchText(item.ho_ten ? `${item.ho_ten} (${item.ma_so_nv})` : '');
   };
 
-  // Excel Paste Parser Logic
+  // Excel Paste Parser Logic (Nhập cước hàng tháng 8 cột)
   const handleParseExcel = () => {
     if (!importRawText.trim()) {
       toast.error('Vui lòng dán dữ liệu cước từ Excel vào ô nhập!');
       return;
     }
 
-    const rows = importRawText.split('\n').filter(l => l.trim()).map(line => {
-      const cols = line.split('\t').map(c => c.trim());
-      const msnv = cols[0] || '';
-      const tongCuoc = parseNum(cols[1]);
-      const sdt = cols[2] || '';
-      const noiMang = parseNum(cols[3]);
-      const ngoaiMang = parseNum(cols[4]);
-      const cuocData = parseNum(cols[5]);
-      const sms = parseNum(cols[6]);
-      const khac = parseNum(cols[7]);
-      const phutGoi = parseNum(cols[8]);
-      const dungLuong = parseNum(cols[9]);
+    const lines = importRawText.split('\n').filter(l => l.trim());
+    const rows: ImportRow[] = [];
 
-      // Match: msnv first, fallback sdt
-      const matchedTB = thueBaoList.find(tb =>
-        (msnv && tb.ma_so_nv === msnv) ||
-        (sdt && formatPhoneNumber(tb.so_dien_thoai) === formatPhoneNumber(sdt))
-      ) || null;
+    lines.forEach(line => {
+      const cols = line.split('\t').map(c => c.trim());
+      if (cols.length === 0 || !cols[0]) return;
+
+      // Bỏ qua dòng tiêu đề nếu khớp từ khóa cột của bảng cước
+      const col0Low = cols[0].toLowerCase();
+      if (
+        col0Low.includes('số') || col0Low.includes('điện thoại') || col0Low.includes('sđt') ||
+        col0Low.includes('sdt') || col0Low.includes('phone') || col0Low.includes('msnv') ||
+        (cols[7] && cols[7].toLowerCase().includes('cước sử dụng'))
+      ) {
+        return;
+      }
+
+      // Vùng dán dữ liệu chuẩn 8 cột:
+      // Col 0: Số điện thoại (dạng xxxxxxxxx hoặc 0xxxxxxxxx)
+      // Col 1: Định mức
+      // Col 2: Cước
+      // Col 3: Khuyến mãi
+      // Col 4: Thuế
+      // Col 5: Điều chỉnh
+      // Col 6: Nợ
+      // Col 7: Cước sử dụng (gắn vào tong_cuoc)
+      const rawCol0 = cols[0] || '';
+      const cleanPhone = parsePhoneNumberWithZero(rawCol0);
+      
+      const is8Col = cols.length >= 8;
+      const dinhMucStr = cols[1];
+      const dinhMucExcel = (is8Col && dinhMucStr && dinhMucStr !== '-' && dinhMucStr.trim() !== '-')
+        ? parseExcelNum(dinhMucStr)
+        : (is8Col && (dinhMucStr === '-' || dinhMucStr.trim() === '-') ? null : undefined);
+
+      const cuoc = is8Col ? parseExcelNum(cols[2]) : undefined;
+      const khuyenMai = is8Col ? parseExcelNum(cols[3]) : undefined;
+      const thue = is8Col ? parseExcelNum(cols[4]) : undefined;
+      const dieuChinh = is8Col ? parseExcelNum(cols[5]) : undefined;
+      const no = is8Col ? parseExcelNum(cols[6]) : undefined;
+      const cuocSuDung = is8Col ? parseExcelNum(cols[7]) : parseExcelNum(cols[1]);
+      const tongCuoc = cuocSuDung; // Cước sử dụng chính là tổng cước phát sinh
+
+      // Đối chiếu số điện thoại với số điện thoại đã có sẵn (ưu tiên SDT, fallback MSNV nếu ai đó dán theo MSNV)
+      const matchedTB = thueBaoList.find(tb => {
+        if (!tb.so_dien_thoai && !tb.ma_so_nv) return false;
+        if (tb.so_dien_thoai && cleanPhone) {
+          const cleanTBPhone = parsePhoneNumberWithZero(tb.so_dien_thoai);
+          if (cleanTBPhone && cleanPhone && cleanTBPhone === cleanPhone) return true;
+          if (formatPhoneNumber(tb.so_dien_thoai) === formatPhoneNumber(rawCol0)) return true;
+        }
+        if (tb.ma_so_nv && rawCol0 && tb.ma_so_nv.toLowerCase() === rawCol0.toLowerCase()) return true;
+        return false;
+      }) || null;
 
       const existingCuoc = matchedTB
-        ? cuocList.find(c => c.id_thue_bao === matchedTB.id && c.thang_nam === importThang) || null
+        ? cuocList.find(c => (String(c.id_thue_bao) === String(matchedTB.id) || (c.so_dien_thoai && parsePhoneNumberWithZero(c.so_dien_thoai) === parsePhoneNumberWithZero(matchedTB.so_dien_thoai))) && c.thang_nam === importThang) || null
         : null;
 
-      return {
-        msnv,
+      rows.push({
+        msnv: matchedTB?.ma_so_nv || '',
+        sdt: cleanPhone || rawCol0,
+        dinhMucExcel,
+        cuoc,
+        khuyenMai,
+        thue,
+        dieuChinh,
+        no,
+        cuocSuDung,
         tongCuoc,
-        sdt,
-        noiMang,
-        ngoaiMang,
-        cuocData,
-        sms,
-        khac,
-        phutGoi,
-        dungLuong,
         matchedTB,
         existingCuoc,
         status: !matchedTB ? 'SKIP' as const : existingCuoc ? 'UPDATE' as const : 'INSERT' as const,
-        skipReason: !matchedTB ? 'Không tìm thấy MSNV/SĐT' : undefined
-      };
+        skipReason: !matchedTB ? `Không tìm thấy SĐT ${rawCol0} trên hệ thống` : undefined
+      });
     });
 
-    setImportPreview(rows);
+    if (rows.length === 0) {
+      toast.warning('Không tìm thấy dữ liệu hợp lệ trong nội dung dán (hoặc chỉ chứa dòng tiêu đề).');
+    } else {
+      setImportPreview(rows);
+    }
   };
-
-  const parseNum = (s: string): number =>
-    parseFloat(String(s || '0').replace(/[^0-9.]/g, '')) || 0;
 
   // Confirm Import save
   const handleConfirmImport = async () => {
@@ -1057,15 +1144,24 @@ export default function CuocDiDongTab({
           id_don_vi: row.matchedTB!.id_don_vi,
           id_phap_nhan: row.matchedTB!.id_phap_nhan,
           thang_nam: importThang,
-          tong_cuoc: row.tongCuoc,
-          cuoc_noi_mang: row.noiMang,
-          cuoc_ngoai_mang: row.ngoaiMang,
-          cuoc_data: row.cuocData,
-          cuoc_sms: row.sms,
-          cuoc_khac: row.khac,
-          so_phut_goi: row.phutGoi,
-          dung_luong_data: row.dungLuong,
-          dinh_muc_snap: row.matchedTB?.dinh_muc_cuoc !== undefined && row.matchedTB?.dinh_muc_cuoc !== null ? Number(row.matchedTB.dinh_muc_cuoc) : null,
+          tong_cuoc: row.cuocSuDung !== undefined ? row.cuocSuDung : row.tongCuoc,
+          cuoc_noi_mang: row.noiMang || 0,
+          cuoc_ngoai_mang: row.ngoaiMang || 0,
+          cuoc_data: row.cuocData || 0,
+          cuoc_sms: row.sms || 0,
+          cuoc_khac: row.khac || 0,
+          so_phut_goi: row.phutGoi || 0,
+          dung_luong_data: row.dungLuong || 0,
+          dinh_muc_snap: (row.dinhMucExcel !== undefined && row.dinhMucExcel !== null && row.dinhMucExcel > 0)
+            ? row.dinhMucExcel
+            : (row.matchedTB?.dinh_muc_cuoc !== undefined && row.matchedTB?.dinh_muc_cuoc !== null ? Number(row.matchedTB.dinh_muc_cuoc) : null),
+          // Cập nhật các trường cước chi tiết theo 8 cột
+          cuoc_goc: row.cuoc !== undefined ? row.cuoc : row.tongCuoc,
+          khuyen_mai: row.khuyenMai || 0,
+          thue: row.thue || 0,
+          dieu_chinh: row.dieuChinh || 0,
+          no_cu: row.no || 0,
+          cuoc_su_dung: row.cuocSuDung !== undefined ? row.cuocSuDung : row.tongCuoc,
           nguoi_nhap: user?.ho_ten || 'Hệ thống'
         };
         await apiService.save(payload, row.status === 'UPDATE' ? 'update' : 'create', 'cp_cuoc_thang');
@@ -1083,38 +1179,6 @@ export default function CuocDiDongTab({
   };
 
   // ── LOGIC THÊM SIM / THUÊ BAO HÀNG LOẠT (COPY/PASTE EXCEL) ──────────
-  const parsePhoneNumberWithZero = (phoneStr: string): string => {
-    if (!phoneStr) return '';
-    let clean = String(phoneStr).replace(/[^0-9]/g, '');
-    if (clean.length === 9) {
-      clean = '0' + clean;
-    }
-    return clean;
-  };
-
-  const parseDateDDMMYYYY = (dateStr: string): string => {
-    if (!dateStr || !String(dateStr).trim()) return new Date().toISOString().split('T')[0];
-    const cleanStr = String(dateStr).trim().split(' ')[0];
-    if (cleanStr.includes('/')) {
-      const parts = cleanStr.split('/');
-      if (parts.length === 3) {
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2];
-        if (year.length === 4) {
-          return `${year}-${month}-${day}`;
-        }
-      }
-    }
-    if (cleanStr.includes('-')) {
-      const parts = cleanStr.split('-');
-      if (parts.length === 3 && parts[0].length === 4) {
-        return cleanStr;
-      }
-    }
-    return new Date().toISOString().split('T')[0];
-  };
-
   const getDefaultUnitAndLegalEntity = (
     unitFilter: string | null,
     donViList: DonVi[],
@@ -2491,10 +2555,24 @@ export default function CuocDiDongTab({
                     className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-[#FFFFF0] dark:bg-gray-900 font-bold outline-none"
                   />
                 </div>
-                <div className="md:col-span-2 text-xs text-gray-400 leading-normal font-medium dark:text-gray-500">
-                  <p className="font-bold text-gray-600 dark:text-gray-300 uppercase mb-0.5">Hướng dẫn copy/paste:</p>
-                  <p>Mở file Excel nhà mạng cung cấp → Copy 2 cột bắt buộc là: <strong className="text-blue-600 font-extrabold font-mono text-[13px]">MSNV</strong> và <strong className="text-blue-600 font-extrabold font-mono text-[13px]">Tổng cước</strong> phát sinh.</p>
-                  <p className="mt-0.5">(Hệ thống hỗ trợ tự động đối chiếu match MSNV trước, nếu không khớp sẽ đối chiếu qua SĐT cột 3).</p>
+                <div className="md:col-span-2 text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
+                  <p className="font-extrabold text-[#05469B] dark:text-blue-400 uppercase mb-1.5 flex items-center gap-1.5">
+                    💡 Hướng dẫn Copy / Paste dữ liệu cước từ Excel:
+                  </p>
+                  <div className="bg-blue-50/70 dark:bg-blue-950/40 p-3 rounded-xl border border-blue-100 dark:border-blue-900/50 space-y-1.5">
+                    <p className="text-[12px] text-gray-700 dark:text-gray-200">
+                      Vùng dán dữ liệu (paste data) có thứ tự chuẩn <strong>8 cột</strong> từ bảng cước hàng tháng:
+                    </p>
+                    <div className="font-mono text-[11px] bg-white dark:bg-gray-900 p-2 rounded-lg border border-blue-200 dark:border-gray-700 text-blue-700 dark:text-blue-300 overflow-x-auto font-bold tracking-tight">
+                      Số điện thoại | Định mức | Cước | Khuyến mãi | Thuế | Điều chỉnh | Nợ | Cước sử dụng
+                    </div>
+                    <p className="text-[11px] text-gray-600 dark:text-gray-400">
+                      📌 <strong className="text-gray-800 dark:text-gray-200">Ví dụ dòng dán từ Excel:</strong> <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-indigo-700 dark:text-indigo-300">901806147 &nbsp; 200,000 &nbsp; 231,518 &nbsp; 34,728 &nbsp; 19,680 &nbsp; - &nbsp; - &nbsp; 216,470</span>
+                    </p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold pt-0.5">
+                      ✓ Hệ thống tự động đối chiếu <strong className="underline">Số điện thoại</strong> (dạng xxxxxxxxx hoặc 0xxxxxxxxx) với danh bạ SIM đã có sẵn trên hệ thống để gắn chính xác <strong>Cước sử dụng</strong> (cột 8) cho từng thuê bao.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -2503,7 +2581,7 @@ export default function CuocDiDongTab({
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Vùng dán dữ liệu (Paste data)</label>
                 <textarea
                   rows={6}
-                  placeholder="Dán các cột dạng tab-separated vào đây...&#10;VD:&#10;2401001&#9;250000&#10;2312045&#9;120000"
+                  placeholder={`Dán bảng cước 8 cột từ Excel vào đây (Ctrl + V)...\nVí dụ:\n901806147\t200,000\t231,518\t34,728\t19,680\t-\t-\t216,470\n938903526\t300,000\t310,000\t0\t31,000\t-\t-\t341,000`}
                   value={importRawText}
                   onChange={(e) => setImportRawText(e.target.value)}
                   className="w-full p-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-[#FFFFF0] dark:bg-gray-900 outline-none font-mono text-xs resize-none"
@@ -2516,48 +2594,67 @@ export default function CuocDiDongTab({
                   onClick={handleParseExcel}
                   className="px-5 py-2.5 bg-[#05469B] hover:bg-[#04367a] text-white font-bold rounded-lg text-xs shadow"
                 >
-                  Xử lý Dữ liệu / Preview
+                  Đối chiếu & Preview Dữ liệu
                 </button>
               </div>
 
               {/* PREVIEW CONTAINER */}
               {importPreview.length > 0 && (
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-xs">
-                  <div className="bg-gray-50 dark:bg-gray-900 p-3 font-bold text-xs text-gray-600 dark:text-gray-300 flex justify-between">
-                    <span>PREVIEW KẾT QUẢ ĐỐI CHIẾU ({importPreview.length} DÒNG)</span>
+                  <div className="bg-gray-50 dark:bg-gray-900 p-3 font-bold text-xs text-gray-600 dark:text-gray-300 flex justify-between items-center flex-wrap gap-2">
+                    <span>PREVIEW KẾT QUẢ ĐỐI CHIẾU CƯỚC THÁNG ({importPreview.length} DÒNG)</span>
                     <div className="flex gap-3 text-[10.5px]">
                       <span className="text-emerald-600 font-extrabold">✅ {importPreview.filter(r => r.status === 'INSERT').length} tạo mới</span>
                       <span className="text-orange-600 font-extrabold">🔄 {importPreview.filter(r => r.status === 'UPDATE').length} ghi đè cước</span>
                       <span className="text-red-500 font-extrabold">⚠️ {importPreview.filter(r => r.status === 'SKIP').length} bỏ qua</span>
                     </div>
                   </div>
-                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                    <table className="w-full text-left text-xs border-collapse">
+                  <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs border-collapse min-w-[850px]">
                       <thead className="sticky top-0 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 font-bold text-gray-500 z-10">
                         <tr>
-                          <th className="p-2.5 text-center w-12">STT</th>
-                          <th className="p-2.5">MSNV</th>
-                          <th className="p-2.5">SĐT</th>
-                          <th className="p-2.5">Nhân Viên sử dụng</th>
-                          <th className="p-2.5 text-right">Tổng Cước</th>
-                          <th className="p-2.5 text-center">Trạng thái</th>
-                          <th className="p-2.5">Chi tiết lỗi</th>
+                          <th className="p-2 text-center w-10">STT</th>
+                          <th className="p-2 w-28">SĐT (Excel)</th>
+                          <th className="p-2">Thuê bao khớp CSDL</th>
+                          <th className="p-2 text-right">Định mức</th>
+                          <th className="p-2 text-right">Cước</th>
+                          <th className="p-2 text-right">KM</th>
+                          <th className="p-2 text-right">Thuế</th>
+                          <th className="p-2 text-right">Điều chỉnh</th>
+                          <th className="p-2 text-right">Nợ</th>
+                          <th className="p-2 text-right font-black text-indigo-600 dark:text-indigo-400">Cước sử dụng</th>
+                          <th className="p-2 text-center">Trạng thái</th>
+                          <th className="p-2">Chi tiết lỗi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                         {importPreview.map((row, idx) => (
-                          <tr key={idx} className={row.status === 'SKIP' ? 'bg-red-50/20' : ''}>
-                            <td className="p-2.5 text-center text-gray-400 font-bold">{idx + 1}</td>
-                            <td className="p-2.5 font-bold font-mono">{row.msnv || '---'}</td>
-                            <td className="p-2.5 font-mono">{formatPhoneNumber(row.sdt || row.matchedTB?.so_dien_thoai || '') || '---'}</td>
-                            <td className="p-2.5">{row.matchedTB?.ho_ten_nv || <span className="text-red-400 font-semibold italic">Không khớp</span>}</td>
-                            <td className="p-2.5 text-right font-bold tabular-nums">{formatCurrency(row.tongCuoc)}đ</td>
-                            <td className="p-2.5 text-center">
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${row.status === 'INSERT' ? 'bg-emerald-100 text-emerald-800' : row.status === 'UPDATE' ? 'bg-orange-100 text-orange-800' : 'bg-red-100 text-red-800'}`}>
-                                {row.status}
+                          <tr key={idx} className={row.status === 'SKIP' ? 'bg-red-50/30 dark:bg-red-950/20' : 'hover:bg-blue-50/20'}>
+                            <td className="p-2 text-center text-gray-400 font-bold">{idx + 1}</td>
+                            <td className="p-2 font-bold font-mono text-[#05469B] dark:text-blue-400">{row.sdt ? formatPhoneNumber(row.sdt) : '---'}</td>
+                            <td className="p-2">
+                              {row.matchedTB ? (
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-gray-800 dark:text-gray-200">{row.matchedTB.ho_ten_nv || row.matchedTB.ten_bo_phan || 'SIM Bộ phận'}</span>
+                                  {row.matchedTB.ma_so_nv && <span className="text-[10px] text-gray-400">MSNV: {row.matchedTB.ma_so_nv}</span>}
+                                </div>
+                              ) : (
+                                <span className="text-red-500 font-semibold italic">Chưa khớp SIM</span>
+                              )}
+                            </td>
+                            <td className="p-2 text-right tabular-nums">{row.dinhMucExcel !== undefined && row.dinhMucExcel !== null ? `${formatCurrency(row.dinhMucExcel)}đ` : (row.matchedTB?.dinh_muc_cuoc ? `${formatCurrency(row.matchedTB.dinh_muc_cuoc)}đ` : '-')}</td>
+                            <td className="p-2 text-right tabular-nums text-gray-600 dark:text-gray-300">{row.cuoc !== undefined ? `${formatCurrency(row.cuoc)}đ` : '-'}</td>
+                            <td className="p-2 text-right tabular-nums text-gray-600 dark:text-gray-300">{row.khuyenMai !== undefined && row.khuyenMai !== 0 ? `${formatCurrency(row.khuyenMai)}đ` : '-'}</td>
+                            <td className="p-2 text-right tabular-nums text-gray-600 dark:text-gray-300">{row.thue !== undefined && row.thue !== 0 ? `${formatCurrency(row.thue)}đ` : '-'}</td>
+                            <td className="p-2 text-right tabular-nums text-gray-600 dark:text-gray-300">{row.dieuChinh !== undefined && row.dieuChinh !== 0 ? `${formatCurrency(row.dieuChinh)}đ` : '-'}</td>
+                            <td className="p-2 text-right tabular-nums text-gray-600 dark:text-gray-300">{row.no !== undefined && row.no !== 0 ? `${formatCurrency(row.no)}đ` : '-'}</td>
+                            <td className="p-2 text-right font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(row.cuocSuDung !== undefined ? row.cuocSuDung : row.tongCuoc)}đ</td>
+                            <td className="p-2 text-center">
+                              <span className={`text-[9.5px] font-black px-2 py-0.5 rounded ${row.status === 'INSERT' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : row.status === 'UPDATE' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' : 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'}`}>
+                                {row.status === 'INSERT' ? 'Tạo mới' : row.status === 'UPDATE' ? 'Cập nhật' : 'Bỏ qua'}
                               </span>
                             </td>
-                            <td className="p-2.5 text-xs text-red-500 font-semibold">{row.skipReason || ''}</td>
+                            <td className="p-2 text-xs text-red-500 font-semibold">{row.skipReason || ''}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2697,7 +2794,7 @@ export default function CuocDiDongTab({
                     </span>
                   </div>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium leading-relaxed">
-                    Dán dữ liệu cước hàng tháng xuất từ nhà mạng (Viettel, Mobifone, VinaPhone) để tính toán cước phát sinh và vượt định mức.
+                    Dán bảng cước 8 cột từ Excel (Số điện thoại - định mức - cước - khuyến mãi - thuế - điều chỉnh - nợ - cước sử dụng). Tự động đối chiếu SĐT để gắn cước sử dụng chính xác.
                   </p>
                 </div>
               </button>
