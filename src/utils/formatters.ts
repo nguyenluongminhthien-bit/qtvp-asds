@@ -44,27 +44,46 @@ export const getDirectImageLink = (url: string): string => {
   return url; 
 };
 
+const unaccentCache = new Map<string, string>();
+const stripAccentsCache = new Map<string, string>();
+
 export const toUnaccented = (str: any): string => {
   if (!str) return '';
-  return String(str)
+  const key = String(str);
+  const cached = unaccentCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const res = key
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d")
-    .replace(/[^a-z0-9\s]/g, "") // Giữ khoảng trắng (\s)
-    .replace(/\s+/g, " ")       // Thu gọn nhiều khoảng trắng liên tiếp
-    .trim();                     // Cắt bỏ khoảng trắng ở đầu và cuối
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (unaccentCache.size > 2000) unaccentCache.clear();
+  unaccentCache.set(key, res);
+  return res;
 };
 
 export const stripAccents = (str: any): string => {
   if (!str) return '';
-  return String(str)
+  const key = String(str);
+  const cached = stripAccentsCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const res = key
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d")
     .replace(/Đ/g, "d")
     .toLowerCase()
     .trim();
+
+  if (stripAccentsCache.size > 2000) stripAccentsCache.clear();
+  stripAccentsCache.set(key, res);
+  return res;
 };
 
 export const normalizeDateToISO = (val: any): string => {

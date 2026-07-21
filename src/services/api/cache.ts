@@ -60,7 +60,20 @@ function setPersistentCache(tableName: string, data: any): void {
       timestamp: Date.now()
     }));
   } catch (e) {
-    // Quá dung lượng localStorage thì chỉ dùng in-memory
+    // Nếu quá dung lượng localStorage -> Tự động dọn dẹp tất cả cache cũ
+    try {
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('SMART_CACHE_')) {
+          localStorage.removeItem(k);
+        }
+      });
+      localStorage.setItem(`SMART_CACHE_${tableName}`, JSON.stringify({
+        data,
+        timestamp: Date.now()
+      }));
+    } catch (err) {
+      // Vẫn không đủ thì chuyển hoàn toàn sang in-memory cache
+    }
   }
 }
 
