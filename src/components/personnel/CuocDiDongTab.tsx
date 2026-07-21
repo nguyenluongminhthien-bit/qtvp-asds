@@ -1608,7 +1608,7 @@ export default function CuocDiDongTab({
               className="flex items-center gap-1.5 px-4 h-8.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg transition-all whitespace-nowrap cursor-pointer"
             >
               <Plus size={16} />
-              <span>+ Thêm Mới SIM</span>
+              <span>Thêm Mới SIM</span>
             </button>
           </div>
 
