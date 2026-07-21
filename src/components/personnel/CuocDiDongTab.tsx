@@ -16,7 +16,6 @@ import Pagination from '../ui/Pagination';
 import CustomAutocomplete from '../ui/CustomAutocomplete';
 import ThueBaoDetailCuocChart from './ThueBaoDetailCuocChart';
 import ThueBaoCuocHistorySection from './ThueBaoCuocHistorySection';
-import { useDebounce } from '../../hooks/useDebounce';
 
 interface Props {
   personnel: Personnel[];
@@ -71,7 +70,6 @@ export default function CuocDiDongTab({
   const [filterTrangThai, setFilterTrangThai] = useState('Đang hoạt động');
   const [filterVuot, setFilterVuot] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 250);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -320,20 +318,20 @@ export default function CuocDiDongTab({
           if (row.dinhMuc !== null) return false;
         }
 
-        if (debouncedSearchTerm) {
-          const q = debouncedSearchTerm.trim().toLowerCase();
-          const matchText = (
-            (row.tb.ho_ten_nv && row.tb.ho_ten_nv.toLowerCase().includes(q)) ||
-            (row.tb.so_dien_thoai && row.tb.so_dien_thoai.includes(q)) ||
-            (row.tb.ma_so_nv && row.tb.ma_so_nv.toLowerCase().includes(q)) ||
-            (row.tb.ten_bo_phan && row.tb.ten_bo_phan.toLowerCase().includes(q)) ||
-            (row.tb.nha_mang && row.tb.nha_mang.toLowerCase().includes(q))
-          );
+        if (searchTerm) {
+          const q = searchTerm.toLowerCase();
+          const matchText = [
+            row.tb.ho_ten_nv,
+            row.tb.ma_so_nv,
+            row.tb.so_dien_thoai,
+            row.tb.ten_bo_phan,
+            row.tb.nha_mang
+          ].some(v => v?.toLowerCase().includes(q));
           if (!matchText) return false;
         }
         return true;
       });
-  }, [thueBaoList, cuocList, personnel, filterThang, filterPhapNhan, filterLoai, filterTrangThai, filterVuot, debouncedSearchTerm, allowedDonViIds, selectedUnitFilter, selectedUnitSubordinates]);
+  }, [thueBaoList, cuocList, personnel, filterThang, filterPhapNhan, filterLoai, filterTrangThai, filterVuot, searchTerm, allowedDonViIds, selectedUnitFilter, selectedUnitSubordinates]);
 
   // Pagination Logic
   const totalPages = Math.ceil(tableRows.length / pageSize);
