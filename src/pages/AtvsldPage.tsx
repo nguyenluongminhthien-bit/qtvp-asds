@@ -393,72 +393,95 @@ export default function AtvsldPage() {
 
       {/* 🟢 CỘT PHẢI: NỘI DUNG CHÍNH */}
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 custom-scrollbar flex flex-col">
-        <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''} shrink-0`}>
-          <div className="flex items-center gap-2.5">
-            {isListCollapsed && (
-              <button 
-                onClick={() => setIsListCollapsed(false)} 
-                className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all flex items-center justify-center shrink-0"
-                title="Mở bộ lọc đơn vị"
-              >
-                <PanelLeftOpen size={18} />
-              </button>
-            )}
-            <div>
-              <h2 className="text-2xl font-black text-emerald-700 flex items-center gap-2"><HardHat size={28} /> Quản lý Hồ sơ ATVSLĐ</h2>
-              <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span></p>
+        
+        {/* 🟢 KHU VỰC TIÊU ĐỀ, TABS & THẺ THỐNG KÊ CỐ ĐỊNH KHI CUỘN (STICKY HEADER) */}
+        <div className={`sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 pt-1 pb-4 border-b border-gray-200/80 dark:border-gray-800 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''} shrink-0 mb-6 shadow-2xs`}>
+          
+          {/* 1. Header tiêu đề + Tìm kiếm + Nút Thêm */}
+          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-5 gap-4">
+            <div className="flex items-center gap-2.5">
+              {isListCollapsed && (
+                <button 
+                  onClick={() => setIsListCollapsed(false)} 
+                  className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all flex items-center justify-center shrink-0"
+                  title="Mở bộ lọc đơn vị"
+                >
+                  <PanelLeftOpen size={18} />
+                </button>
+              )}
+              <div>
+                <h2 className="text-2xl font-black text-emerald-700 flex items-center gap-2"><HardHat size={28} /> Quản lý Hồ sơ ATVSLĐ</h2>
+                <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span></p>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              {activeTab === 'hoso' && (
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input 
+                    type="text" 
+                    placeholder="Tìm tên cơ sở, người phụ trách..." 
+                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none shadow-xs text-xs font-semibold" 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                  />
+                </div>
+              )}
+
+              {user?.quyen === 'ADMIN' && activeTab === 'hoso' && (
+                <button 
+                  type="button"
+                  onClick={() => openModal(selectedUnitFilter || '')} 
+                  className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Thêm Báo cáo Cơ sở</span>
+                </button>
+              )}
             </div>
           </div>
-          
-          <div className="flex flex-col items-end gap-3 w-full xl:w-auto">
-            {user?.quyen === 'ADMIN' && activeTab === 'hoso' && (
-              <button onClick={() => openModal(selectedUnitFilter || '')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Thêm Báo cáo Cơ sở</button>
-            )}
-          </div>
-        </div>
 
-        {/* 🟢 KHU VỰC CHUYỂN TAB */}
-        <div className={`border-b border-gray-200 mb-6 flex gap-6 px-1 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''} shrink-0`}>
-          <button onClick={() => setActiveTab('hoso')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'hoso' ? 'text-emerald-700' : 'text-gray-400 hover:text-gray-700'}`}>
-            <Building2 size={18} /> Hồ sơ Báo cáo Cơ sở
-            {activeTab === 'hoso' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-600 rounded-t-md animate-in slide-in-from-left-2 duration-300"></div>}
-          </button>
-          <button onClick={() => setActiveTab('kehoach')} className={`py-3 text-sm font-black transition-colors relative flex items-center gap-2 ${activeTab === 'kehoach' ? 'text-emerald-700' : 'text-gray-400 hover:text-gray-700'}`}>
-            <ShieldCheck size={18} /> Kế hoạch Đào tạo đợt tới
-            {activeTab === 'kehoach' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-600 rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
-          </button>
+          {/* 2. Khu vực Chuyển Tab */}
+          <div className="border-b border-gray-200 dark:border-gray-700 mb-5 flex gap-6 px-1">
+            <button onClick={() => setActiveTab('hoso')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'hoso' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+              <Building2 size={18} /> Hồ sơ Báo cáo Cơ sở
+              {activeTab === 'hoso' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-600 rounded-t-md animate-in slide-in-from-left-2 duration-300"></div>}
+            </button>
+            <button onClick={() => setActiveTab('kehoach')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'kehoach' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+              <ShieldCheck size={18} /> Kế hoạch Đào tạo đợt tới
+              {activeTab === 'kehoach' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-600 rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
+            </button>
+          </div>
+
+          {/* 3. Thẻ Thống kê Tổng quan (khi ở Tab 1 - Hồ sơ) */}
+          {activeTab === 'hoso' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-[1400px]">
+              <div className="bg-white dark:bg-gray-800 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md">
+                <div className="w-11 h-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><Building2 size={20}/></div>
+                <div><p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Cơ sở khai báo</p><p className="text-xl font-black text-emerald-700 dark:text-emerald-400">{filteredData.length}</p></div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md">
+                <div className="w-11 h-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><ShieldCheck size={20}/></div>
+                <div><p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Nhân sự Huấn Luyện</p><p className="text-xl font-black text-emerald-700 dark:text-emerald-400">{stats.totalNhanSuHL}</p></div>
+              </div>
+              <div className={`bg-white dark:bg-gray-800 p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md ${stats.totalLoi > 0 ? 'border-orange-200 dark:border-orange-900/50 bg-orange-50/30 dark:bg-orange-950/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalLoi > 0 ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}><AlertCircle size={20}/></div>
+                <div><p className={`text-[10px] font-bold uppercase ${stats.totalLoi > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'}`}>TB Nghiêm ngặt (Quá hạn)</p><p className={`text-xl font-black ${stats.totalLoi > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-gray-700 dark:text-gray-200'}`}>{stats.totalThietBi} <span className="text-xs text-red-500 font-bold">{stats.totalLoi > 0 ? `(${stats.totalLoi} Lỗi)` : ''}</span></p></div>
+              </div>
+              <div className={`bg-white dark:bg-gray-800 p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md ${stats.totalTaiNan > 0 ? 'border-red-200 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalTaiNan > 0 ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}><HardHat size={20}/></div>
+                <div><p className={`text-[10px] font-bold uppercase ${stats.totalTaiNan > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>Tai nạn LĐ (Năm)</p><p className={`text-xl font-black ${stats.totalTaiNan > 0 ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>{stats.totalTaiNan} Vụ</p></div>
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* 🟢 TAB 1: HỒ SƠ ATVSLĐ (BÁO CÁO CÁC CƠ SỞ) */}
         {activeTab === 'hoso' && (
-          <div className={`transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+          <div className={`transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
             <div className="max-w-[1400px] mx-auto space-y-6">
-              
-              {/* Thanh tìm kiếm của Tab Hồ Sơ */}
-              <div className="relative w-full sm:w-96 mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input type="text" placeholder="Tìm tên cơ sở, người phụ trách..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-              </div>
-
-              {/* THẺ TỔNG QUAN */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><Building2 size={20}/></div>
-                  <div><p className="text-[10px] font-bold text-gray-500 uppercase">Cơ sở khai báo</p><p className="text-xl font-black text-emerald-700">{filteredData.length}</p></div>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
-                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><ShieldCheck size={20}/></div>
-                  <div><p className="text-[10px] font-bold text-gray-500 uppercase">Nhân sự Huấn Luyện</p><p className="text-xl font-black text-emerald-700">{stats.totalNhanSuHL}</p></div>
-                </div>
-                <div className={`bg-white p-4 rounded-xl border shadow-sm flex items-center gap-4 transition-all hover:shadow-md ${stats.totalLoi > 0 ? 'border-orange-200 bg-orange-50/30' : 'border-gray-200'}`}>
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${stats.totalLoi > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}><AlertCircle size={20}/></div>
-                  <div><p className={`text-[10px] font-bold uppercase ${stats.totalLoi > 0 ? 'text-orange-600' : 'text-gray-500'}`}>TB Nghiêm ngặt (Quá hạn)</p><p className={`text-xl font-black ${stats.totalLoi > 0 ? 'text-orange-700' : 'text-gray-700'}`}>{stats.totalThietBi} <span className="text-xs text-red-500 font-bold">{stats.totalLoi > 0 ? `(${stats.totalLoi} Lỗi)` : ''}</span></p></div>
-                </div>
-                <div className={`bg-white p-4 rounded-xl border shadow-sm flex items-center gap-4 transition-all hover:shadow-md ${stats.totalTaiNan > 0 ? 'border-red-200 bg-red-50/30' : 'border-gray-200'}`}>
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${stats.totalTaiNan > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}><HardHat size={20}/></div>
-                  <div><p className={`text-[10px] font-bold uppercase ${stats.totalTaiNan > 0 ? 'text-red-600' : 'text-gray-500'}`}>Tai nạn LĐ (Năm)</p><p className={`text-xl font-black ${stats.totalTaiNan > 0 ? 'text-red-700' : 'text-gray-700'}`}>{stats.totalTaiNan} Vụ</p></div>
-                </div>
-              </div>
 
               {/* DANH SÁCH CHI TIẾT DẠNG THẺ (CARD LAYOUT) */}
               {filteredData.length === 0 ? (
