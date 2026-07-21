@@ -111,11 +111,19 @@ export default function CuocDiDongTab({
     open: boolean;
     title: string;
     description: string;
+    subDescription?: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: 'danger' | 'warning' | 'info';
     onConfirm: () => void | Promise<void>;
   }>({
     open: false,
     title: '',
     description: '',
+    subDescription: '',
+    confirmText: 'Xác nhận',
+    cancelText: 'Quay lại',
+    variant: 'danger',
     onConfirm: () => {}
   });
 
@@ -746,70 +754,91 @@ export default function CuocDiDongTab({
   };
 
   // ── Tạm ngưng ──────────────────────────────────────────────────────
-  const handleTamNgung = async (thueBao: ThueBao) => {
-    if (!confirm(`Tạm ngưng thuê bao ${thueBao.so_dien_thoai}?\n(Cần báo nhà mạng tạm khóa số)`))
-      return;
-    try {
-      await apiService.save({
-        ...thueBao,
-        trang_thai: 'Tạm ngưng',
-        updated_at: new Date().toISOString(),
-      }, 'update', 'dm_thue_bao');
-      toast.success(`Đã tạm ngưng SIM ${thueBao.so_dien_thoai}`);
-      setSelectedThueBaoId(null);
-      loadData();
-    } catch (err: any) {
-      toast.error('Lỗi: ' + err.message);
-    }
+  const handleTamNgung = (thueBao: ThueBao) => {
+    setConfirmModal({
+      open: true,
+      title: `Tạm ngưng SIM ${formatPhoneNumber(thueBao.so_dien_thoai)}?`,
+      description: 'SIM sẽ chuyển sang trạng thái Tạm ngưng (Cần báo nhà mạng tạm khóa số).',
+      subDescription: 'Bạn có thể kích hoạt lại SIM này bất cứ lúc nào.',
+      confirmText: 'Tạm ngưng SIM',
+      cancelText: 'Quay lại',
+      variant: 'warning',
+      onConfirm: async () => {
+        try {
+          await apiService.save({
+            ...thueBao,
+            trang_thai: 'Tạm ngưng',
+            updated_at: new Date().toISOString(),
+          }, 'update', 'dm_thue_bao');
+          toast.success(`Đã tạm ngưng SIM ${formatPhoneNumber(thueBao.so_dien_thoai)}`);
+          setSelectedThueBaoId(null);
+          loadData();
+        } catch (err: any) {
+          toast.error('Lỗi: ' + err.message);
+        }
+      }
+    });
   };
 
   // ── Kích hoạt lại ──────────────────────────────────────────────────
-  const handleKichHoat = async (thueBao: ThueBao) => {
-    if (!confirm(`Kích hoạt lại thuê bao ${thueBao.so_dien_thoai}?`))
-      return;
-    try {
-      await apiService.save({
-        ...thueBao,
-        trang_thai: 'Đang hoạt động',
-        updated_at: new Date().toISOString(),
-      }, 'update', 'dm_thue_bao');
-      toast.success(`Đã kích hoạt lại SIM ${thueBao.so_dien_thoai}`);
-      setSelectedThueBaoId(null);
-      loadData();
-    } catch (err: any) {
-      toast.error('Lỗi: ' + err.message);
-    }
+  const handleKichHoat = (thueBao: ThueBao) => {
+    setConfirmModal({
+      open: true,
+      title: `Kích hoạt lại SIM ${formatPhoneNumber(thueBao.so_dien_thoai)}?`,
+      description: 'SIM sẽ chuyển lại trạng thái Đang hoạt động.',
+      confirmText: 'Kích hoạt lại',
+      cancelText: 'Quay lại',
+      variant: 'info',
+      onConfirm: async () => {
+        try {
+          await apiService.save({
+            ...thueBao,
+            trang_thai: 'Đang hoạt động',
+            updated_at: new Date().toISOString(),
+          }, 'update', 'dm_thue_bao');
+          toast.success(`Đã kích hoạt lại SIM ${formatPhoneNumber(thueBao.so_dien_thoai)}`);
+          setSelectedThueBaoId(null);
+          loadData();
+        } catch (err: any) {
+          toast.error('Lỗi: ' + err.message);
+        }
+      }
+    });
   };
 
   // ── Huỷ SIM vĩnh viễn ──────────────────────────────────────────────
-  const handleHuySIM = async (thueBao: ThueBao) => {
-    const confirmed = confirm(
-      `⚠️ HUỶ VĨNH VIỄN SIM ${thueBao.so_dien_thoai}?\n\n` +
-      `SIM sẽ bị ẩn khỏi danh sách hoạt động.\n` +
-      `Dữ liệu cước lịch sử vẫn được giữ để báo cáo.\n\n` +
-      `Thao tác này không thể hoàn tác. Xác nhận?`
-    );
-    if (!confirmed) return;
-    try {
-      const lichSuMoi = dongLogHienTai(
-        thueBao.lich_su_nsd || [],
-        'Huỷ SIM vĩnh viễn'
-      );
-      await apiService.save({
-        ...thueBao,
-        trang_thai: 'Đã huỷ',
-        id_nhan_su: null,
-        ma_so_nv: '',
-        ho_ten_nv: '',
-        lich_su_nsd: lichSuMoi,
-        updated_at: new Date().toISOString(),
-      }, 'update', 'dm_thue_bao');
-      toast.success(`Đã huỷ SIM ${thueBao.so_dien_thoai}`);
-      setSelectedThueBaoId(null);
-      loadData();
-    } catch (err: any) {
-      toast.error('Lỗi: ' + err.message);
-    }
+  const handleHuySIM = (thueBao: ThueBao) => {
+    setConfirmModal({
+      open: true,
+      title: `HUỶ VĨNH VIỄN SIM ${formatPhoneNumber(thueBao.so_dien_thoai)}?`,
+      description: 'SIM sẽ bị ẩn khỏi danh sách hoạt động. Dữ liệu lịch sử cước vẫn được giữ để báo cáo.',
+      subDescription: 'Thao tác này không thể hoàn tác. Bạn có chắc chắn muốn xác nhận?',
+      confirmText: 'Huỷ vĩnh viễn SIM',
+      cancelText: 'Quay lại',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const lichSuMoi = dongLogHienTai(
+            thueBao.lich_su_nsd || [],
+            'Huỷ SIM vĩnh viễn'
+          );
+          await apiService.save({
+            ...thueBao,
+            trang_thai: 'Đã huỷ',
+            id_nhan_su: null,
+            ma_so_nv: '',
+            ho_ten_nv: '',
+            lich_su_nsd: lichSuMoi,
+            updated_at: new Date().toISOString(),
+          }, 'update', 'dm_thue_bao');
+          toast.success(`Đã huỷ SIM ${formatPhoneNumber(thueBao.so_dien_thoai)}`);
+          setSelectedThueBaoId(null);
+          loadData();
+        } catch (err: any) {
+          toast.error('Lỗi: ' + err.message);
+        }
+      }
+    });
   };
 
   // Open History NSD Dialog
@@ -2596,29 +2625,63 @@ export default function CuocDiDongTab({
           </div>
         </div>
       )}
+      {/* Custom Confirm Modal đồng bộ giao diện ứng dụng */}
       {confirmModal.open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center animate-in zoom-in duration-200">
-            <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-950/20 text-red-500 flex items-center justify-center mx-auto mb-4 border-4 border-red-100 dark:border-red-900/40">
-              <AlertCircle className="w-8 h-8" />
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border-2 shadow-sm ${
+              confirmModal.variant === 'warning'
+                ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-400'
+                : confirmModal.variant === 'info'
+                ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400'
+                : 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:border-red-800 dark:text-red-400'
+            }`}>
+              {confirmModal.variant === 'warning' ? (
+                <PauseCircle className="w-8 h-8" />
+              ) : confirmModal.variant === 'info' ? (
+                <PlayCircle className="w-8 h-8" />
+              ) : (
+                <AlertCircle className="w-8 h-8" />
+              )}
             </div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">{confirmModal.title}</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{confirmModal.description}</p>
-            <div className="flex gap-3">
+            
+            <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 mb-2 leading-tight">
+              {confirmModal.title}
+            </h3>
+            
+            <p className="text-gray-600 dark:text-gray-300 text-xs font-medium mb-1">
+              {confirmModal.description}
+            </p>
+            
+            {confirmModal.subDescription && (
+              <p className="text-red-500 dark:text-red-400 text-[11px] font-bold mt-2 bg-red-50 dark:bg-red-950/30 p-2 rounded-xl border border-red-100 dark:border-red-900/40">
+                {confirmModal.subDescription}
+              </p>
+            )}
+
+            <div className="flex items-center gap-3 mt-6">
               <button
+                type="button"
                 onClick={() => setConfirmModal(prev => ({ ...prev, open: false }))}
-                className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl font-bold transition-colors"
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-bold text-xs transition-all cursor-pointer"
               >
-                Hủy
+                {confirmModal.cancelText || 'Quay lại'}
               </button>
               <button
+                type="button"
                 onClick={async () => {
                   await confirmModal.onConfirm();
                   setConfirmModal(prev => ({ ...prev, open: false }));
                 }}
-                className="flex-1 py-3 text-white bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
+                className={`flex-1 py-2.5 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer ${
+                  confirmModal.variant === 'warning'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : confirmModal.variant === 'info'
+                    ? 'bg-[#05469B] hover:bg-[#04367a]'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
-                <Trash2 className="w-5 h-5" /> Xác nhận
+                {confirmModal.confirmText || 'Xác nhận'}
               </button>
             </div>
           </div>
