@@ -104,10 +104,10 @@ export default function PersonnelModal({
     if (isOpen && formData.cc_atvsld) {
       const nhom = String(formData.nhom_doi_tuong || '');
       let certName = '';
-      if (nhom === '1' || nhom === '2') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
-      else if (nhom === '3') certName = 'Thẻ An toàn lao động';
-      else if (nhom === '4') certName = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
-      else if (nhom === '6') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
+      if (nhom === 'Nhóm 1' || nhom === 'Nhóm 2') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
+      else if (nhom === 'Nhóm 3') certName = 'Thẻ An toàn lao động';
+      else if (nhom === 'Nhóm 4') certName = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
+      else if (nhom === 'Nhóm 6') certName = 'Giấy chứng nhận huấn luyện ATVSLĐ';
 
       if (formData.chung_nhan !== certName) {
         setFormData(prev => ({ ...prev, chung_nhan: certName }));

@@ -18,6 +18,7 @@ import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
 import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import PersonnelModal from '../components/personnel/PersonnelModal';
+import { calcGiaTriDen } from '../utils/atvsld';
 import CuocDiDongTab from '../components/personnel/CuocDiDongTab';
 import PersonnelDetailCuocChart from '../components/personnel/PersonnelDetailCuocChart';
 import { CERTIFICATES } from '../constants/certificates';
@@ -1827,23 +1828,23 @@ export default function PersonnelPage() {
               
               {/* DÒNG 1: 4 CHỈ SỐ KPI */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><Users size={24}/></div>
+                <div className="bg-white p-5 rounded-xl border border-blue-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-blue-500">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200"><Users size={24}/></div>
                   <div><p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-1">Đang làm việc</p><p className="text-3xl font-black text-gray-800 leading-none">{stats.total}</p></div>
                 </div>
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><TrendingUp size={24}/></div>
+                <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-emerald-500">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-250"><TrendingUp size={24}/></div>
                   <div><p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-1">Nhận việc Tháng {stats.currentMonth + 1}</p><p className="text-3xl font-black text-emerald-600 leading-none">{stats.newThisMonth}</p></div>
                 </div>
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0"><ShieldCheck size={24}/></div>
+                <div className="bg-white p-5 rounded-xl border border-orange-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-orange-500">
+                  <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200"><ShieldCheck size={24}/></div>
                   <div>
                     <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-1" title="Số được đào tạo ATVSLĐ / Tổng số NV">Đã Đào tạo ATVSLĐ / Tổng</p>
                     <p className="text-3xl font-black text-orange-600 leading-none">{stats.atvsldTrained} <span className="text-lg text-gray-400">/ {stats.total}</span></p>
                   </div>
                 </div>
-                <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-pink-100 text-pink-500 flex items-center justify-center shrink-0"><Cake size={24}/></div>
+                <div className="bg-white p-5 rounded-xl border border-pink-200 shadow-sm flex items-center gap-4 transition-all hover:shadow-md hover:border-pink-500">
+                  <div className="w-12 h-12 rounded-full bg-pink-100 text-pink-500 flex items-center justify-center shrink-0 border border-pink-200"><Cake size={24}/></div>
                   <div><p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-1">Sinh nhật Tháng {stats.currentMonth + 1}</p><p className="text-3xl font-black text-pink-500 leading-none">{stats.birthdays.length}</p></div>
                 </div>
               </div>
@@ -2527,9 +2528,8 @@ export default function PersonnelPage() {
                           ? new Date(viewData.gia_tri_den).toLocaleDateString('vi-VN') 
                           : viewData.huan_luyen_den 
                             ? (() => {
-                                const d = new Date(viewData.huan_luyen_den);
-                                d.setFullYear(d.getFullYear() + (String(viewData.nhom_doi_tuong || '').includes('4') ? 1 : 2));
-                                return d.toLocaleDateString('vi-VN') + " (Tự tính tạm)";
+                                const calculated = calcGiaTriDen(viewData.huan_luyen_den, viewData.nhom_doi_tuong || '', []);
+                                return calculated ? new Date(calculated).toLocaleDateString('vi-VN') + " (Tự tính tạm)" : '...';
                               })()
                             : '...'
                         }

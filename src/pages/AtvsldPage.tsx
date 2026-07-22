@@ -4,13 +4,20 @@ import {
   HardHat, Search, Edit, Trash2, AlertCircle, Loader2, ShieldCheck, 
   Building2, MapPin, PanelLeftClose, PanelLeftOpen, ChevronRight, ChevronDown, Plus,
   FileText, Users, Settings, Link as LinkIcon, CheckCircle2, XCircle,
-  FileSpreadsheet, Download, AlertTriangle, CheckCheck, HelpCircle, ChevronLeft
+  FileSpreadsheet, Download, AlertTriangle, CheckCheck, HelpCircle, ChevronLeft,
+  Wrench, Heart
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { toast } from '../utils/toast';
 import AtvsldModal from '../components/department/AtvsldModal';
+import HoSoTab from '../components/atvsld/HoSoTab';
+import KeHoachTab from '../components/atvsld/KeHoachTab';
+import KhoaHocTab from '../components/atvsld/KhoaHocTab';
+import StrictEquipmentTab from '../components/atvsld/StrictEquipmentTab';
+import { getExpiryStatus } from '../utils/expiryStatus';
 import { useAuth } from '../contexts/AuthContext';
 import { DonVi } from '../types';
+import { GraduationCap } from 'lucide-react';
 import { groupParentUnits, sortDonViByThuTu, getUnitEmoji, getAllSubordinateIds } from '../utils/hierarchy';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import Pagination from '../components/ui/Pagination';
@@ -41,6 +48,11 @@ export default function AtvsldPage() {
   const [donViData, setDonViList] = useState<DonVi[]>([]);
   const [atvsldData, setAtvsldData] = useState<any[]>([]);
   const [personnelData, setPersonnelData] = useState<any[]>([]); // 🟢 Lấy Data Nhân sự để check hạn thẻ
+  const [khoaHocData, setKhoaHocData] = useState<any[]>([]);
+  const [hocVienData, setHocVienData] = useState<any[]>([]);
+  const [chuKyData, setChuKyData] = useState<any[]>([]);
+  const [thietBiData, setThietBiData] = useState<any[]>([]);
+  const [kiemDinhData, setKiemDinhData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [isListCollapsed, setIsListCollapsed] = useState(false);
@@ -48,14 +60,17 @@ export default function AtvsldPage() {
   const [unitSearchTerm, setUnitSearchTerm] = useState('');
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
   
-  // 🟢 STATE CHUYỂN TAB
-  const [activeTab, setActiveTab] = useState<'hoso' | 'kehoach'>('hoso');
+  // 🟢 STATE CHUYỂN TAB CẤP 1 VÀ CẤP 2
+  const [activeTab, setActiveTab] = useState<'hoso' | 'daotao' | 'thietbi' | 'khamsuckhoe'>('hoso');
+  const [activeSubTab, setActiveSubTab] = useState<'kehoach' | 'khoahoc'>('kehoach');
 
   // Tab Hồ sơ (Cũ)
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentData, setCurrentData] = useState<any | null>(null);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // Tab Kế hoạch ATVSLĐ (Mới)
   const [safetySearchTerm, setSafetySearchTerm] = useState('');
@@ -65,18 +80,28 @@ export default function AtvsldPage() {
   const [currentSafetyPage, setCurrentSafetyPage] = useState(1);
   const [rowsPerSafetyPage, setRowsPerSafetyPage] = useState(50);
 
-  // 🟢 KÉO CÙNG LÚC 3 BẢNG DỮ LIỆU
+  // 🟢 KÉO CÙNG LÚC 8 BẢNG DỮ LIỆU
   const loadData = async () => {
     setLoading(true);
     try {
-      const [dvResult, atResult, nsResult] = await Promise.all([
+      const [dvResult, atResult, nsResult, khResult, hvResult, ckResult, tbResult, kdResult] = await Promise.all([
         apiService.getDonVi(),
         apiService.getATVSLD ? apiService.getATVSLD().catch(() => []) : Promise.resolve([]),
-        apiService.getPersonnel()
+        apiService.getPersonnel(),
+        apiService.getKhoaHuanLuyen ? apiService.getKhoaHuanLuyen().catch(() => []) : Promise.resolve([]),
+        apiService.getHocVienKhoaHuanLuyen ? apiService.getHocVienKhoaHuanLuyen().catch(() => []) : Promise.resolve([]),
+        apiService.getChuKyATVSLD ? apiService.getChuKyATVSLD().catch(() => []) : Promise.resolve([]),
+        apiService.getThietBiNghiemNgat ? apiService.getThietBiNghiemNgat().catch(() => []) : Promise.resolve([]),
+        apiService.getKiemDinhTBNN ? apiService.getKiemDinhTBNN().catch(() => []) : Promise.resolve([])
       ]);
       setDonViList(dvResult || []);
       setAtvsldData(atResult || []);
       setPersonnelData(nsResult || []);
+      setKhoaHocData(khResult || []);
+      setHocVienData(hvResult || []);
+      setChuKyData(ckResult || []);
+      setThietBiData(tbResult || []);
+      setKiemDinhData(kdResult || []);
     } catch (err) {
       toast.error('Lỗi tải dữ liệu ATVSLĐ.');
     } finally {
@@ -124,24 +149,47 @@ export default function AtvsldPage() {
 
   const stats = useMemo(() => {
     let totalThietBi = 0, totalLoi = 0, totalTaiNan = 0, totalNhanSuHL = 0;
-    filteredData.forEach(item => {
-      totalThietBi += Number(item.so_luong_thiet_bi_nghiem_ngat) || 0;
-      totalLoi += Number(item.so_luong_thiet_bi_qua_han_kt) || 0;
-      totalTaiNan += Number(item.so_tai_nan_trong_nam) || 0;
-      if (item.thong_ke_hl) {
-        let hlStats = item.thong_ke_hl;
-        if (typeof hlStats === 'string') {
-          try { hlStats = JSON.parse(hlStats); } catch (e) { hlStats = null; }
-        }
-        if (hlStats) {
-          ['1', '2', '3', '4', '6'].forEach(nhom => {
-            if (hlStats[nhom]) totalNhanSuHL += (hlStats[nhom].total || 0);
-          });
+    
+    const activeUnitIds = new Set(filteredData.map(item => item.id_don_vi));
+
+    // 1. Tính tổng nhân sự huấn luyện đạt
+    hocVienData.forEach(hv => {
+      if (hv.id_don_vi && activeUnitIds.has(hv.id_don_vi)) {
+        const isDat = String(hv.ket_qua || '').trim().toLowerCase().includes('đạt') || String(hv.ket_qua || '').trim().toLowerCase().includes('dat');
+        if (isDat) {
+          totalNhanSuHL++;
         }
       }
     });
+
+    // 2. Tính số lượng thiết bị nghiêm ngặt và quá hạn kiểm định từ database
+    thietBiData.forEach(tb => {
+      if (activeUnitIds.has(tb.id_don_vi) && tb.tinh_trang === 'Đang sử dụng') {
+        totalThietBi++;
+        
+        // Tìm lượt kiểm định gần nhất
+        const inspections = kiemDinhData
+          .filter(kd => kd.id_thiet_bi === tb.id)
+          .sort((a, b) => new Date(b.ngay_kiem_dinh).getTime() - new Date(a.ngay_kiem_dinh).getTime());
+        
+        if (inspections.length > 0) {
+          const status = getExpiryStatus(inspections[0].han_kiem_dinh);
+          if (status.level === 'expired') {
+            totalLoi++;
+          }
+        } else {
+          totalLoi++; // Chưa kiểm định = Quá hạn
+        }
+      }
+    });
+
+    // 3. Tính số vụ tai nạn lao động
+    filteredData.forEach(item => {
+      totalTaiNan += Number(item.so_tai_nan_trong_nam) || 0;
+    });
+
     return { totalThietBi, totalLoi, totalTaiNan, totalNhanSuHL };
-  }, [filteredData]);
+  }, [filteredData, hocVienData, thietBiData, kiemDinhData]);
 
   const openModal = (unitId: string, data: any = null) => {
     setSelectedUnitId(unitId);
@@ -149,14 +197,22 @@ export default function AtvsldPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa hồ sơ này?')) return;
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
+    setIsConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
     try {
-      await apiService.delete(id, 'hs_an_toan_lao_dong');
-      setAtvsldData(prev => prev.filter(item => item.id !== id));
-      toast.success('Đã xóa hồ sơ!');
+      await apiService.delete(deleteTargetId, 'hs_an_toan_lao_dong');
+      setAtvsldData(prev => prev.filter(item => item.id !== deleteTargetId));
+      toast.success('Đã xóa hồ sơ thành công!');
     } catch (err) {
       toast.error('Lỗi khi xóa hồ sơ.');
+    } finally {
+      setIsConfirmOpen(false);
+      setDeleteTargetId(null);
     }
   };
 
@@ -368,12 +424,6 @@ export default function AtvsldPage() {
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       
-      {/* NÚT MỞ SIDEBAR NẾU ĐANG ẨN */}
-      {isListCollapsed && (
-        <button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all" title="Mở bộ lọc đơn vị">
-          <PanelLeftOpen size={20} />
-        </button>
-      )}
 
       {/* CỘT TRÁI: BỘ LỌC ĐƠN VỊ ĐỒNG BỘ */}
       <UnitFilterSidebar
@@ -392,10 +442,10 @@ export default function AtvsldPage() {
       />
 
       {/* 🟢 CỘT PHẢI: NỘI DUNG CHÍNH */}
-      <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 custom-scrollbar flex flex-col">
+      <div className="flex-1 min-w-0 max-w-full overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 relative transition-all duration-300 custom-scrollbar flex flex-col">
         
         {/* 🟢 KHU VỰC TIÊU ĐỀ, TABS & THẺ THỐNG KÊ CỐ ĐỊNH KHI CUỘN (STICKY HEADER) */}
-        <div className={`sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 pt-1 pb-4 border-b border-gray-200/80 dark:border-gray-800 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''} shrink-0 mb-6 shadow-2xs`}>
+        <div className={`sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 pt-4 sm:pt-6 pb-4 border-b border-gray-200/80 dark:border-gray-800 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''} shrink-0 mb-6 shadow-2xs`}>
           
           {/* 1. Header tiêu đề + Tìm kiếm + Nút Thêm */}
           <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-5 gap-4">
@@ -403,7 +453,7 @@ export default function AtvsldPage() {
               {isListCollapsed && (
                 <button 
                   onClick={() => setIsListCollapsed(false)} 
-                  className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all flex items-center justify-center shrink-0"
+                  className="bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-emerald-700 hover:bg-emerald-50 transition-all flex items-center justify-center shrink-0"
                   title="Mở bộ lọc đơn vị"
                 >
                   <PanelLeftOpen size={18} />
@@ -442,387 +492,142 @@ export default function AtvsldPage() {
             </div>
           </div>
 
-          {/* 2. Khu vực Chuyển Tab */}
-          <div className="border-b border-gray-200 dark:border-gray-700 mb-5 flex gap-6 px-1">
-            <button onClick={() => setActiveTab('hoso')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'hoso' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+          {/* 2. Khu vực Chuyển Tab Cấp 1 */}
+          <div className="border-b border-gray-200 dark:border-gray-700 mb-5 flex flex-wrap gap-6 px-1">
+            <button onClick={() => setActiveTab('hoso')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'hoso' ? 'text-lime-700 dark:text-lime-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
               <Building2 size={18} /> Hồ sơ Báo cáo Cơ sở
-              {activeTab === 'hoso' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-600 rounded-t-md animate-in slide-in-from-left-2 duration-300"></div>}
+              {activeTab === 'hoso' && <div className="absolute bottom-0 left-0 w-full h-1 bg-lime-600 rounded-t-md animate-in slide-in-from-left-2 duration-300"></div>}
             </button>
-            <button onClick={() => setActiveTab('kehoach')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'kehoach' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-              <ShieldCheck size={18} /> Kế hoạch Đào tạo đợt tới
-              {activeTab === 'kehoach' && <div className="absolute bottom-0 left-0 w-full h-1 bg-emerald-600 rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
+            <button onClick={() => setActiveTab('daotao')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'daotao' ? 'text-lime-700 dark:text-lime-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+              <GraduationCap size={18} /> Đào tạo ATVSLĐ
+              {activeTab === 'daotao' && <div className="absolute bottom-0 left-0 w-full h-1 bg-lime-600 rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
+            </button>
+            <button onClick={() => setActiveTab('thietbi')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'thietbi' ? 'text-lime-700 dark:text-lime-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+              <Wrench size={18} /> Thiết bị yêu cầu nghiêm ngặt
+              {activeTab === 'thietbi' && <div className="absolute bottom-0 left-0 w-full h-1 bg-lime-600 rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
+            </button>
+            <button onClick={() => setActiveTab('khamsuckhoe')} className={`py-2.5 text-sm font-black transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'khamsuckhoe' ? 'text-lime-700 dark:text-lime-400' : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+              <Heart size={18} /> Khám sức khỏe
+              {activeTab === 'khamsuckhoe' && <div className="absolute bottom-0 left-0 w-full h-1 bg-lime-600 rounded-t-md animate-in slide-in-from-right-2 duration-300"></div>}
             </button>
           </div>
 
+          {/* Sub-navigation Cấp 2 (Chỉ xuất hiện khi chọn Tab Đào tạo ATVSLĐ) */}
+          {activeTab === 'daotao' && (
+            <div className="flex gap-4 mb-5 border-b border-gray-150/50 pb-2 px-1">
+              <button 
+                onClick={() => setActiveSubTab('kehoach')} 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeSubTab === 'kehoach' 
+                    ? 'bg-lime-600 text-white shadow-sm border border-lime-600' 
+                    : 'bg-white text-gray-500 border border-gray-250 hover:bg-gray-50 hover:text-gray-700'
+                }`}
+              >
+                Kế hoạch đào tạo đợt tới
+              </button>
+              <button 
+                onClick={() => setActiveSubTab('khoahoc')} 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeSubTab === 'khoahoc' 
+                    ? 'bg-lime-600 text-white shadow-sm border border-lime-600' 
+                    : 'bg-white text-gray-500 border border-gray-250 hover:bg-gray-50 hover:text-gray-700'
+                }`}
+              >
+                Khóa học huấn luyện
+              </button>
+            </div>
+          )}
+
           {/* 3. Thẻ Thống kê Tổng quan (khi ở Tab 1 - Hồ sơ) */}
           {activeTab === 'hoso' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-[1400px]">
-              <div className="bg-white dark:bg-gray-800 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md">
-                <div className="w-11 h-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><Building2 size={20}/></div>
-                <div><p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Cơ sở khai báo</p><p className="text-xl font-black text-emerald-700 dark:text-emerald-400">{filteredData.length}</p></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+              <div className="bg-white p-3.5 rounded-xl border border-emerald-200 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md hover:border-emerald-500">
+                <div className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100"><Building2 size={20}/></div>
+                <div><p className="text-[10px] font-bold text-gray-500 uppercase">Cơ sở khai báo</p><p className="text-xl font-black text-emerald-700">{filteredData.length}</p></div>
               </div>
-              <div className="bg-white dark:bg-gray-800 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md">
-                <div className="w-11 h-11 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><ShieldCheck size={20}/></div>
-                <div><p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase">Nhân sự Huấn Luyện</p><p className="text-xl font-black text-emerald-700 dark:text-emerald-400">{stats.totalNhanSuHL}</p></div>
+              <div className="bg-white p-3.5 rounded-xl border border-emerald-200 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md hover:border-emerald-500">
+                <div className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100"><ShieldCheck size={20}/></div>
+                <div><p className="text-[10px] font-bold text-gray-500 uppercase">Nhân sự Huấn Luyện</p><p className="text-xl font-black text-emerald-700">{stats.totalNhanSuHL}</p></div>
               </div>
-              <div className={`bg-white dark:bg-gray-800 p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md ${stats.totalLoi > 0 ? 'border-orange-200 dark:border-orange-900/50 bg-orange-50/30 dark:bg-orange-950/20' : 'border-gray-200 dark:border-gray-700'}`}>
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalLoi > 0 ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-600 dark:text-orange-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}><AlertCircle size={20}/></div>
-                <div><p className={`text-[10px] font-bold uppercase ${stats.totalLoi > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'}`}>TB Nghiêm ngặt (Quá hạn)</p><p className={`text-xl font-black ${stats.totalLoi > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-gray-700 dark:text-gray-200'}`}>{stats.totalThietBi} <span className="text-xs text-red-500 font-bold">{stats.totalLoi > 0 ? `(${stats.totalLoi} Lỗi)` : ''}</span></p></div>
+              <div className={`p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md cursor-pointer ${stats.totalLoi > 0 ? 'border-orange-200 bg-orange-50/10 hover:border-orange-500 animate-pulse' : 'border-gray-300 bg-white hover:border-gray-500'}`} onClick={() => setActiveTab('thietbi')}>
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalLoi > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}><AlertCircle size={20}/></div>
+                <div><p className={`text-[10px] font-bold uppercase ${stats.totalLoi > 0 ? 'text-orange-600' : 'text-gray-500'}`}>TB Nghiêm ngặt (Quá hạn)</p><p className={`text-xl font-black ${stats.totalLoi > 0 ? 'text-orange-700' : 'text-gray-700'}`}>{stats.totalThietBi} <span className="text-xs text-red-500 font-bold">{stats.totalLoi > 0 ? `(${stats.totalLoi} Lỗi)` : ''}</span></p></div>
               </div>
-              <div className={`bg-white dark:bg-gray-800 p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md ${stats.totalTaiNan > 0 ? 'border-red-200 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20' : 'border-gray-200 dark:border-gray-700'}`}>
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalTaiNan > 0 ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}><HardHat size={20}/></div>
-                <div><p className={`text-[10px] font-bold uppercase ${stats.totalTaiNan > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>Tai nạn LĐ (Năm)</p><p className={`text-xl font-black ${stats.totalTaiNan > 0 ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>{stats.totalTaiNan} Vụ</p></div>
+              <div className={`p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md ${stats.totalTaiNan > 0 ? 'border-red-200 bg-red-50/10 hover:border-red-500' : 'border-gray-300 bg-white hover:border-gray-500'}`}>
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalTaiNan > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}><HardHat size={20}/></div>
+                <div><p className={`text-[10px] font-bold uppercase ${stats.totalTaiNan > 0 ? 'text-red-600' : 'text-gray-500'}`}>Tai nạn LĐ (Năm)</p><p className={`text-xl font-black ${stats.totalTaiNan > 0 ? 'text-red-700' : 'text-gray-700'}`}>{stats.totalTaiNan} Vụ</p></div>
               </div>
             </div>
           )}
 
         </div>
 
-        {/* 🟢 TAB 1: HỒ SƠ ATVSLĐ (BÁO CÁO CÁC CƠ SỞ) */}
+        {/* 🟢 TAB CẤP 1 - PHÂN HỆ 1: HỒ SƠ ATVSLĐ (BÁO CÁO CÁC CƠ SỞ) */}
         {activeTab === 'hoso' && (
-          <div className={`transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
-            <div className="max-w-[1400px] mx-auto space-y-6">
-
-              {/* DANH SÁCH CHI TIẾT DẠNG THẺ (CARD LAYOUT) */}
-              {filteredData.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-16 text-center text-gray-400">
-                  <Search size={48} className="mx-auto mb-4 text-gray-300"/>
-                  <p className="text-lg font-medium text-gray-500">Không tìm thấy hồ sơ an toàn lao động.</p>
-                  {user?.quyen === 'ADMIN' && <p className="text-sm mt-1">Bấm nút "Thêm Báo cáo Cơ sở" để tạo mới.</p>}
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {filteredData.map(item => {
-                    let hlStats: Record<string, {total: number, dat: number, khong_dat: number}> | null = null;
-                    if (item.thong_ke_hl) {
-                      try { hlStats = typeof item.thong_ke_hl === 'string' ? JSON.parse(item.thong_ke_hl) : item.thong_ke_hl; } 
-                      catch (e) {}
-                    }
-
-                    let sumTotal = 0, sumDat = 0, sumKhongDat = 0;
-                    const activeGroups: any[] = [];
-                    ['1', '2', '3', '4', '6'].forEach(g => {
-                      if (hlStats && hlStats[g] && hlStats[g].total > 0) {
-                        sumTotal += hlStats[g].total;
-                        sumDat += hlStats[g].dat;
-                        sumKhongDat += hlStats[g].khong_dat;
-                        activeGroups.push({ nhom: `Nhóm ${g}`, ...hlStats[g] });
-                      }
-                    });
-
-                    return (
-                      <div key={item.id} className="bg-white rounded-2xl shadow-sm border border-emerald-100 overflow-hidden hover:shadow-md transition-shadow">
-                        
-                        {/* Card Header */}
-                        <div className="bg-emerald-50/70 border-b border-emerald-100 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0 border border-emerald-200">
-                              <Building2 size={20} />
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-black text-emerald-800 tracking-wide uppercase">{donViMap[String(item.id_don_vi)] || item.id_don_vi}</h3>
-                              <p className="text-[11px] font-bold text-emerald-600/70 uppercase">MÃ HỒ SƠ: {item.id}</p>
-                            </div>
-                          </div>
-                          
-                          {user?.quyen === 'ADMIN' && (
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => openModal(item.id_don_vi, item)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors shadow-sm"><Edit size={14}/> Sửa</button>
-                              <button onClick={() => handleDelete(item.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors shadow-sm"><Trash2 size={14}/> Xóa</button>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="p-5 sm:p-6 space-y-6">
-                          {/* SECTION 1: HUẤN LUYỆN */}
-                          <div className="border border-emerald-100 rounded-xl overflow-hidden shadow-sm">
-                            <div className="p-4 bg-white border-b border-gray-100">
-                              <p className="text-sm font-bold text-gray-800 mb-1 leading-relaxed">
-                                {item.can_cu_quyet_dinh || 'Chưa cập nhật Quyết định Huấn luyện'}
-                              </p>
-                              <p className="text-[13px] font-semibold text-emerald-600 flex items-center gap-1.5">
-                                <ShieldCheck size={16}/> Khoá huấn luyện: {item.khoa_huan_luyen_tu ? new Date(item.khoa_huan_luyen_tu).toLocaleDateString('vi-VN') : '---'} - {item.khoa_huan_luyen_den ? new Date(item.khoa_huan_luyen_den).toLocaleDateString('vi-VN') : '---'}
-                              </p>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-b border-gray-100 bg-gray-50/50">
-                              <div className="p-4 text-center border-b md:border-b-0 md:border-r border-gray-100">
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">TỔNG SỐ NGƯỜI</p>
-                                <p className="text-3xl font-black text-blue-700">{sumTotal}</p>
-                              </div>
-                              <div className="p-4 text-center border-b md:border-b-0 md:border-r border-gray-100">
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">ĐẠT YÊU CẦU</p>
-                                <p className="text-3xl font-black text-emerald-600">{sumDat}</p>
-                              </div>
-                              <div className="p-4 text-center">
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">KHÔNG ĐẠT</p>
-                                <p className={`text-3xl font-black ${sumKhongDat > 0 ? 'text-red-600' : 'text-gray-400'}`}>{sumKhongDat}</p>
-                              </div>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-center text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                  <tr>
-                                    <th className="p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Nhóm</th>
-                                    <th className="p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Số lượng</th>
-                                    <th className="p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Tỉ lệ (%)</th>
-                                    <th className="p-3 text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Đạt (SL & %)</th>
-                                    <th className="p-3 text-[11px] font-bold text-red-500 uppercase tracking-wider">Không đạt (SL & %)</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 bg-white">
-                                  {activeGroups.map((g, idx) => {
-                                    const pctNhom = sumTotal > 0 ? ((g.total / sumTotal) * 100).toFixed(2) : 0;
-                                    const pctDat = g.total > 0 ? ((g.dat / g.total) * 100).toFixed(0) : 0;
-                                    const pctKhongDat = g.total > 0 ? ((g.khong_dat / g.total) * 100).toFixed(0) : 0;
-                                    return (
-                                      <tr key={idx} className="hover:bg-gray-50/50">
-                                        <td className="p-3 font-bold text-[#05469B]">{g.nhom}</td>
-                                        <td className="p-3 font-semibold text-gray-700">{g.total}</td>
-                                        <td className="p-3 font-semibold text-gray-700">{pctNhom}%</td>
-                                        <td className="p-3 font-bold text-emerald-600">{g.dat} <span className="text-xs text-gray-400 font-medium">({pctDat}%)</span></td>
-                                        <td className={`p-3 font-bold ${g.khong_dat > 0 ? 'text-red-500' : 'text-gray-400'}`}>{g.khong_dat} <span className="text-xs text-gray-300 font-medium">({pctKhongDat}%)</span></td>
-                                      </tr>
-                                    );
-                                  })}
-                                  {activeGroups.length > 0 && (
-                                    <tr className="bg-gray-50/80 border-t-2 border-gray-200">
-                                      <td className="p-3 font-black text-gray-800 uppercase">TỔNG CỘNG</td>
-                                      <td className="p-3 font-black text-blue-700">{sumTotal}</td>
-                                      <td className="p-3 font-black text-blue-700">{sumTotal > 0 ? '100' : '0'}%</td>
-                                      <td className="p-3 font-black text-emerald-600">{sumDat} <span className="text-xs text-gray-500">({sumTotal > 0 ? Math.round((sumDat/sumTotal)*100) : 0}%)</span></td>
-                                      <td className={`p-3 font-black ${sumKhongDat > 0 ? 'text-red-500' : 'text-gray-500'}`}>{sumKhongDat} <span className="text-xs text-gray-400">({sumTotal > 0 ? Math.round((sumKhongDat/sumTotal)*100) : 0}%)</span></td>
-                                    </tr>
-                                  )}
-                                  {activeGroups.length === 0 && (
-                                    <tr><td colSpan={5} className="p-6 text-gray-400 italic">Chưa có số liệu huấn luyện</td></tr>
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-
-                            <div className="p-4 bg-white border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-3">
-                              <p className="text-[13px] font-semibold text-gray-600 flex items-center gap-2">
-                                Tỷ lệ hoàn thành HL Chung: <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 font-black rounded-md">{item.ty_le_hoan_thanh_hl || '0%'}</span>
-                              </p>
-                              {item.link_ho_so_quy_dinh ? (
-                                <a href={item.link_ho_so_quy_dinh} target="_blank" rel="noopener noreferrer" className="text-[13px] font-bold text-[#05469B] flex items-center gap-1.5 hover:underline">
-                                  <LinkIcon size={14}/> Xem Hồ sơ gốc
-                                </a>
-                              ) : (
-                                <span className="text-[12px] text-gray-400 italic flex items-center gap-1"><LinkIcon size={12}/> Chưa có Link Hồ sơ gốc</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* SECTION 2 & 3: GRID 2 CỘT */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            
-                            {/* 2. Tổ chức & Y tế */}
-                            <div className="bg-white border border-blue-100 rounded-xl p-5 shadow-sm">
-                              <h4 className="font-bold text-blue-800 text-sm uppercase tracking-wide mb-4 flex items-center gap-2 border-b border-blue-100 pb-2">
-                                <Users size={18} className="text-blue-500"/> 2. Tổ chức & Y tế
-                              </h4>
-                              <div className="space-y-3 text-[13px]">
-                                <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                                  <span className="text-gray-500 font-medium">Phụ trách ATVSLĐ:</span>
-                                  <span className="font-bold text-[#05469B]">{item.nguoi_phu_trach || '---'}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                                  <span className="text-gray-500 font-medium">Mạng lưới ATVS Viên:</span>
-                                  <span className="font-bold text-gray-800">{item.so_luong_mang_luoi || '0'} Người</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                                  <span className="text-gray-500 font-medium">Khám SK / Bệnh nghề nghiệp:</span>
-                                  <span className="font-bold text-gray-800">
-                                    {item.ngay_ksk ? new Date(item.ngay_ksk).toLocaleDateString('vi-VN') : '---'} / {item.ngay_kham_bnn ? new Date(item.ngay_kham_bnn).toLocaleDateString('vi-VN') : '---'}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-gray-500 font-medium">Cấp phát BHLĐ:</span>
-                                  <span className={`font-bold ${item.ty_le_cap_bhld === 'Đầy đủ' ? 'text-emerald-600' : 'text-orange-500'}`}>{item.ty_le_cap_bhld || '---'}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 3. Máy móc & Hiện trường */}
-                            <div className="bg-white border border-red-100 rounded-xl p-5 shadow-sm">
-                              <h4 className="font-bold text-red-700 text-sm uppercase tracking-wide mb-4 flex items-center gap-2 border-b border-red-100 pb-2">
-                                <Settings size={18} className="text-red-500"/> 3. Máy móc & Hiện trường
-                              </h4>
-                              <div className="space-y-3 text-[13px]">
-                                <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                                  <span className="text-gray-500 font-medium">Đo kiểm Môi trường:</span>
-                                  <span className="font-bold text-gray-800">{item.ngay_quan_trac_mt ? new Date(item.ngay_quan_trac_mt).toLocaleDateString('vi-VN') : 'Chưa đo'}</span>
-                                </div>
-                                <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                                  <span className="text-gray-500 font-medium">TB Nghiêm ngặt (Tổng / Quá hạn):</span>
-                                  <span className="font-black text-gray-800">
-                                    {item.so_luong_thiet_bi_nghiem_ngat || '0'} / <span className={Number(item.so_luong_thiet_bi_qua_han_kt) > 0 ? 'text-red-600' : 'text-emerald-600'}>{item.so_luong_thiet_bi_qua_han_kt || '0'}</span>
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center mb-3">
-                                  <span className="text-gray-500 font-medium">Số vụ Tai nạn (Năm):</span>
-                                  <span className={`font-black ${Number(item.so_tai_nan_trong_nam) > 0 ? 'text-red-600' : 'text-gray-800'}`}>{item.so_tai_nan_trong_nam || '0'} Vụ</span>
-                                </div>
-                                
-                                <div className="pt-2">
-                                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">TUẦN TRA & LỖI HIỆN TRƯỜNG:</span>
-                                  {item.cac_loi_hien_truong ? (
-                                    <div className="bg-red-50 border border-red-200 text-red-700 p-2.5 rounded-lg text-xs font-medium flex items-start gap-2">
-                                      <XCircle size={14} className="shrink-0 mt-0.5 text-red-500"/>
-                                      <span className="leading-relaxed">{item.cac_loi_hien_truong}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-2.5 rounded-lg text-xs font-bold flex items-center gap-2">
-                                      <CheckCircle2 size={14} className="text-emerald-500"/> 
-                                      Không có lỗi / Đã xử lý (Kiểm tra: {item.ngay_tu_kiem_tra ? new Date(item.ngay_tu_kiem_tra).toLocaleDateString('vi-VN') : '---'})
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
+          <HoSoTab
+            filteredData={filteredData}
+            donViMap={donViMap}
+            user={user}
+            onOpenModal={openModal}
+            onDelete={handleDelete}
+            isListCollapsed={isListCollapsed}
+            khoaHocList={khoaHocData}
+            hocVienList={hocVienData}
+            thietBiList={thietBiData}
+            kiemDinhList={kiemDinhData}
+            onNavigateToStrictDevices={() => setActiveTab('thietbi')} // truyền callback drill-down
+          />
         )}
 
-{/*PHẦN 4: TAB KẾ HOẠCH ĐÀO TẠO ATVSLĐ VÀ MODALS*/}
-        {/* 🟢 TAB 2: KẾ HOẠCH ĐÀO TẠO ATVSLĐ (TÍNH NĂNG MỚI) */}
-        {activeTab === 'kehoach' && (
-          <div className={`transition-all duration-300 flex flex-col h-full ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
-            
-            {/* KHỐI 4 THẺ CHỈ SỐ KPI TÌNH TRẠNG THẺ */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5 shrink-0">
-              <div onClick={() => setStatusFilter('CHUA_HOC')} className={`p-4 bg-white rounded-xl border-2 shadow-sm cursor-pointer transition-all flex items-center gap-4 ${statusFilter === 'CHUA_HOC' ? 'border-red-500 bg-red-50/20' : 'border-gray-200 hover:border-red-300'}`}>
-                <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0"><HelpCircle size={20}/></div>
-                <div><p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Chưa huấn luyện</p><p className="text-2xl font-black text-red-600">{safetySummaryCounts.chua_hoc}</p></div>
-              </div>
-              <div onClick={() => setStatusFilter('QUA_HAN')} className={`p-4 bg-white rounded-xl border-2 shadow-sm cursor-pointer transition-all flex items-center gap-4 ${statusFilter === 'QUA_HAN' ? 'border-gray-800 bg-gray-100' : 'border-gray-200 hover:border-gray-400'}`}>
-                <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-800 flex items-center justify-center shrink-0"><AlertTriangle size={20}/></div>
-                <div><p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Đã quá hạn thẻ</p><p className="text-2xl font-black text-gray-900">{safetySummaryCounts.qua_han}</p></div>
-              </div>
-              <div onClick={() => setStatusFilter('SAP_HET_HAN')} className={`p-4 bg-white rounded-xl border-2 shadow-sm cursor-pointer transition-all flex items-center gap-4 ${statusFilter === 'SAP_HET_HAN' ? 'border-orange-500 bg-orange-50/20' : 'border-gray-200 hover:border-orange-300'}`}>
-                <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0"><AlertTriangle size={20}/></div>
-                <div><p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Sắp hết hạn (&lt;60 ngày)</p><p className="text-2xl font-black text-orange-600">{safetySummaryCounts.sap_het_han}</p></div>
-              </div>
-              <div onClick={() => setStatusFilter('AN_TOAN')} className={`p-4 bg-white rounded-xl border-2 shadow-sm cursor-pointer transition-all flex items-center gap-4 ${statusFilter === 'AN_TOAN' ? 'border-emerald-500 bg-emerald-50/20' : 'border-gray-200 hover:border-emerald-300'}`}>
-                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><CheckCheck size={20}/></div>
-                <div><p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Thẻ hợp lệ (An toàn)</p><p className="text-2xl font-black text-emerald-600">{safetySummaryCounts.an_toan}</p></div>
-              </div>
+        {/* 🟢 TAB CẤP 1 - PHÂN HỆ 2: ĐÀO TẠO ATVSLĐ (Gồm 2 Sub-tabs) */}
+        {activeTab === 'daotao' && activeSubTab === 'kehoach' && (
+          <KeHoachTab
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            safetySearchTerm={safetySearchTerm}
+            setSafetySearchTerm={setSafetySearchTerm}
+            nhomFilter={nhomFilter}
+            setNhomFilter={setNhomFilter}
+            safetySummaryCounts={safetySummaryCounts}
+            paginatedSafetyList={paginatedSafetyList}
+            selectedSafetyIds={selectedSafetyIds}
+            totalSafetyPages={totalSafetyPages}
+            currentSafetyPage={currentSafetyPage}
+            setCurrentSafetyPage={setCurrentSafetyPage}
+            rowsPerSafetyPage={rowsPerSafetyPage}
+            setRowsPerSafetyPage={setRowsPerSafetyPage}
+            filteredSafetyList={filteredSafetyList}
+            exportSafetyPlanToExcel={exportSafetyPlanToExcel}
+            handleSelectAllSafety={handleSelectAllSafety}
+            handleSelectSafetyRow={handleSelectSafetyRow}
+            isListCollapsed={isListCollapsed}
+          />
+        )}
+
+        {activeTab === 'daotao' && activeSubTab === 'khoahoc' && (
+          <KhoaHocTab onReloadData={loadData} />
+        )}
+
+        {/* 🟢 TAB CẤP 1 - PHÂN HỆ 3: THIẾT BỊ YÊU CẦU NGHIÊM NGẶT */}
+        {activeTab === 'thietbi' && (
+          <StrictEquipmentTab
+            selectedUnitFilter={selectedUnitFilter}
+            isListCollapsed={isListCollapsed}
+            donViList={donViData}
+            thietBiList={thietBiData}
+            kiemDinhList={kiemDinhData}
+            onReload={loadData}
+          />
+        )}
+
+        {/* 🟢 TAB CẤP 1 - PHÂN HỆ 4: KHÁM SỨC KHỎE (SẮP CẬP NHẬT) */}
+        {activeTab === 'khamsuckhoe' && (
+          <div className="bg-white border border-lime-100 p-16 rounded-2xl shadow-sm text-center">
+            <div className="w-16 h-16 rounded-full bg-lime-50 text-lime-600 flex items-center justify-center mx-auto mb-4 border-4 border-lime-100">
+              <Heart className="w-8 h-8" />
             </div>
-
-            {/* THANH THAO TÁC, BỘ LỌC VÀ NÚT XUẤT EXCEL */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-4 flex flex-col md:flex-row gap-3 items-center justify-between shrink-0">
-              <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                  <input type="text" placeholder="Tìm Mã NV, Họ tên..." value={safetySearchTerm} onChange={(e) => setSafetySearchTerm(e.target.value)} className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded text-xs outline-none focus:ring-1 focus:ring-emerald-500" />
-                </div>
-                
-                <select value={nhomFilter} onChange={(e) => setNhomFilter(e.target.value)} className="py-1.5 px-3 border border-gray-200 rounded text-xs text-gray-700 outline-none focus:ring-1 focus:ring-emerald-500">
-                  <option value="ALL">-- Tất cả nhóm --</option>
-                  <option value="1">Nhóm 1</option>
-                  <option value="2">Nhóm 2</option>
-                  <option value="3">Nhóm 3</option>
-                  <option value="4">Nhóm 4</option>
-                  <option value="6">Nhóm 6</option>
-                </select>
-
-                {statusFilter !== 'ALL' && (
-                  <button onClick={() => setStatusFilter('ALL')} className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1.5 rounded hover:bg-emerald-100 border border-emerald-200">
-                    Xóa lọc (Đang xem: {statusFilter})
-                  </button>
-                )}
-              </div>
-
-              <button 
-                onClick={exportSafetyPlanToExcel} 
-                disabled={selectedSafetyIds.length === 0}
-                className="w-full md:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs px-4 py-2 rounded-lg shadow transition-colors"
-              >
-                <FileSpreadsheet size={16}/> Xuất danh sách huấn luyện đợt tới ({selectedSafetyIds.length})
-              </button>
-            </div>
-
-            {/* BẢNG SỐ LIỆU CHI TIẾT DANH SÁCH NHÂN SỰ */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex-1 overflow-hidden flex flex-col min-h-[400px]">
-              <div className="overflow-x-auto w-full flex-1 custom-scrollbar">
-                <table className="w-full text-left border-collapse text-xs min-w-[1000px]">
-                  <thead className="sticky top-0 bg-[#f8fafc] z-10 shadow-sm">
-                    <tr className="border-b border-gray-200 font-bold text-gray-600 uppercase">
-                      <th className="p-3 text-center w-12"><input type="checkbox" onChange={handleSelectAllSafety} checked={paginatedSafetyList.length > 0 && paginatedSafetyList.every(p => selectedSafetyIds.includes(p.id))} className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"/></th>
-                      <th className="p-3 w-24">Mã NV</th>
-                      <th className="p-3">Họ và Tên</th>
-                      <th className="p-3">Đơn vị / Showroom</th>
-                      <th className="p-3">Bộ phận / Chức danh</th>
-                      <th className="p-3 text-center w-16">Nhóm</th>
-                      <th className="p-3 text-center w-28">Hạn Thẻ</th>
-                      <th className="p-3 text-center w-28">Trạng thái</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {paginatedSafetyList.length === 0 ? (
-                      <tr><td colSpan={8} className="p-12 text-center text-gray-400 italic">Không tìm thấy nhân sự nào thuộc diện cần quét.</td></tr>
-                    ) : (
-                      paginatedSafetyList.map(p => {
-                        let badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-200";
-                        let badgeText = "Hợp lệ";
-                        if (p.trainingStatus === 'CHUA_HOC') { badgeClass = "bg-red-100 text-red-700 border-red-200"; badgeText = "Chưa học"; }
-                        else if (p.trainingStatus === 'QUA_HAN') { badgeClass = "bg-gray-100 text-gray-700 border-gray-300 font-bold"; badgeText = "Quá hạn"; }
-                        else if (p.trainingStatus === 'SAP_HET_HAN') { badgeClass = "bg-orange-100 text-orange-800 border-orange-200 animate-pulse"; badgeText = `Còn ${p.remainingDays} ngày`; }
-
-                        return (
-                          <tr key={p.id} className="hover:bg-emerald-50/30 transition-colors">
-                            <td className="p-3 text-center">
-                              <input type="checkbox" checked={selectedSafetyIds.includes(p.id)} onChange={(e) => handleSelectSafetyRow(p.id, e.target.checked)} className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 rounded cursor-pointer"/>
-                            </td>
-                            <td className="p-3 font-bold text-gray-700">{p.ma_so_nhan_vien}</td>
-                            <td className="p-3 font-bold text-[#05469B]">{p.ho_ten}</td>
-                            <td className="p-3">
-                              <p className="font-semibold text-gray-800">{p.donViText}</p>
-                              <p className="text-[10px] text-gray-400">{p.showroomText} • {p.phiaText}</p>
-                            </td>
-                            <td className="p-3">
-                              <p className="font-medium text-gray-700">{p.phong_ban || '---'}</p>
-                              <p className="text-[10px] text-gray-500">{p.chuc_vu} ({p.phan_loai})</p>
-                            </td>
-                            <td className="p-3 text-center font-bold text-[#05469B] text-sm">{p.nhom_doi_tuong || '---'}</td>
-                            <td className="p-3 text-center font-mono font-semibold text-gray-600">
-                              {p.gia_tri_den ? new Date(p.gia_tri_den).toLocaleDateString('vi-VN') : '---'}
-                            </td>
-                            <td className="p-3 text-center">
-                              <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold inline-block min-w-16 ${badgeClass}`}>{badgeText}</span>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <Pagination
-                currentPage={currentSafetyPage}
-                totalPages={totalSafetyPages}
-                onPageChange={setCurrentSafetyPage}
-                rowsPerPage={rowsPerSafetyPage}
-                onRowsPerPageChange={(rows) => {
-                  setRowsPerSafetyPage(rows);
-                  setCurrentSafetyPage(1);
-                }}
-                totalRows={filteredSafetyList.length}
-                itemName="nhân sự"
-              />
-            </div>
+            <h3 className="text-xl font-bold text-lime-800 mb-2">Phân hệ Khám sức khỏe & Bệnh nghề nghiệp</h3>
+            <p className="text-gray-500 text-sm max-w-md mx-auto">Phân hệ này hiện đang được lên kế hoạch phát triển ở các giai đoạn tiếp theo. Dữ liệu khám sức khỏe định kỳ và quản lý bệnh nghề nghiệp của nhân sự sẽ được tập trung tại đây.</p>
           </div>
         )}
 
@@ -839,6 +644,21 @@ export default function AtvsldPage() {
         }}
         onClose={() => setIsModalOpen(false)}
       />
+
+      {/* 🟢 CUSTOM CONFIRM MODAL XÓA HỒ SƠ */}
+      {isConfirmOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center animate-in zoom-in duration-200">
+            <div className="w-16 h-16 rounded-full bg-lime-50 text-lime-600 flex items-center justify-center mx-auto mb-4 border-4 border-lime-100"><AlertCircle className="w-8 h-8" /></div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Xác nhận xóa?</h3>
+            <p className="text-gray-500 text-sm mb-6">Bạn có chắc chắn muốn xóa hồ sơ báo cáo ATVSLĐ của đơn vị này? Hành động này không thể hoàn tác.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setIsConfirmOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors">Hủy</button>
+              <button onClick={confirmDelete} className="flex-1 py-3 text-white bg-lime-600 hover:bg-lime-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors"><Trash2 className="w-5 h-5" /> Xóa</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

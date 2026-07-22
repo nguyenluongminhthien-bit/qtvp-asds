@@ -104,7 +104,7 @@ export default function CuocDiDongTab({
   selectedUnitSubordinates
 }: Props) {
   const { user } = useAuth();
-  
+
   // Data States
   const [thueBaoList, setThueBaoList] = useState<ThueBao[]>([]);
   const [cuocList, setCuocList] = useState<CuocThang[]>([]);
@@ -171,7 +171,7 @@ export default function CuocDiDongTab({
     confirmText: 'Xác nhận',
     cancelText: 'Quay lại',
     variant: 'danger',
-    onConfirm: () => {}
+    onConfirm: () => { }
   });
 
   // Modal Thu hồi (nhập lý do)
@@ -359,7 +359,7 @@ export default function CuocDiDongTab({
         if (filterPhapNhan && row.tb.id_phap_nhan !== filterPhapNhan) return false;
         if (filterLoai && row.tb.loai_thue_bao !== filterLoai) return false;
         if (filterTrangThai && row.tb.trang_thai !== filterTrangThai) return false;
-        
+
         if (filterVuot === 'vuot') {
           if (row.vuot === null || row.vuot <= 0) return false;
         } else if (filterVuot === 'trong') {
@@ -966,7 +966,7 @@ export default function CuocDiDongTab({
 
       await apiService.save(payload, 'update', 'dm_thue_bao');
       toast.success('Cập nhật lịch sử sử dụng thành công!');
-      
+
       setLichSuModal(prev => ({
         ...prev,
         thueBao: { ...prev.thueBao!, lich_su_nsd: currentHist },
@@ -1067,7 +1067,7 @@ export default function CuocDiDongTab({
       // Col 7: Cước sử dụng (gắn vào tong_cuoc)
       const rawCol0 = cols[0] || '';
       const cleanPhone = parsePhoneNumberWithZero(rawCol0);
-      
+
       const is8Col = cols.length >= 8;
       const dinhMucStr = cols[1];
       const dinhMucExcel = (is8Col && dinhMucStr && dinhMucStr !== '-' && dinhMucStr.trim() !== '-')
@@ -1398,7 +1398,7 @@ export default function CuocDiDongTab({
   const renderSVGChart = () => {
     if (!selectedRowDetails) return null;
     const { chartPoints, nv } = selectedRowDetails;
-    
+
     const rawSimDm = selectedRowDetails.tb.dinh_muc_cuoc !== undefined && selectedRowDetails.tb.dinh_muc_cuoc !== null ? Number(selectedRowDetails.tb.dinh_muc_cuoc) : null;
     const dinhMuc = (rawSimDm !== null && rawSimDm > 0) ? rawSimDm : null;
 
@@ -1433,7 +1433,7 @@ export default function CuocDiDongTab({
     return (
       <div className="relative bg-gray-50 dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
         <div className="font-bold text-xs text-gray-500 mb-2 dark:text-gray-400">BIỂU ĐỒ DIỄN BIẾN 12 THÁNG GẦN NHẤT</div>
-        
+
         {chartTooltip.visible && (
           <div
             className="absolute z-50 p-2.5 bg-gray-800/95 dark:bg-black/95 text-white rounded-lg shadow-xl text-[10.5px] border border-gray-700 pointer-events-none"
@@ -1572,11 +1572,11 @@ export default function CuocDiDongTab({
 
   return (
     <div className="flex flex-col flex-1 h-full min-h-0">
-      
+
       {/* TOOLBAR FILTER & ACTIONS: TẤT CẢ TRÊN CÙNG 1 DÒNG */}
       <div className="bg-white dark:bg-gray-800 px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0 shadow-sm overflow-x-auto custom-scrollbar">
         <div className="flex items-end justify-between gap-2.5 xl:gap-3.5 min-w-max w-full">
-          
+
           {/* 1. KỲ CƯỚC */}
           <div className="shrink-0">
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Kỳ cước</label>
@@ -1681,53 +1681,53 @@ export default function CuocDiDongTab({
 
       {/* SUMMARY STATS BAR */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shrink-0">
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
-          <div className="w-9 h-9 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><Phone size={18}/></div>
+        <div className="bg-white p-3 rounded-xl border border-blue-200 flex items-center gap-3 shadow-xs transition-all hover:shadow-md hover:border-blue-500">
+          <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100"><Phone size={18} /></div>
           <div>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Tổng Số SIM</p>
-            <p className="text-xl font-black text-gray-800 dark:text-gray-100 leading-none">{stats.totalSim}</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-1">Tổng Số SIM</p>
+            <p className="text-xl font-black text-gray-800 leading-none">{stats.totalSim}</p>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
-          <div className="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0"><CheckCircle2 size={18}/></div>
+        <div className="bg-white p-3 rounded-xl border border-emerald-200 flex items-center gap-3 shadow-xs transition-all hover:shadow-md hover:border-emerald-500">
+          <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100"><CheckCircle2 size={18} /></div>
           <div>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Đang Hoạt Động</p>
-            <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{stats.activeSim}</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-1">Đang Hoạt Động</p>
+            <p className="text-xl font-black text-emerald-600 leading-none">{stats.activeSim}</p>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
-          <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0"><TrendingUp size={18}/></div>
+        <div className="bg-white p-3 rounded-xl border border-indigo-200 flex items-center gap-3 shadow-xs transition-all hover:shadow-md hover:border-indigo-500">
+          <div className="w-9 h-9 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100"><TrendingUp size={18} /></div>
           <div>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Tổng Cước</p>
-            <p className="text-xl font-black text-indigo-600 dark:text-indigo-400 leading-none">{formatCurrency(stats.totalCuoc)}đ</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-1">Tổng Cước</p>
+            <p className="text-xl font-black text-indigo-600 leading-none">{formatCurrency(stats.totalCuoc)}đ</p>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 shadow-xs">
-          <div className="w-9 h-9 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0"><AlertCircle size={18}/></div>
+        <div className="bg-white p-3 rounded-xl border border-red-200 flex items-center gap-3 shadow-xs transition-all hover:shadow-md hover:border-red-500">
+          <div className="w-9 h-9 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100"><AlertCircle size={18} /></div>
           <div>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Vượt Định Mức</p>
-            <p className="text-xl font-black text-red-600 dark:text-red-400 leading-none">{stats.vuotCount} SIM</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-1">Vượt Định Mức</p>
+            <p className="text-xl font-black text-red-600 leading-none">{stats.vuotCount} SIM</p>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:bg-gray-800 flex items-center gap-3 shadow-xs">
-          <div className="w-9 h-9 rounded-full bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0"><CheckCircle2 size={18}/></div>
+        <div className="bg-white p-3 rounded-xl border border-teal-200 flex items-center gap-3 shadow-xs transition-all hover:shadow-md hover:border-teal-500">
+          <div className="w-9 h-9 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center shrink-0 border border-teal-100"><CheckCircle2 size={18} /></div>
           <div>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Trong Định Mức</p>
-            <p className="text-xl font-black text-teal-600 dark:text-teal-400 leading-none">{stats.trongCount} SIM</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-1">Trong Định Mức</p>
+            <p className="text-xl font-black text-teal-600 leading-none">{stats.trongCount} SIM</p>
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:bg-gray-800 flex items-center gap-3 shadow-xs">
-          <div className="w-9 h-9 rounded-full bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 flex items-center justify-center shrink-0"><Activity size={18}/></div>
+        <div className="bg-white p-3 rounded-xl border border-yellow-200 flex items-center gap-3 shadow-xs transition-all hover:shadow-md hover:border-yellow-500">
+          <div className="w-9 h-9 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center shrink-0 border border-yellow-100"><Activity size={18} /></div>
           <div>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase leading-none mb-1">Chưa Có Dữ Liệu</p>
-            <p className="text-xl font-black text-yellow-600 dark:text-yellow-400 leading-none">{stats.noDataCount} SIM</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase leading-none mb-1">Chưa Có Dữ Liệu</p>
+            <p className="text-xl font-black text-yellow-600 leading-none">{stats.noDataCount} SIM</p>
           </div>
         </div>
       </div>
 
       {/* CORE WORKSPACE GRID */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        
+
         {/* LEFT PANEL: MAIN TABLE */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden w-full">
           <div className="flex-1 overflow-auto custom-scrollbar">
@@ -1946,12 +1946,12 @@ export default function CuocDiDongTab({
                       {/* Nút Huỷ SIM — hiện khi đã thu hồi hoặc tạm ngưng */}
                       {(selectedRowDetails.tb.trang_thai === 'Đã thu hồi - Chờ tái cấp' ||
                         selectedRowDetails.tb.trang_thai === 'Tạm ngưng') && (
-                        <button
-                          onClick={() => handleHuySIM(selectedRowDetails.tb)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors bg-white dark:bg-gray-800">
-                          <XCircle size={13} /> Huỷ SIM
-                        </button>
-                      )}
+                          <button
+                            onClick={() => handleHuySIM(selectedRowDetails.tb)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors bg-white dark:bg-gray-800">
+                            <XCircle size={13} /> Huỷ SIM
+                          </button>
+                        )}
                     </div>
                   )}
                 </div>
@@ -1986,7 +1986,7 @@ export default function CuocDiDongTab({
           <div className="bg-white dark:bg-gray-800 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-2xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
             <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
               <h3 className="text-xl font-bold text-[#05469B] dark:text-blue-400 flex items-center gap-2">
-                <Phone size={22}/>
+                <Phone size={22} />
                 {thueBaoModal.mode === 'create' ? 'Khai Báo SIM / Thuê Bao Mới' : 'Cập Nhật SIM / Thuê Bao'}
               </h3>
               <button
@@ -1999,7 +1999,7 @@ export default function CuocDiDongTab({
 
             <form onSubmit={handleSaveThueBao} className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar bg-white dark:bg-gray-800 text-sm">
-                
+
                 {/* ROW 1: SỐ ĐIỆN THOẠI + PHÂN LOẠI + NHÀ MẠNG */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -2103,7 +2103,7 @@ export default function CuocDiDongTab({
                   <div className="bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900 relative space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-[#05469B] dark:text-blue-400 mb-1">Chọn Nhân sự sử dụng SIM *</label>
-                      
+
                       {/* Autocomplete Field */}
                       <div className="relative w-full" ref={staffSuggestionsRef}>
                         <input
@@ -2169,7 +2169,7 @@ export default function CuocDiDongTab({
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-1">Nhân sự phụ trách quản lý</label>
-                      
+
                       {/* Autocomplete for Non-Cá nhân SIM Manager */}
                       <div className="relative w-full" ref={staffSuggestionsRef}>
                         <input
@@ -2223,7 +2223,7 @@ export default function CuocDiDongTab({
                 {thueBaoModal.showReasonInput && (
                   <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded-xl animate-in zoom-in-95 duration-200 space-y-2">
                     <div className="flex items-center gap-2 text-xs font-black text-orange-800 dark:text-orange-400">
-                      <AlertCircle size={15}/>
+                      <AlertCircle size={15} />
                       XÁC NHẬN CHUYỂN GIAO THUÊ BAO
                     </div>
                     <p className="text-[11px] text-gray-500 dark:text-gray-400">Hệ thống phát hiện có sự thay đổi nhân sự quản lý SIM. Lịch sử sử dụng sẽ được cập nhật tự động. Vui lòng nhập lý do:</p>
@@ -2314,7 +2314,7 @@ export default function CuocDiDongTab({
           <div className="bg-white dark:bg-gray-800 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-2xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
             <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
               <h3 className="text-xl font-bold text-[#05469B] dark:text-blue-400 flex items-center gap-2">
-                <History size={22}/>
+                <History size={22} />
                 Lịch Sử Người Sử Dụng: {formatPhoneNumber(lichSuModal.thueBao.so_dien_thoai)}
               </h3>
               <button
@@ -2379,8 +2379,8 @@ export default function CuocDiDongTab({
                             {item.ma_so_nv && <span className="text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.2 rounded ml-2 font-bold font-mono">{item.ma_so_nv}</span>}
                           </div>
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
-                            <button onClick={() => editHistoryItem(item, originalIndexInStore)} className="text-[#05469B] hover:text-[#04367a] p-1"><Edit size={12}/></button>
-                            <button onClick={() => handleDeleteHistoryItem(originalIndexInStore)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={12}/></button>
+                            <button onClick={() => editHistoryItem(item, originalIndexInStore)} className="text-[#05469B] hover:text-[#04367a] p-1"><Edit size={12} /></button>
+                            <button onClick={() => handleDeleteHistoryItem(originalIndexInStore)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={12} /></button>
                           </div>
                         </div>
                         <div className="text-[11px] text-gray-500 mt-1">
@@ -2403,9 +2403,9 @@ export default function CuocDiDongTab({
                 <form onSubmit={handleSaveHistoryItem} className="p-4 bg-blue-50/50 dark:bg-gray-900/50 border border-blue-200 dark:border-gray-800 rounded-xl space-y-4 animate-in zoom-in-95 duration-200">
                   <div className="font-bold text-xs text-[#05469B] dark:text-blue-400 border-b border-blue-150 pb-1 flex justify-between">
                     <span>{lichSuModal.editingIndex !== null ? 'SỬA BẢN GHI LỊCH SỬ' : 'THÊM BẢN GHI LỊCH SỬ'}</span>
-                    <button type="button" onClick={() => setLichSuModal(prev => ({ ...prev, showAddForm: false }))} className="text-gray-400 hover:text-red-500"><X size={14}/></button>
+                    <button type="button" onClick={() => setLichSuModal(prev => ({ ...prev, showAddForm: false }))} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 mb-1">Chọn / Gõ tên nhân sự *</label>
@@ -2533,7 +2533,7 @@ export default function CuocDiDongTab({
           <div className="bg-white dark:bg-gray-800 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-h-[95vh] sm:max-h-[90vh] sm:max-w-4xl flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in duration-200 mt-auto sm:mt-0 overflow-hidden">
             <div className="flex justify-between items-center p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
               <h3 className="text-xl font-bold text-[#05469B] dark:text-blue-400 flex items-center gap-2">
-                <FileSpreadsheet size={22}/>
+                <FileSpreadsheet size={22} />
                 Nhập Cước Điện Thoại Hàng Tháng Từ Excel
               </h3>
               <button
@@ -2680,7 +2680,7 @@ export default function CuocDiDongTab({
                 disabled={importing || importPreview.filter(r => r.status !== 'SKIP').length === 0}
                 className="px-8 py-2.5 text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:cursor-not-allowed rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg transition-all text-xs"
               >
-                {importing ? <Loader2 className="animate-spin w-4 h-4" /> : <CheckCircle2 size={15}/>}
+                {importing ? <Loader2 className="animate-spin w-4 h-4" /> : <CheckCircle2 size={15} />}
                 Xác Nhận Nhập Cước ({importPreview.filter(r => r.status !== 'SKIP').length} thuê bao)
               </button>
             </div>
@@ -2691,7 +2691,7 @@ export default function CuocDiDongTab({
       {showAddSimModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-xl w-full p-6 sm:p-8 animate-in zoom-in-95 duration-200 flex flex-col gap-6">
-            
+
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-700">
               <div className="flex items-center gap-3">
@@ -2819,13 +2819,12 @@ export default function CuocDiDongTab({
       {confirmModal.open && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border border-gray-100 dark:border-gray-700 animate-in zoom-in-95 duration-200">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border-2 shadow-sm ${
-              confirmModal.variant === 'warning'
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border-2 shadow-sm ${confirmModal.variant === 'warning'
                 ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-400'
                 : confirmModal.variant === 'info'
-                ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400'
-                : 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:border-red-800 dark:text-red-400'
-            }`}>
+                  ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400'
+                  : 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/40 dark:border-red-800 dark:text-red-400'
+              }`}>
               {confirmModal.variant === 'warning' ? (
                 <PauseCircle className="w-8 h-8" />
               ) : confirmModal.variant === 'info' ? (
@@ -2834,15 +2833,15 @@ export default function CuocDiDongTab({
                 <AlertCircle className="w-8 h-8" />
               )}
             </div>
-            
+
             <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 mb-2 leading-tight">
               {confirmModal.title}
             </h3>
-            
+
             <p className="text-gray-600 dark:text-gray-300 text-xs font-medium mb-1">
               {confirmModal.description}
             </p>
-            
+
             {confirmModal.subDescription && (
               <p className="text-red-500 dark:text-red-400 text-[11px] font-bold mt-2 bg-red-50 dark:bg-red-950/30 p-2 rounded-xl border border-red-100 dark:border-red-900/40">
                 {confirmModal.subDescription}
@@ -2863,13 +2862,12 @@ export default function CuocDiDongTab({
                   await confirmModal.onConfirm();
                   setConfirmModal(prev => ({ ...prev, open: false }));
                 }}
-                className={`flex-1 py-2.5 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer ${
-                  confirmModal.variant === 'warning'
+                className={`flex-1 py-2.5 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer ${confirmModal.variant === 'warning'
                     ? 'bg-amber-600 hover:bg-amber-700'
                     : confirmModal.variant === 'info'
-                    ? 'bg-[#05469B] hover:bg-[#04367a]'
-                    : 'bg-red-600 hover:bg-red-700'
-                }`}
+                      ? 'bg-[#05469B] hover:bg-[#04367a]'
+                      : 'bg-red-600 hover:bg-red-700'
+                  }`}
               >
                 {confirmModal.confirmText || 'Xác nhận'}
               </button>
@@ -2903,11 +2901,10 @@ export default function CuocDiDongTab({
                 <button key={opt}
                   type="button"
                   onClick={() => setThuHoiModal(p => ({ ...p, lyDo: opt }))}
-                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                    thuHoiModal.lyDo === opt
+                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${thuHoiModal.lyDo === opt
                       ? 'bg-orange-500 border-orange-500 text-white'
                       : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-orange-400'
-                  }`}>
+                    }`}>
                   {opt}
                 </button>
               ))}
@@ -3003,11 +3000,10 @@ export default function CuocDiDongTab({
                 <button key={opt}
                   type="button"
                   onClick={() => setTaiCapModal(p => ({ ...p, lyDo: opt }))}
-                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                    taiCapModal.lyDo === opt
+                  className={`px-3 py-1 text-xs rounded-full border transition-colors ${taiCapModal.lyDo === opt
                       ? 'bg-green-500 border-green-500 text-white'
                       : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-green-400'
-                  }`}>
+                    }`}>
                   {opt}
                 </button>
               ))}
@@ -3045,7 +3041,7 @@ export default function CuocDiDongTab({
       {batchSimModal.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col animate-in zoom-in duration-200 overflow-hidden border border-gray-200 dark:border-gray-700">
-            
+
             {/* HEADER */}
             <div className="flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-700 bg-indigo-700 text-white shrink-0">
               <div className="flex items-center gap-3">
@@ -3068,7 +3064,7 @@ export default function CuocDiDongTab({
 
             {/* BODY SCROLLABLE */}
             <div className="overflow-y-auto flex-1 p-6 custom-scrollbar space-y-5">
-              
+
               {/* HUỚNG DẪN & NHẬP CHUỖI DÁN */}
               <div className="bg-indigo-50/70 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                 <label className="block text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
@@ -3134,15 +3130,14 @@ export default function CuocDiDongTab({
                         {batchSimModal.previewRows.map((row, idx) => (
                           <tr
                             key={idx}
-                            className={`hover:bg-blue-50/30 transition-colors ${
-                              row.status === 'ERROR_DUPLICATE' || row.status === 'INVALID'
+                            className={`hover:bg-blue-50/30 transition-colors ${row.status === 'ERROR_DUPLICATE' || row.status === 'INVALID'
                                 ? 'bg-red-50/40 dark:bg-red-950/30'
                                 : row.status === 'WARNING_NO_NV'
-                                ? 'bg-amber-50/40 dark:bg-amber-950/30'
-                                : row.status === 'UPDATE_EXISTING'
-                                ? 'bg-blue-50/40 dark:bg-blue-950/30'
-                                : ''
-                            }`}
+                                  ? 'bg-amber-50/40 dark:bg-amber-950/30'
+                                  : row.status === 'UPDATE_EXISTING'
+                                    ? 'bg-blue-50/40 dark:bg-blue-950/30'
+                                    : ''
+                              }`}
                           >
                             <td className="p-2.5 text-center text-gray-400 font-bold">{idx + 1}</td>
                             <td className="p-2.5 font-bold font-mono text-gray-800 dark:text-gray-200">{row.msnv || '---'}</td>
@@ -3233,22 +3228,21 @@ export default function CuocDiDongTab({
                               </select>
                             </td>
                             <td className="p-2.5 text-center">
-                              <span className={`text-[9.5px] font-black px-2 py-0.5 rounded-full border ${
-                                row.status === 'VALID'
+                              <span className={`text-[9.5px] font-black px-2 py-0.5 rounded-full border ${row.status === 'VALID'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : row.status === 'WARNING_NO_NV'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : row.status === 'UPDATE_EXISTING'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : 'bg-red-50 text-red-700 border-red-200'
-                              }`}>
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : row.status === 'UPDATE_EXISTING'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : 'bg-red-50 text-red-700 border-red-200'
+                                }`}>
                                 {row.status === 'VALID'
                                   ? '🟢 Hợp lệ'
                                   : row.status === 'WARNING_NO_NV'
-                                  ? '🟡 Chưa khớp NV'
-                                  : row.status === 'UPDATE_EXISTING'
-                                  ? '🔄 Ghi đè SIM cũ'
-                                  : `🔴 ${row.errorMessage || 'Lỗi'}`}
+                                    ? '🟡 Chưa khớp NV'
+                                    : row.status === 'UPDATE_EXISTING'
+                                      ? '🔄 Ghi đè SIM cũ'
+                                      : `🔴 ${row.errorMessage || 'Lỗi'}`}
                               </span>
                             </td>
                           </tr>
@@ -3279,7 +3273,7 @@ export default function CuocDiDongTab({
                 }
                 className="px-8 py-2.5 text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all text-xs"
               >
-                {batchSimModal.isSubmitting ? <Loader2 className="animate-spin w-4 h-4" /> : <Save size={16}/>}
+                {batchSimModal.isSubmitting ? <Loader2 className="animate-spin w-4 h-4" /> : <Save size={16} />}
                 Xác Nhận Lưu ({batchSimModal.previewRows.filter(r => r.status !== 'ERROR_DUPLICATE' && r.status !== 'INVALID').length} Thuê Bao)
               </button>
             </div>

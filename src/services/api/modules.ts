@@ -37,6 +37,11 @@ export const getUsers = () => getWithFallback<User>('config_users');
 export const getLogs = () => getWithFallback<SysLog>('sys_logs');
 export const getThueBao   = () => getWithFallback<ThueBao>('dm_thue_bao');
 export const getCuocThang = () => getWithFallback<CuocThang>('cp_cuoc_thang');
+export const getKhoaHuanLuyen = () => getWithFallback<any>('hs_khoa_huan_luyen');
+export const getHocVienKhoaHuanLuyen = () => getWithFallback<any>('hs_hoc_vien_khoa_huan_luyen');
+export const getChuKyATVSLD = () => getWithFallback<any>('dm_chu_ky_atvsld');
+export const getThietBiNghiemNgat = () => getWithFallback<any>('ts_thiet_bi_nghiem_ngat');
+export const getKiemDinhTBNN = () => getWithFallback<any>('nk_kiem_dinh_tbnn');
 
 // Helper làm sạch payload trước khi gửi lên Supabase (loại bỏ trường UI-only, rỗng "" -> null)
 function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false): Record<string, any> {

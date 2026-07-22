@@ -27,7 +27,7 @@ export const apiCache: Record<string, CacheEntry> = {};
 
 // Khi bảng A thay đổi -> tự động xóa cache các bảng liên quan
 export const CACHE_DEPENDENCIES: Record<string, string[]> = {
-  'ns_dich_vu':      ['dm_don_vi'],        // Thêm/sửa nhân sự -> làm mới đơn vị
+  'ns_dich_vu':      ['dm_don_vi', 'hs_hoc_vien_khoa_huan_luyen'],        // Thêm/sửa nhân sự -> làm mới đơn vị
   'dm_don_vi':       ['ns_dich_vu'],       // Sửa đơn vị -> làm mới nhân sự
   'ts_xe':           ['cp_hoat_dong_xe'],  // Sửa xe -> làm mới chi phí xe
   'cp_hoat_dong_xe': ['ts_xe'],            // Sửa chi phí -> làm mới xe
@@ -35,6 +35,10 @@ export const CACHE_DEPENDENCIES: Record<string, string[]> = {
   'nk_thiet_bi':     ['ts_thiet_bi'],      // Sửa nhật ký -> làm mới thiết bị
   'hs_pccc':         ['ts_pccc'],          // Sửa hồ sơ PCCC -> làm mới tài sản PCCC
   'ts_pccc':         ['hs_pccc'],          // Sửa tài sản PCCC -> làm mới hồ sơ
+  'hs_khoa_huan_luyen':            ['hs_hoc_vien_khoa_huan_luyen', 'hs_an_toan_lao_dong'],
+  'hs_hoc_vien_khoa_huan_luyen':   ['hs_khoa_huan_luyen', 'ns_dich_vu', 'hs_an_toan_lao_dong'],
+  'ts_thiet_bi_nghiem_ngat':       ['nk_kiem_dinh_tbnn', 'hs_an_toan_lao_dong'],
+  'nk_kiem_dinh_tbnn':             ['ts_thiet_bi_nghiem_ngat', 'hs_an_toan_lao_dong'],
 };
 
 // Helper đọc bộ đệm Layer 2 từ LocalStorage

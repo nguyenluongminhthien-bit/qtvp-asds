@@ -64,6 +64,11 @@ export interface Personnel {
   mo_ta_ngoai_hinh: string;
   ghi_chu: string;
   cc_atvsld: boolean;
+  nhom_doi_tuong?: string;
+  huan_luyen_tu?: string;
+  huan_luyen_den?: string;
+  gia_tri_den?: string;
+  chung_nhan?: string;
   cc_anbv: boolean;
   cc_pccc: boolean;
   cc_cnch: boolean;
@@ -270,15 +275,10 @@ export interface ATVSLD {
   nguoi_phu_trach: string;
   so_luong_mang_luoi: string | number;
   link_ho_so_quy_dinh: string;
-  khoa_huan_luyen_tu: string;
-  khoa_huan_luyen_den: string;
   can_cu_quyet_dinh: string;
-  thong_ke_hl: any
   ty_le_hoan_thanh_hl: string;
   ngay_ksk: string;
   ngay_kham_bnn: string;
-  so_luong_thiet_bi_nghiem_ngat: string | number;
-  so_luong_thiet_bi_qua_han_kt: string | number;
   ngay_quan_trac_mt: string;
   ty_le_cap_bhld: string;
   ngay_tu_kiem_tra: string;
@@ -403,8 +403,96 @@ export interface CuocThang {
   so_phut_goi: number;
   dung_luong_data: number;
   dinh_muc_snap: number;    // Snapshot định mức tại thời điểm nhập
+  cuoc_goc?: number;        // Cước trước KM/Thuế
+  khuyen_mai?: number;      // Khuyến mãi
+  thue?: number;            // Thuế
+  dieu_chinh?: number;      // Điều chỉnh cước
+  no_cu?: number;           // Nợ kỳ trước
+  cuoc_su_dung?: number;    // Cước sử dụng thực tế
   trang_thai: string;
   ghi_chu: string;
   nguoi_nhap: string;
+  [key: string]: any;
+}
+
+export interface ChuKyATVSLD {
+  id: string;
+  nhom: string;
+  so_thang_hieu_luc: number;
+  ghi_chu?: string;
+  [key: string]: any;
+}
+
+export interface KhoaHuanLuyen {
+  id: string;
+  id_don_vi?: string;
+  ten_khoa_hoc: string;
+  don_vi_dao_tao?: string;
+  ngay_bat_dau?: string;
+  ngay_ket_thuc?: string;
+  dia_diem?: string;
+  si_so_du_kien?: number;
+  si_so_thuc_te?: number;
+  trang_thai?: string;
+  link_ho_so?: string;
+  ghi_chu?: string;
+  [key: string]: any;
+}
+
+export interface HocVienKhoaHuanLuyen {
+  id: string;
+  id_khoa_hoc: string;
+  stt?: number;
+  msnv: string;
+  ho_ten?: string;
+  ngay_sinh?: string;
+  gioi_tinh?: string;
+  so_cccd?: string;
+  quoc_tich?: string;
+  chuc_vu?: string;
+  don_vi_text?: string;
+  id_don_vi?: string;
+  nhom?: string;
+  noi_dung_huan_luyen?: string;
+  thoi_gian_text?: string;
+  diem_ly_thuyet?: number;
+  diem_thuc_hanh?: number;
+  ket_qua?: string;
+  ghi_chu?: string;
+  da_dong_bo_nhan_su?: boolean;
+  [key: string]: any;
+}
+
+export interface ThietBiNghiemNgat {
+  id: string;
+  id_don_vi: string;
+  don_vi_text?: string;
+  so_serial?: string;
+  ten_thiet_bi: string;
+  ma_thiet_bi?: string;
+  ma_che_tao?: string;
+  thong_so_ky_thuat?: string;
+  dia_diem_lap_dat?: string;
+  tinh_trang: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+export interface KiemDinhTBNN {
+  id: string;
+  id_thiet_bi: string;
+  ngay_kiem_dinh: string;
+  hl_kiem_dinh?: string;
+  han_kiem_dinh: string;
+  nguoi_ky?: string;
+  gia_thanh?: number;
+  loai_kiem_dinh?: string;
+  bien_ban_kiem_dinh?: string;
+  cap_ly_lich?: string;
+  nguoi_ho_tro?: string;
+  tinh_trang_ho_so_luu_tru?: string;
+  ghi_chu?: string;
+  created_at?: string;
   [key: string]: any;
 }

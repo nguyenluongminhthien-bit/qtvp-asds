@@ -22,7 +22,12 @@ import {
   save,
   deleteRecord,
   getThueBao,
-  getCuocThang
+  getCuocThang,
+  getKhoaHuanLuyen,
+  getHocVienKhoaHuanLuyen,
+  getChuKyATVSLD,
+  getThietBiNghiemNgat,
+  getKiemDinhTBNN
 } from './modules';
 
 export const apiService = {
@@ -50,5 +55,10 @@ export const apiService = {
   save,
   delete: deleteRecord,
   getThueBao,
-  getCuocThang
+  getCuocThang,
+  getKhoaHuanLuyen,
+  getHocVienKhoaHuanLuyen,
+  getChuKyATVSLD,
+  getThietBiNghiemNgat,
+  getKiemDinhTBNN
 };
