@@ -71,7 +71,7 @@ src/
 | Nhân sự (`personnel`) | `PersonnelPage.tsx` (2868 dòng) | `PersonnelModal`, component `SegmentTabs.tsx`; module con **Cước ĐTDĐ**: `CuocDiDongTab.tsx` (3366 dòng — **file lớn nhất toàn repo**), `ThueBaoCuocHistorySection`, `BatchCostEntryModal`, `PersonnelDetailCuocChart`, `ThueBaoDetailCuocChart` | `ns_dich_vu` (hồ sơ NS); Cước ĐTDĐ dùng `dm_thue_bao` + `cp_cuoc_thang` | ✅ |
 | An toàn PCCC (`firesafety`) | `FireSafetyPage.tsx` (1465 dòng) | `PcccContactPasteModal`, `pcccContactParser.ts`, dùng chung `PcccModal` (ở `components/department/`) | `hs_pccc` (bổ sung `ten_giam_doc`, `sdt_giam_doc`, `ten_ptkd_dvpt`, `sdt_ptkd_dvpt`, `ten_ptkd_xe`, `sdt_ptkd_xe`), `ts_pccc` | ✅ |
 | ATVSLĐ (`atvsld`) | `AtvsldPage.tsx` (676 dòng) — có 5 tab cấp 1: `hoso`, `daotao` (2 tab con `kehoach`/`khoahoc`), `thietbi`, `khamsuckhoe` | `HoSoTab.tsx`, `KeHoachTab.tsx`, `KhoaHocTab.tsx` (1742 dòng), `StrictEquipmentTab.tsx` (996 dòng), `SucKhoeTab.tsx` (705 dòng), modal `AtvsldModal`, component `SegmentTabs.tsx` | `hs_an_toan_lao_dong` (hồ sơ), `hs_khoa_huan_luyen`+`hs_hoc_vien_khoa_huan_luyen` (khóa học), `ts_thiet_bi_nghiem_ngat`+`nk_kiem_dinh_tbnn` (thiết bị nghiêm ngặt), `hs_kham_suc_khoe`+`hs_kham_suc_khoe_campaign` (khám sức khỏe) | ✅ |
-| Phương tiện (`vehicles`) | `VehiclePage.tsx` (1380 dòng) | `SegmentTabs.tsx` | `ts_xe`, `cp_hoat_dong_xe`, `nk_su_dung_xe` | ✅ |
+| Phương tiện (`vehicles`) | `VehiclePage.tsx` (1520 dòng) | `SegmentTabs.tsx`, tích hợp Google Drive (`googleDrive.ts`, `searchVehicleDriveFile` theo Số khung) | `ts_xe` (bổ sung cột `ho_so_xe`), `cp_hoat_dong_xe`, `nk_su_dung_xe` | ✅ |
 | Tài sản-Thiết bị (`equipments`) | `EquipmentPage.tsx` (3205 dòng) | `PasteImportModal`, `CustomAutocomplete`, `SegmentTabs.tsx` | `ts_thiet_bi`, `nk_thiet_bi`, `dm_phap_nhan` (lọc theo `id_don_vi`) | ✅ |
 | Nhà cung cấp (`suppliers`) | `SupplierPage.tsx` (khoảng 600 dòng) | modal xem chi tiết, modal thêm/sửa | `dm_ncc` | ✅ |
 | Tài liệu (`documents`) | `DocumentPage.tsx` (1674 dòng) | Các component con hiển thị bảng theo tab nằm trong `src/components/document/` (`AllDocTable.tsx`, `ThongBaoTable.tsx`, `QuyetDinhTable.tsx`, `CongVanDenTable.tsx`, `CongVanDiTable.tsx`, `ToTrinhTable.tsx`), file helper `documentHelpers.ts`, component `SegmentTabs.tsx`, tích hợp Google Drive (`googleDrive.ts`, `searchGoogleDriveFile`). | `vb_tb` | ✅ |
@@ -176,6 +176,20 @@ src/
   > ADD COLUMN IF NOT EXISTS sdt_ptkd_xe TEXT;
   > ```
 
+- [x] **Trường Hồ sơ xe & Tự động quét tìm Drive (File / Folder) theo Số khung (`VehiclePage.tsx`, `googleDrive.ts`, `ts_xe`)**:
+  - Bổ sung trường `ho_so_xe` trong bảng `ts_xe` và `TS_Xe` interface để lưu link xem hồ sơ xe trên Google Drive.
+  - Tích hợp tính năng **"Tự động tìm file trên Drive"** tại modal Thêm/Sửa xe: Quét thư mục Google Drive `Hồ sơ Xe` (Folder ID: `1UZ5ZUTPrOZ4-ClAbxCgTQ8pbn8d6CzSa`) bằng Google Drive API v3 (quét cả file trực tiếp lẫn thư mục con cấp 1).
+  - **Quy tắc so khớp nghiêm ngặt theo SỐ KHUNG (VIN)**: Hỗ trợ nhận diện cả **Tệp tin (File)** (PDF, RAR, ZIP, DOC...) lẫn **Thư mục (Folder)** mang tên Số khung xe. So khớp normalized Số khung (loại bỏ phần mở rộng, ký tự phân cách, dấu chấm, gạch ngang, khoảng trắng, không phân biệt hoa thường). Tuyệt đối không quét theo biển số xe.
+  - Vị trí trường nhập: Đặt ngay dưới các trường Định vị GPS và Hiện trạng, phía trên phần Ghi chú khác trong modal Thêm/Cập nhật xe.
+  - Hiển thị trực quan: Icon `FileText` cạnh biển số xe trên Bảng danh sách desktop và Thẻ mobile kèm tooltip `"Xem hồ sơ xe"`, mở trực tiếp file hoặc thư mục Drive trong tab mới. Modal xem chi tiết xe bổ sung ô "Hồ sơ xe" và nút `[ Xem hồ sơ ↗ ]`. Hỗ trợ cả dán Excel hàng loạt với cột "Hồ sơ xe".
+
+  > 📌 **Script DDL Supabase Database:**
+  > ```sql
+  > ALTER TABLE ts_xe 
+  > ADD COLUMN IF NOT EXISTS ho_so_xe TEXT;
+  > ```
+
+
 
 - [ ] Bảng `dm_chu_ky_atvsld` có hàm `getChuKyATVSLD()` trong `modules.ts` nhưng KHÔNG tìm thấy nơi nào trong `components/`/`pages/` gọi hàm này hoặc dùng chuỗi `'dm_chu_ky_atvsld'` trực tiếp — khả năng là bảng chưa được nối vào UI, hoặc đã lệch tên biến. Cần kiểm tra lại thủ công trước khi phát triển thêm module ATVSLĐ.
 - [ ] `AtvsldPage.tsx` đã refactor tab (`HoSoTab`, `KeHoachTab`, `KhoaHocTab`, `StrictEquipmentTab`) nhưng bản thân `AtvsldPage.tsx` vẫn còn 663 dòng logic dùng chung (state, modal, hàm `getRegionName`) — có thể tách tiếp nếu muốn gọn hơn.
@@ -184,9 +198,73 @@ src/
 
 ---
 
-## 8. PROMPT MẪU KHI LÀM VIỆC VỚI AI
+## 8. QUY CHUẨN THIẾT KẾ GIAO DIỆN (UI/UX DESIGN SYSTEM SPECIFICATIONS)
+
+Quy chuẩn này là **nguyên tắc bắt buộc** cho toàn bộ 13 phân hệ của ứng dụng QTVP-ASDS nhằm đảm bảo tính đồng nhất về thẩm mỹ, kích thước chuẩn xác và trải nghiệm người dùng cao cấp.
+
+### 8.1. Giao diện Tabs Phân cấp Liền khối (Nested Connected Tabs - NCT) & Hiệu ứng Trượt FlyonUI
+Áp dụng cho các trang có phân cấp tab con (VD: Quản lý Xe: *Danh sách xe* $\rightarrow$ *Hiện hữu | Thanh lý*; Quản lý ATVSLĐ: *Hồ sơ Báo cáo cơ sở* $\rightarrow$ *Định kỳ | Đột xuất*).
+
+1. **Hình học & Cấu trúc bao bọc (Single Container Geometry)**:
+   - Tab cha và hàng sub-tab con **BẮT BUỘC** phải nằm chung trong **cùng 1 container bảo vệ duy nhất** (`gap: 0`).
+   - Tuyệt đối **KHÔNG ĐƯỢC** tách rời thành 2 khối container độc lập với khoảng hở ngăn cách ở giữa.
+   - **Khối chuyển tiếp liền mạch (Seamless Connection)**: Khi tab cha được kích hoạt (`active`), phần chân tab nối liền không có viền ngăn cách với dải tab con bên dưới (`rounded-t-xl rounded-b-none pb-2.5 sm:pb-3`), màu nền tab cha active tiệp hoàn toàn với màu dải sub-tab con.
+   - Container bao ngoài sử dụng nền `bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80`.
+2. **Hiệu ứng Viên thuốc Trượt FlyonUI (FlyonUI Sliding Pill Effect)**:
+   - Sử dụng thư viện `motion.div` (`motion/react` / Framer Motion).
+   - Khai báo thuộc tính `layoutId` duy nhất cho mỗi cấp tab (VD: `layoutId="vehicleSubTab"`, `layoutId="atvsldSubTab"`).
+   - Thông số chuyển động: `transition={{ type: "spring", stiffness: 400, damping: 30 }}` giúp viên thuốc nền trượt êm ái, co giãn tự nhiên khi chuyển tab.
+3. **Hiển thị Huy hiệu Số lượng (Count Badges)**:
+   - Toàn bộ tab cha và tab con phải hiển thị kèm số lượng bản ghi tương ứng trong ngoặc:
+     * *Tab cha*: `Danh sách xe (2) | Lịch trình & Nhật ký | Thống kê`
+     * *Sub-tab*: `Hiện hữu (2) | Thanh lý (0)`
+   - Badge bo tròn nhỏ (`text-xs font-semibold px-1.5 py-0.5 rounded-full`), tự động đổi màu tương phản phù hợp theo trạng thái active/inactive.
+
+---
+
+### 8.2. Kích thước & Quy cách Thanh Công Cụ (Header Toolbar Specifications)
+
+| Thành phần | Kích thước Pixels | Kích thước Inches | Màu sắc & Kiểu dáng | Trạng thái Tương tác & Phân lớp Z-Index |
+| :--- | :---: | :---: | :--- | :--- |
+| **Ô tìm kiếm (Search Input)** | **256 x 32 px** | `2.766 x 0.3458 in` | • Nền vàng nhạt chống lóa: `#FFFFF0`<br>• Viền xám: `border-gray-200`<br>• Bo góc: `rounded-lg` | • **Focus**: Viền & Ring xanh thương hiệu `#05469B`<br>• Icon kính lúp 14px căn giữa dọc bên trái<br>• Phông chữ `text-xs` (12-13px) |
+| **Nút Tính năng (Features Button)** | **119 x 32 px** | `1.286 x 0.3458 in` | • Mặc định: Nền trắng `bg-white`, chữ `text-gray-800`, viền `border-gray-200`<br>• Bo góc: `rounded-lg` | • **Active / Mở Menu**: Đổi sang màu đặc trưng mô-đun, chữ trắng.<br>• **Z-Index**: Nút `z-50`, backdrop `z-[90]`, dropdown menu **`z-[100]`** nổi tuyệt đối trên `sticky thead` (`z-10`). |
+| **Nút Đồng bộ Dữ liệu (Sync Button)** | **24 x 24 px** | `0.2594 x 0.2594 in` | • Nền trắng `bg-white`<br>• Viền mỏng `border-gray-200`<br>• Bo góc `rounded-md` | • Icon `RotateCcw` 13px.<br>• **Đang tải / Bấm**: Quay vòng `animate-spin` với màu đặc trưng của mô-đun. |
+| **Nút Ban hành** *(VTLT & Quy định)* | **Cao 27 px** | Chiều cao chuẩn `27px` | • Bo góc `rounded-lg`, `px-3 text-xs`<br>• Màu xanh thương hiệu `#05469B` | • **Bố cục**: Cùng 1 dòng duy nhất (`flex-nowrap`, không ngắt dòng) với Ô tìm kiếm, Nút đồng bộ và Bộ lọc. |
+
+---
+
+### 8.3. Bảng Màu Đặc Trưng Theo Phân Hệ (Module Characteristic Colors)
+
+| Phân hệ Nghiệp vụ | Mã màu Hex / Tailwind | Tông màu hiển thị (Active Gradient) |
+| :--- | :--- | :--- |
+| 👥 **Thông tin Nhân sự** | `#05469B` | `bg-gradient-to-r from-[#05469B] to-[#0a5bc4]` (Xanh dương) |
+| 🚗 **Quản lý Xe Demo / Mobile Service** | `#05469B` | `bg-gradient-to-r from-[#05469B] to-[#0a5bc4]` (Xanh dương) |
+| 💻 **Quản lý Thiết bị VP (TTB VP)** | `#05469B` | `bg-gradient-to-r from-[#05469B] to-[#0a5bc4]` (Xanh dương) |
+| 🤝 **Quản lý Nhà cung cấp (NCC)** | `#05469B` | `bg-gradient-to-r from-[#05469B] to-[#0a5bc4]` (Xanh dương) |
+| 📄 **Quản lý VTLT & Thông báo** | `#05469B` | `bg-gradient-to-r from-[#05469B] to-[#0a5bc4]` (Xanh dương) |
+| 📜 **Quản lý Quy định & Quy trình** | `#05469B` | `bg-gradient-to-r from-[#05469B] to-[#0a5bc4]` (Xanh dương) |
+| 🧯 **Quản lý Hồ sơ PCCC & CNCH** | `#dc2626` | `bg-gradient-to-r from-red-600 to-rose-700` (Đỏ cảnh báo) |
+| 🛡️ **Quản lý ATVSLĐ & TBNN** | `#16a34a` | `bg-gradient-to-r from-emerald-600 to-teal-700` (Xanh an toàn) |
+
+---
+
+### 8.4. Ma Trận Thao Tác Trong Menu Dropdown "Tính Năng"
+- **👥 Thông tin Nhân sự**: `Thêm từng nhân sự` | `Thêm hàng loạt` | `Xuất báo cáo`.
+- **🚗 Quản lý Xe**:
+  - `Lọc nâng cao`: Mở rộng / thu gọn thanh slicer bộ lọc chi tiết (*Tất cả Hãng | Tất cả Loại xe | Tất cả Mục đích | Tất cả Tình trạng*).
+  - `Thêm từng xe`: Mở modal thêm xe mới đơn lẻ.
+  - `Thêm hàng loạt`: Mở modal dán dữ liệu Excel nhiều xe cùng lúc.
+- **🧯 Hồ sơ PCCC**: `Thêm mới Hồ sơ PCCC` (màu đặc trưng đỏ `#dc2626`).
+- **🛡️ Quản lý ATVSLĐ**: `Thêm Báo cáo cơ sở` (màu đặc trưng xanh lá `#16a34a`).
+- **💻 Trang thiết bị VP**: `Quét QR` | `Thêm từng thiết bị` | `Thêm hàng loạt` (màu đặc trưng xanh dương `#05469B`).
+- **🤝 Nhà cung cấp**: `Thêm Đối tác` (màu đặc trưng xanh dương `#05469B`).
+
+---
+
+## 9. PROMPT MẪU KHI LÀM VIỆC VỚI AI
 
 1. Dán `ARCHITECTURE.md` kèm: *"Đây là bản đồ kiến trúc hệ thống, đọc kỹ trước khi làm."*
 2. Tra bảng mục 3 theo tên menu để biết đúng Page/Component/Bảng dữ liệu cần đụng vào.
 3. Gửi kèm các file `.tsx` liên quan.
-4. Sau khi AI hoàn thành, yêu cầu: *"Đề xuất nội dung cần cập nhật vào bảng mục 3 và mục 7 (nợ kỹ thuật)."*
+4. Sau khi AI hoàn thành, yêu cầu: *"Đề xuất nội dung cần cập nhật vào bảng mục 3, mục 7 (nợ kỹ thuật) và mục 8 (quy chuẩn UI/UX)."*
+

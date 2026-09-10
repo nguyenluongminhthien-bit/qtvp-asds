@@ -148,8 +148,15 @@ QTVP-ASDS App
   - *Custom Confirm Modal Xóa:* Thay thế dialog confirm native của trình duyệt bằng Custom Confirm Modal giao diện mờ backdrop blur sang trọng.
 
 #### 🚗 06. Phân hệ Quản lý Xe & Chi phí Vận hành (VehiclePage.tsx)
-- **Master Tài sản Xe (TS_Xe)**: Quản lý biển số, loại phương tiện, hiệu xe, số khung, số máy, năm sản xuất, hình thức sở hữu, GPS, hiện trạng.
+- **Master Tài sản Xe (TS_Xe)**: Quản lý biển số, loại phương tiện, hiệu xe, số khung, số máy, năm sản xuất, hình thức sở hữu, GPS, hiện trạng, đường link xem hồ sơ xe (`ho_so_xe`).
+- **Tích hợp Hồ sơ xe & Tự động quét Google Drive theo Số khung**:
+  - Tích hợp trường **"Hồ sơ xe"** kèm nút **"Tự động tìm file trên Drive"** tại modal Thêm mới & Cập nhật thông tin xe (nằm ngay dưới cụm Định vị GPS / Hiện trạng và phía trên Ghi chú khác).
+  - Kết nối trực tiếp với Google Drive API v3 quét thư mục `Hồ sơ Xe` (ID: `1UZ5ZUTPrOZ4-ClAbxCgTQ8pbn8d6CzSa`).
+  - **Quy tắc so khớp nghiêm ngặt theo Số khung (VIN)**: Hệ thống chuẩn hóa số khung (loại bỏ ký tự phân cách, khoảng trắng, dấu chấm, dấu gạch ngang, phần mở rộng file) và tìm kiếm cả **Tệp tin (File)** lẫn **Thư mục (Folder)** mang tên Số khung xe trong thư mục gốc và thư mục con cấp 1 (tuyệt đối không quét theo biển số xe).
+  - Tích hợp biểu tượng xem nhanh (`FileText`) cạnh biển số xe trên Bảng danh sách desktop và Thẻ mobile với tooltip `"Xem hồ sơ xe"`, mở trực tiếp file hoặc thư mục trên Google Drive trong tab mới.
+  - Hỗ trợ xem hồ sơ trong Modal Xem chi tiết và hỗ trợ dán Excel hàng loạt với cột "Hồ sơ xe".
 - **Nhật ký Chi phí Vận hành (CP_HoatDongXe)**: Theo dõi số km, số lít nhiên liệu, chi phí nhiên liệu, cầu đường bến bãi, rửa xe, bảo dưỡng sửa chữa, khấu hao theo từng tháng/năm.
+
 
 #### 💻 07. Phân hệ Quản lý Trang thiết bị & QR Code (EquipmentPage.tsx)
 - **Master Thiết bị CNTT & Văn phòng**: Quản lý mã tài sản, tên thiết bị, nhóm, thông số kỹ thuật (CPU, RAM, SSD, VGA, màn hình...), hạn bảo hành, nhà cung cấp.
@@ -178,6 +185,9 @@ QTVP-ASDS App
 - **Auto-fill Người lấy số**: Nhập mã nhân viên tự động điền Họ tên và Bộ phận lấy số.
 - **Hỗ trợ Đa nghiệp vụ**: Cho phép nhập nhiều phân loại nghiệp vụ ngăn cách bởi dấu `;`. Giao diện bảng danh sách tài liệu (`AllDocTable.tsx`, `ThongBaoTable.tsx`, `QuyetDinhTable.tsx`, `CongVanDiTable.tsx`, `ToTrinhTable.tsx`) tự động tách chuỗi theo dấu `;` để hiển thị thành các tag nghiệp vụ độc lập, gọn gàng.
 - **Autocomplete Nhiều giá trị**: Ô nhập liệu Nghiệp vụ tự động gợi ý thông minh dựa trên phần văn bản sau dấu `;` cuối cùng và điền tiếp nối một cách chuẩn xác mà không đè lên giá trị đã nhập trước đó.
+- **Cấp số hiệu tự động (Auto-numbering)**: Tích hợp checkbox "Số tự động" cạnh ô Số hiệu giúp tự động tính toán số hiệu tiếp theo dạng `[số]/[năm]/[loại]-[đơn vị]` dựa trên phân loại, đơn vị ban hành, năm hiện hành và viết tắt chức danh người ký.
+- **Cấu trúc Component hóa (Modular architecture)**: Tách mã nguồn hiển thị bảng dữ liệu của từng loại văn bản thành các file `.tsx` riêng biệt (`AllDocTable`, `ThongBaoTable`, `QuyetDinhTable`, `CongVanDenTable`, `CongVanDiTable`, `ToTrinhTable`) giúp dễ bảo trì và tối ưu cột hiển thị riêng cho mỗi loại.
+- **Copy nhanh Thông tin phản hồi**: Hỗ trợ nút sao chép thông tin phản hồi định dạng chuẩn bên cạnh mục Ban hành trong bảng Chi tiết Văn bản để phản hồi ngay cho người xin cấp số (bao gồm Số hiệu, Nội dung, Ngày ban hành, Người phê duyệt, Nhân sự & Bộ phận trình).
 
 #### 📜 10. Phân hệ Quản lý Quy định & Quy trình (PolicyPage.tsx)
 - Lưu trữ, phân loại và tra cứu các quy định hành chính, quy trình làm việc chuẩn áp dụng trong toàn hệ thống.
@@ -236,7 +246,63 @@ Trong `src/pages/PersonnelPage.tsx`:
 
 ---
 
-## 4. GIẢI THÍCH CẤU TRÚC FILE DỰ ÁN (HÌNH 1 VS HÌNH 2)
+## 4. QUY CHUẨN THIẾT KẾ GIAO DIỆN & TRẢI NGHIỆM NGƯỜI DÙNG (UI/UX DESIGN SYSTEM)
+
+Hệ thống QTVP-ASDS áp dụng bộ quy chuẩn thiết kế giao diện đồng bộ, chuẩn xác đến từng pixel và inch nhằm mang lại trải nghiệm nhất quán, hiện đại và cao cấp trên tất cả 13 phân hệ.
+
+### 4.1. Giao diện Tabs Phân cấp Liền khối (Nested Connected Tabs - NCT) & Hiệu ứng Trượt FlyonUI
+- **Kết cấu Liền khối Không Khoảng Hở (Single Container Geometry)**:
+  - Khi phân hệ có tab con cấp 2 (ví dụ: *Quản lý Xe*: Tab cha "Danh sách xe" $\rightarrow$ Sub-tab con "Hiện hữu (2) | Thanh lý (0)"; hoặc *ATVSLĐ*: Tab cha "Hồ sơ Báo cáo cơ sở" $\rightarrow$ Sub-tab con "Định kỳ | Đột xuất"), tab cha và dải sub-tab con **BẮT BUỘC nằm chung trong 1 container duy nhất** (`gap: 0`).
+  - Tuyệt đối không tách rời thành 2 container độc lập có khoảng hở (gap) hay bo góc rời rạc như 2 viên pill xếp chồng.
+  - Mép đáy của tab cha đang active tiếp giáp liền mạch, không có viền phân cách với hàng sub-tab bên dưới (`rounded-t-xl rounded-b-none pb-2.5 sm:pb-3`), màu nền đồng nhất tạo cảm giác một khối liên hoàn.
+- **Hiệu ứng Trượt FlyonUI (Sliding Pill Effect)**:
+  - Sử dụng `motion.div` từ `motion/react` (Framer Motion) với thuộc tính `layoutId` riêng biệt theo cấp (VD: `layoutId="vehicleSubTab"`, `layoutId="atvsldSubTab"`).
+  - Cấu hình chuyển động `transition={{ type: "spring", stiffness: 400, damping: 30 }}` giúp khối màu nền trượt mượt mà, đàn hồi tự nhiên giữa các tab khi người dùng chuyển đổi.
+- **Hiển thị Số lượng (Count Badges)**:
+  - Tất cả các tab cha và sub-tab con đều tích hợp huy hiệu số lượng tự động cập nhật:
+    * *Tab cha*: `Danh sách xe (2) | Lịch trình & Nhật ký | Thống kê`
+    * *Sub-tab*: `Hiện hữu (2) | Thanh lý (0)`
+
+### 4.2. Quy cách Kích thước Chuẩn của Thanh Công Cụ (Header Toolbar Specifications)
+
+- **🔍 Ô tìm kiếm (Search Input)**:
+  - Kích thước chuẩn: **256 x 32 px** (`2.766 x 0.3458 in`), Tailwind: `w-[256px] h-[32px]`.
+  - Màu nền: Vàng ngà nhẹ chống lóa `#FFFFF0` (`bg-[#FFFFF0]`).
+  - Viền & Bo góc: Bo tròn `rounded-lg`, viền mỏng `border-gray-200`.
+  - Trạng thái Focus: Viền xanh dương thương hiệu `#05469B` (`focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B] outline-none`).
+  - Biểu tượng: Kính lúp (Search) 14px căn giữa dọc bên trái, text placeholder 12-13px (`text-xs`).
+
+- **✨ Nút Tính năng (Features Button)**:
+  - Kích thước chuẩn: **119 x 32 px** (`1.286 x 0.3458 in`), Tailwind: `w-[119px] h-[32px]`.
+  - Kiểu dáng: Bo tròn `rounded-lg`, mặc định nền trắng `bg-white text-gray-800 border-gray-200`.
+  - Trạng thái Kích hoạt / Mở Menu: Tự động đổi sang màu/gradient đặc trưng của từng phân hệ, chữ trắng, đổ bóng nổi bật.
+  - Phân tầng hiển thị (Z-Index): Nút cha `z-50`, backdrop che `z-[90]`, Dropdown menu xổ xuống có **`z-[100]`** và `shadow-2xl` để đảm bảo luôn nổi lên trên hàng tiêu đề bảng cố định (`sticky thead` có `z-10`).
+
+- **🔄 Nút Đồng bộ Dữ liệu (Sync Button)**:
+  - Kích thước chuẩn: **24 x 24 px** (`0.2594 x 0.2594 in`), Tailwind: `w-[24px] h-[24px] min-w-[24px]`.
+  - Kiểu dáng: Nền trắng `bg-white`, bo góc `rounded-md`, viền `border-gray-200`.
+  - Biểu tượng & Trạng thái: Icon `RotateCcw` 13px; khi click hoặc tải ngầm sẽ quay tròn liên tục (`animate-spin`) và hiển thị màu đặc trưng phân hệ.
+
+- **📤 Nút Ban hành (Quản lý VTLT & Quy định - Quy trình)**:
+  - Chiều cao chuẩn: **27 px** (`h-[27px] px-3`).
+  - Bố cục: Nằm trên **cùng 1 dòng duy nhất** (`flex-nowrap`, không ngắt dòng) cùng với: Ô tìm kiếm (256x32) | Nút đồng bộ (24x24) | Bộ lọc nâng cao / Bộ phận ban hành | Nút ban hành.
+
+### 4.3. Bảng Màu Đặc Trưng Theo Phân Hệ (Module Characteristic Colors)
+- **Xanh dương `#05469B`** (`from-[#05469B] to-[#0a5bc4]`): Thông tin Nhân sự, Quản lý Xe Demo/Mobile Service, Quản lý Nhà cung cấp, Quản lý Trang thiết bị VP, Quản lý Văn bản - Tài liệu lưu trữ (VTLT), Quản lý Quy định - Quy trình.
+- **Đỏ `#dc2626`** (`from-red-600 to-rose-700`): Quản lý Hồ sơ PCCC & CNCH.
+- **Xanh lá `#16a34a`** (`from-emerald-600 to-teal-700`): Quản lý ATVSLĐ & Thiết bị Nghiêm ngặt.
+
+### 4.4. Ma Trận Tùy Chọn Nút "Tính Năng" Theo Phân Hệ
+- **Thông tin Nhân sự**: `Thêm từng nhân sự` | `Thêm hàng loạt` | `Xuất báo cáo`.
+- **Quản lý Xe**: `Lọc nâng cao` (ẩn/hiện thanh slicer Hãng, Loại xe, Mục đích, Tình trạng) | `Thêm từng xe` | `Thêm hàng loạt`.
+- **Hồ sơ PCCC**: `Thêm mới Hồ sơ PCCC`.
+- **ATVSLĐ**: `Thêm Báo cáo cơ sở`.
+- **Trang thiết bị VP**: `Quét QR` | `Thêm từng thiết bị` | `Thêm hàng loạt`.
+- **Nhà cung cấp**: `Thêm Đối tác`.
+
+---
+
+## 5. GIẢI THÍCH CẤU TRÚC FILE DỰ ÁN (HÌNH 1 VS HÌNH 2)
 
 Dưới đây là giải thích chi tiết lý do vì sao phiên bản gốc (Hình 1) chỉ có các file cơ bản, và phiên bản hiện tại (Hình 2) phát sinh thêm một số file ngoài thư mục root:
 
@@ -274,9 +340,9 @@ Dưới đây là giải thích chi tiết lý do vì sao phiên bản gốc (H�
 
 ---
 
-## 5. HƯỚNG DẪN CÀI ĐẶT & VẬN HÀNH (OPERATIONAL GUIDE)
+## 6. HƯỚNG DẪN CÀI ĐẶT & VẬN HÀNH (OPERATIONAL GUIDE)
 
-### 5.1. Chạy trên máy Cục bộ (Local Development)
+### 6.1. Chạy trên máy Cục bộ (Local Development)
 1. Cài đặt các thư viện phụ thuộc:
    ```bash
    npm install
@@ -287,7 +353,7 @@ Dưới đây là giải thích chi tiết lý do vì sao phiên bản gốc (H�
    ```
 3. Truy cập trình duyệt tại địa chỉ: [http://127.0.0.1:3000/](http://127.0.0.1:3000/) hoặc [http://localhost:3000/](http://localhost:3000/)
 
-### 5.2. Kiểm tra Cú pháp & Đóng gói Production
+### 6.2. Kiểm tra Cú pháp & Đóng gói Production
 1. Kiểm tra linter & kiểu dữ liệu TypeScript (Strict mode):
    ```bash
    npx tsc --noEmit
@@ -299,20 +365,20 @@ Dưới đây là giải thích chi tiết lý do vì sao phiên bản gốc (H�
 
 ---
 
-## 6. NGUYÊN TẮC PHÁT TRIỂN & BẢO TRÌ DÀNH CHO AI / DEVELOPERS
+## 7. NGUYÊN TẮC PHÁT TRIỂN & BẢO TRÌ DÀNH CHO AI / DEVELOPERS
 
 > ⚠️ **2 NGUYÊN TẮC LÀM VIỆC BẮT BUỘC KHI CẬP NHẬT CODE:**
 > 1. **Nguyên tắc 1 (Trình bày tóm tắt trước khi code)**: Trước bất kỳ lần sửa đổi mã nguồn nào, phải lập bản tóm tắt phương án triển khai rõ ràng, người dùng xem và bấm **Đồng ý** thì mới được phép ghi code.
 > 2. **Nguyên tắc 2 (Không tự ý bỏ / thay thế tính năng)**: Tuyệt đối không tự ý xóa bỏ hoặc thay thế bất kỳ tính năng, liên kết hay trường dữ liệu nào. Nếu bắt buộc phải thay đổi, phải giải thích lý do và có sự đồng ý của người dùng mới được triển khai.
 > 3. **Nguyên tắc 3 (Đồng bộ tài liệu bắt buộc)**: Sau khi hoàn thành bất kỳ thay đổi code nào (thêm/sửa/xóa tính năng, đổi bảng Supabase, thêm file mới...), AI PHẢI tự đề xuất nội dung cần cập nhật vào ĐÚNG 1 trong 2 file:
->    - Thay đổi thuộc về **nghiệp vụ/tính năng người dùng thấy được** (tab mới, quy tắc nhập liệu mới, cách vận hành...) → cập nhật `README.md` (mục 2 tương ứng phân hệ, hoặc mục 7 nếu là vấn đề kỹ thuật cần lưu ý).
->    - Thay đổi thuộc về **cấu trúc code** (file mới, đổi tên bảng Supabase, đổi luồng gọi API, nợ kỹ thuật mới phát sinh...) → cập nhật `ARCHITECTURE.md` mục 3 (bảng ánh xạ) hoặc mục 7 (nợ kỹ thuật).
+>    - Thay đổi thuộc về **nghiệp vụ/tính năng người dùng thấy được** (tab mới, quy tắc nhập liệu mới, cách vận hành...) → cập nhật `README.md` (mục 2 tương ứng phân hệ, hoặc mục 8 nếu là vấn đề kỹ thuật cần lưu ý).
+>    - Thay đổi thuộc về **cấu trúc code** (file mới, đổi tên bảng Supabase, đổi luồng gọi API, nợ kỹ thuật mới phát sinh...) → cập nhật `ARCHITECTURE.md` mục 3 (bảng ánh xạ), mục 7 (nợ kỹ thuật) hoặc mục 8 (quy chuẩn UI/UX).
 >    - Nếu thay đổi ảnh hưởng cả 2 khía cạnh, phải đề xuất cập nhật CẢ 2 file.
 >    - AI không tự ý sửa file tài liệu — chỉ đề xuất nội dung, chờ bạn duyệt rồi mới ghi.
 
 ---
 
-## 7. VẤN ĐỀ KỸ THUẬT ĐÃ XÁC MINH TRỰC TIẾP TRONG CODE (cập nhật mới nhất)
+## 8. VẤN ĐỀ KỸ THUẬT ĐÃ XÁC MINH TRỰC TIẾP TRONG CODE (cập nhật mới nhất)
 
 > Mục này được thêm sau khi quét toàn bộ 81 file `.ts/.tsx` thật trong `src/` (không suy đoán). Xem chi tiết bảng ánh xạ Tính năng ↔ File ↔ Bảng Supabase đầy đủ tại `ARCHITECTURE.md`.
 
@@ -324,9 +390,3 @@ Dưới đây là giải thích chi tiết lý do vì sao phiên bản gốc (H�
 - **`services/api/client.ts`** chứa `SUPABASE_ANON_KEY` hardcode trực tiếp trong source. Đây là anon key public (được bảo vệ bởi Row Level Security phía Supabase) nên không phải lỗi bảo mật nghiêm trọng, nhưng nên cân nhắc chuyển sang biến môi trường (`.env` + `import.meta.env` của Vite) để thuận tiện đổi giữa môi trường dev/production.
 - **2 file lớn nhất hệ thống** (ứng viên hàng đầu nếu cần tách nhỏ để dễ bảo trì): `components/personnel/CuocDiDongTab.tsx` (3.366 dòng) và `pages/PersonnelPage.tsx` (2.851 dòng).
 - **Lỗi trùng khớp kết quả OSH (ATVSLĐ) "Chưa đạt"**: Các hàm kiểm tra kết quả học viên đạt trong `KhoaHocTab.tsx`, `HoSoTab.tsx` và `AtvsldPage.tsx` ban đầu sử dụng phương thức `.includes('đạt')` / `.includes('dat')`, gây ra lỗi logic nhận nhầm trạng thái "Chưa đạt" thành "Đạt" (do có chứa từ khóa "đạt"). Đã được khắc phục hoàn toàn bằng cách so khớp chính xác (`=== 'đạt' || === 'dat'`) sau khi chuyển chữ thường, loại bỏ khoảng trắng và chuẩn hóa Unicode bằng `.normalize('NFC')` để chống lệch dấu tiếng Việt.
-
-#### 📄 09. Phân hệ Quản lý Văn bản & Thông báo (DocumentPage.tsx)
-- **Giao diện Tab dạng Segmented Control (SegmentTabs.tsx)**: Cơ chế chuyển đổi tab trên tất cả các trang chính (Nhân sự, Xe, Thiết bị, Văn bản, ATVSLĐ) đã được nâng cấp đồng bộ từ LineTabs cũ sang SegmentTabs. Sử dụng giao diện bo tròn dạng viên thuốc hiện đại, tích hợp hiệu ứng chuyển động trượt mượt mà bằng Framer Motion (`motion/react`), đồng thời hỗ trợ hiển thị số lượng badge và các biểu tượng đi kèm trực quan.
-- **Cấp số hiệu tự động (Auto-numbering)**: Tích hợp checkbox "Số tự động" cạnh ô Số hiệu giúp tự động tính toán số hiệu tiếp theo dạng `[số]/[năm]/[loại]-[đơn vị]` dựa trên phân loại, đơn vị ban hành, năm hiện hành và viết tắt chức danh người ký.
-- **Cấu trúc Component hóa (Modular architecture)**: Tách mã nguồn hiển thị bảng dữ liệu của từng loại văn bản thành các file `.tsx` riêng biệt (`AllDocTable`, `ThongBaoTable`, `QuyetDinhTable`, `CongVanDenTable`, `CongVanDiTable`, `ToTrinhTable`) giúp dễ bảo trì và tối ưu cột hiển thị riêng cho mỗi loại.
-- **Copy nhanh Thông tin phản hồi**: Hỗ trợ nút sao chép thông tin phản hồi định dạng chuẩn bên cạnh mục Ban hành trong bảng Chi tiết Văn bản để phản hồi ngay cho người xin cấp số (bao gồm Số hiệu, Nội dung, Ngày ban hành, Người phê duyệt, Nhân sự & Bộ phận trình).
