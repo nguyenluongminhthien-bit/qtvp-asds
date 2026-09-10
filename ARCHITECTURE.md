@@ -182,6 +182,7 @@ src/
   - **Quy tắc so khớp nghiêm ngặt theo SỐ KHUNG (VIN)**: Hỗ trợ nhận diện cả **Tệp tin (File)** (PDF, RAR, ZIP, DOC...) lẫn **Thư mục (Folder)** mang tên Số khung xe. So khớp normalized Số khung (loại bỏ phần mở rộng, ký tự phân cách, dấu chấm, gạch ngang, khoảng trắng, không phân biệt hoa thường). Tuyệt đối không quét theo biển số xe.
   - Vị trí trường nhập: Đặt ngay dưới các trường Định vị GPS và Hiện trạng, phía trên phần Ghi chú khác trong modal Thêm/Cập nhật xe.
   - Hiển thị trực quan: Icon `FileText` cạnh biển số xe trên Bảng danh sách desktop và Thẻ mobile kèm tooltip `"Xem hồ sơ xe"`, mở trực tiếp file hoặc thư mục Drive trong tab mới. Modal xem chi tiết xe bổ sung ô "Hồ sơ xe" và nút `[ Xem hồ sơ ↗ ]`. Hỗ trợ cả dán Excel hàng loạt với cột "Hồ sơ xe".
+  - **Lưu ý Phân quyền Thư mục Google Drive**: Thư mục Google Drive `Hồ sơ Xe` phải được bật quyền truy cập chung là **"Bất kỳ ai có đường liên kết"** ➔ **"Người xem"** (Viewer) để Google Drive REST API cho phép đọc dữ liệu qua API Key Client-side mà không bị chặn bởi lỗi 404 bảo mật của Google.
 
   > 📌 **Script DDL Supabase Database:**
   > ```sql
