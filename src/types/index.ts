@@ -183,9 +183,16 @@ export interface TS_Xe {
   loai_nhien_lieu: string;
   dung_tich: string;
   cong_thuc_banh: string;
+  tai_trong?: string | null;
+  kich_thuoc_xe?: { dai?: number | string; rong?: number | string; cao?: number | string } | string | null;
+  kich_thuoc_thung?: { dai?: number | string; rong?: number | string; cao?: number | string } | string | null;
   hinh_thuc_so_huu: string;
   gps: string;
   hien_trang: string;
+  ngay_thanh_ly?: string | null;
+  trang_thai?: string;
+  ho_so_xe?: string | null;
+  link_ho_so_xe?: string | null;
   ghi_chu: string;
   [key: string]: any;
 }

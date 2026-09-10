@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
   BookOpen, Link as LinkIcon, Calendar, Eye, Bookmark, Briefcase, Filter, Info, CheckCircle2,
-  PenTool, Hash, Layers, FileText, ExternalLink
+  PenTool, Hash, Layers, ExternalLink, RotateCcw
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { VB_TB } from '../types';
@@ -290,87 +290,7 @@ export default function PolicyPage() {
     toast.info(`Đây là tài liệu được đồng bộ từ mục "Văn bản - Thông báo".\n\nVui lòng sang mục Văn bản để ${action} tài liệu này!`);
   };
 
-  const exportToExcel = () => {
-    // Ghi nhận nhật ký xuất Excel
-    void apiService.writeLog('XUẤT EXCEL', 'Tải danh sách Quy định - Quy trình từ trang quản lý');
 
-    // Sắp xếp theo Nghiệp vụ (A-Z) và Ngày ban hành (mới đến cũ)
-    const sortedExportDocs = [...filteredDocs].sort((a, b) => {
-      const nvA = a.nghiep_vu || '';
-      const nvB = b.nghiep_vu || '';
-      const compNv = nvA.localeCompare(nvB, 'vi', { sensitivity: 'base' });
-      if (compNv !== 0) return compNv;
-
-      const dateA = a.ngay_ban_hanh ? new Date(a.ngay_ban_hanh).getTime() : 0;
-      const dateB = b.ngay_ban_hanh ? new Date(b.ngay_ban_hanh).getTime() : 0;
-      return dateB - dateA;
-    });
-
-    const rowsHTML = sortedExportDocs.map((item, idx) => {
-      const linkHTML = item.link_vb ? 'Link' : '';
-      
-      const formattedDate = item.ngay_ban_hanh 
-        ? new Date(item.ngay_ban_hanh).toLocaleDateString('vi-VN') 
-        : '';
-
-      return `
-        <tr>
-          <td style="text-align: center;">${idx + 1}</td>
-          <td style="mso-number-format:'\\@'; font-weight: bold;">${item.so_hieu || ''}</td>
-          <td>${item.tieu_de || ''}</td>
-          <td>${item.noi_dung || ''}</td>
-          <td>${item.nghiep_vu || ''}</td>
-          <td>${item.bo_phan_lay_so || ''}</td>
-          <td style="text-align: center;">${formattedDate}</td>
-          <td style="text-align: center; color: #05469B; text-decoration: underline;">${linkHTML}</td>
-        </tr>
-      `;
-    }).join('');
-
-    const excelTemplate = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          table { border-collapse: collapse; font-family: 'Times New Roman', serif; font-size: 12px; }
-          th { border: 1px solid #000000; padding: 8px; font-weight: bold; text-align: center; background-color: #05469B; color: #ffffff; }
-          td { border: 1px solid #000000; padding: 6px; vertical-align: middle; }
-          .title { font-size: 16px; font-weight: bold; color: #05469B; text-align: center; padding-bottom: 15px; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <tr><td colspan="8" class="title">DANH SÁCH QUY ĐỊNH & QUY TRÌNH</td></tr>
-          <thead>
-            <tr>
-              <th style="width: 50px;">STT</th>
-              <th style="width: 150px;">Số hiệu</th>
-              <th style="width: 250px;">Nội dung (tiêu đề)</th>
-              <th style="width: 350px;">Trích yếu</th>
-              <th style="width: 150px;">Nghiệp vụ</th>
-              <th style="width: 180px;">Bộ phận ban hành</th>
-              <th style="width: 120px;">Ngày ban hành</th>
-              <th style="width: 100px;">Đính kèm</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHTML}
-          </tbody>
-        </table>
-      </body>
-      </html>
-    `;
-
-    const blob = new Blob([excelTemplate], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Quy_Dinh_Quy_Trinh_${new Date().toISOString().slice(0, 10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
 
 
   if (loading) return <PageWithFilterSkeleton rows={8} />;
@@ -423,8 +343,8 @@ export default function PolicyPage() {
 
         {/* FIXED HEADER */}
         <div className="shrink-0 flex flex-col z-20">
-          <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10' : ''}`}>
-            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+          <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
+            <div className="flex items-center gap-2.5 w-full xl:w-auto">
               {isListCollapsed && (
                 <button
                   onClick={() => setIsListCollapsed(false)}
@@ -439,21 +359,43 @@ export default function PolicyPage() {
                 <p className="text-sm font-medium text-gray-500 mt-1">Lọc theo: <span className="text-emerald-600 font-bold">{selectedNghiepvu || 'Tất cả nghiệp vụ'}</span> ({filteredDocs.length} tài liệu)</p>
               </div>
             </div>
-            <div className="flex flex-wrap w-full sm:w-auto gap-3 items-center">
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input type="text" placeholder="Tìm số hiệu, tiêu đề, bộ phận..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+
+            <div className="flex flex-nowrap items-center justify-end gap-2 w-full xl:w-auto overflow-x-auto pb-1 xl:pb-0 relative z-30">
+              {/* 1. Ô tìm kiếm 256 x 32 px */}
+              <div className="relative w-[256px] h-[32px] shrink-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Tìm số hiệu, tiêu đề, bộ phận..."
+                  className="w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
 
-              {/* Bộ lọc Bộ phận lấy số (Multi-select Dropdown) */}
-              <div className="relative w-full sm:w-auto" ref={boPhanDropdownRef}>
+              {/* 2. Nút Đồng bộ dữ liệu (24 x 24 px) */}
+              <button
+                type="button"
+                onClick={() => {
+                  loadData();
+                  toast.success('Đang đồng bộ dữ liệu Quy định - Quy trình mới nhất từ Supabase...');
+                }}
+                title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
+                disabled={loading}
+                className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-[#05469B] rounded-md border border-gray-200 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
+              >
+                <RotateCcw size={13} className={loading ? 'animate-spin text-[#05469B]' : ''} />
+              </button>
+
+              {/* 3. Bộ lọc Bộ phận ban hành (Multi-select Dropdown) */}
+              <div className="relative shrink-0" ref={boPhanDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setIsBoPhanDropdownOpen(!isBoPhanDropdownOpen)}
-                  className={`w-full sm:w-auto flex items-center justify-between gap-2 bg-white border ${selectedBoPhans.length > 0 ? 'border-[#05469B] text-[#05469B] bg-blue-50/30' : 'border-gray-200 text-gray-700'} hover:bg-gray-50 px-4 py-2.5 rounded-lg text-sm font-medium shadow-sm transition-all`}
+                  className={`h-[32px] flex items-center justify-between gap-2 bg-white border ${selectedBoPhans.length > 0 ? 'border-[#05469B] text-[#05469B] bg-blue-50/30' : 'border-gray-200 text-gray-700'} hover:bg-gray-50 px-3 rounded-lg text-xs font-medium shadow-xs transition-all cursor-pointer whitespace-nowrap shrink-0`}
                 >
                   <div className="flex items-center gap-1.5 truncate">
-                    <Filter size={16} />
+                    <Filter size={14} />
                     <span className="truncate">
                       {selectedBoPhans.length === 0 
                         ? 'Bộ phận ban hành' 
@@ -509,11 +451,15 @@ export default function PolicyPage() {
                 )}
               </div>
 
-              <button onClick={exportToExcel} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap">
-                <FileText className="w-5 h-5" /> Xuất Excel
+              {/* 4. 🟢 Nút ban hành (độ cao 27 px) */}
+              <button
+                type="button"
+                onClick={() => openModal('create')}
+                className="h-[27px] px-3 flex items-center justify-center gap-1.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"
+              >
+                <Plus size={14} />
+                <span>Ban hành</span>
               </button>
-
-              <button onClick={() => openModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Ban hành mới</button>
             </div>
           </div>
 

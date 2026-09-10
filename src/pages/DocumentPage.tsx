@@ -5,7 +5,8 @@ import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
   FileText, Building2, MapPin, ChevronDown, ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen,
   Link as LinkIcon, Calendar, CheckCircle2, Bookmark, Eye, Lock, Zap, Clock, Send,
-  PenTool, Hash, Briefcase, Layers, ExternalLink, Filter, Copy, Megaphone, Inbox
+  PenTool, Hash, Briefcase, Layers, ExternalLink, Filter, Copy, Megaphone, Inbox,
+  RotateCcw
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { DonVi, VB_TB, Personnel } from '../types';
@@ -1220,8 +1221,8 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col w-full">
 
         {/* TOP BAR HIỂN THỊ RESPONSIVE */}
-        <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''} shrink-0`}>
-          <div className="w-full flex justify-between items-center">
+        <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 sm:mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''} shrink-0`}>
+          <div className="flex items-center justify-between w-full xl:w-auto">
             <div className="flex items-center gap-2.5">
               {isListCollapsed && (
                 <button
@@ -1245,36 +1246,51 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
             {/* 🟢 Nút mở bộ lọc nhanh trên Mobile */}
             <button
               onClick={() => setIsListCollapsed(false)}
-              className="md:hidden p-2.5 bg-blue-50 text-[#05469B] rounded-lg border border-blue-100 flex items-center gap-2 shadow-sm"
+              className="md:hidden p-2 bg-blue-50 text-[#05469B] rounded-lg border border-blue-100 flex items-center gap-2 shadow-sm shrink-0"
             >
               <Filter size={18} /> <span className="text-sm font-bold hidden sm:inline">Bộ lọc</span>
             </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-3 items-stretch sm:items-center">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <div className="flex flex-nowrap items-center justify-end gap-2 w-full xl:w-auto overflow-x-auto pb-1 xl:pb-0 relative z-30">
+            {/* 1. Ô tìm kiếm 256 x 32 px */}
+            <div className="relative w-[256px] h-[32px] shrink-0">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
               <input
                 type="text"
                 placeholder="Tìm số hiệu, tiêu đề, nghiệp vụ..."
-                className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm"
+                className="w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
 
-            <div className="relative">
+            {/* 2. Nút Đồng bộ dữ liệu (24 x 24 px) */}
+            <button
+              onClick={() => {
+                loadData();
+                toast.success('Đang đồng bộ dữ liệu Văn thư Lưu trữ mới nhất từ Supabase...');
+              }}
+              title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
+              disabled={loading}
+              className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-[#05469B] rounded-md border border-gray-200 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
+            >
+              <RotateCcw size={13} className={loading ? 'animate-spin text-[#05469B]' : ''} />
+            </button>
+
+            {/* 3. Bộ lọc nâng cao */}
+            <div className="relative shrink-0">
               <button
                 onClick={() => setIsFilterPopoverOpen(prev => !prev)}
-                className={`w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-bold shadow-sm transition-all whitespace-nowrap
+                className={`h-[32px] flex items-center justify-center gap-1.5 px-3 rounded-lg border text-xs font-bold shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0
                   ${activeFiltersCount > 0
                     ? 'bg-blue-50 text-[#05469B] border-blue-200'
                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
               >
-                <Filter className="w-4 h-4" />
+                <Filter className="w-3.5 h-3.5" />
                 <span>Bộ lọc nâng cao</span>
                 {activeFiltersCount > 0 && (
-                  <span className="flex items-center justify-center w-5 h-5 text-[10px] font-black text-white bg-red-500 rounded-full animate-pulse">
+                  <span className="flex items-center justify-center w-4 h-4 text-[9px] font-black text-white bg-red-500 rounded-full animate-pulse">
                     {activeFiltersCount}
                   </span>
                 )}
@@ -1388,15 +1404,14 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
               )}
             </div>
 
-            {/* 🟢 ẨN NÚT BAN HÀNH THEO MA TRẬN QUYỀN MỚI VÀ QUYỀN HẠN CHẾ */}
+            {/* 4. 🟢 Nút ban hành (độ cao 27 px) */}
             {!isViewerHanChe && !advancedRules.includes('VB_HIDE_BTN') && (
               <button
                 onClick={() => openModal('create')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"
+                className="h-[27px] px-3 flex items-center justify-center gap-1.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"
               >
-                <Plus className="w-5 h-5" />
-                <span className="md:hidden">Ban hành văn bản mới</span>
-                <span className="hidden md:inline">Ban hành</span>
+                <Plus size={14} />
+                <span>Ban hành</span>
               </button>
             )}
           </div>

@@ -300,15 +300,14 @@ export default function KhoaHocTab({
     );
 
     targetNsList.forEach(p => {
-      if (!p.cc_atvsld) {
+      const isCertActive = p.cc_atvsld === true || String(p.cc_atvsld).toLowerCase() === 'true';
+      if (!isCertActive || !p.gia_tri_den) {
         chua_hoc++;
-      } else if (p.gia_tri_den) {
+      } else {
         const daysLeft = Math.ceil((new Date(p.gia_tri_den).getTime() - Date.now()) / (1000 * 3600 * 24));
         if (daysLeft <= 0) qua_han++;
         else if (daysLeft <= 60) sap_het_han++;
         else an_toan++;
-      } else {
-        an_toan++;
       }
     });
 
@@ -321,16 +320,13 @@ export default function KhoaHocTab({
 
     return groupedHocVienMatrix.filter(emp => {
       const matchedPerson = personnelList.find(p => String(p.ma_so_nhan_vien || '').trim().toLowerCase() === String(emp.msnv || '').trim().toLowerCase());
+      const isCertActive = matchedPerson?.cc_atvsld === true || String(matchedPerson?.cc_atvsld).toLowerCase() === 'true';
       let status = 'CHUA_HOC';
-      if (matchedPerson?.cc_atvsld) {
-        if (matchedPerson.gia_tri_den) {
-          const daysLeft = Math.ceil((new Date(matchedPerson.gia_tri_den).getTime() - Date.now()) / (1000 * 3600 * 24));
-          if (daysLeft <= 0) status = 'QUA_HAN';
-          else if (daysLeft <= 60) status = 'SAP_HET_HAN';
-          else status = 'AN_TOAN';
-        } else {
-          status = 'AN_TOAN';
-        }
+      if (isCertActive && matchedPerson?.gia_tri_den) {
+        const daysLeft = Math.ceil((new Date(matchedPerson.gia_tri_den).getTime() - Date.now()) / (1000 * 3600 * 24));
+        if (daysLeft <= 0) status = 'QUA_HAN';
+        else if (daysLeft <= 60) status = 'SAP_HET_HAN';
+        else status = 'AN_TOAN';
       }
       return status === statusMatrixFilter;
     });
@@ -345,22 +341,21 @@ export default function KhoaHocTab({
 
     const exportData = targetNsList
       .filter(ns => {
-        if (statusMatrixFilter === 'CHUA_HOC') return !ns.cc_atvsld;
-        if (statusMatrixFilter === 'QUA_HAN') return ns.cc_atvsld && ns.gia_tri_den && new Date(ns.gia_tri_den) <= new Date();
+        const isCertActive = ns.cc_atvsld === true || String(ns.cc_atvsld).toLowerCase() === 'true';
+        if (statusMatrixFilter === 'CHUA_HOC') return !isCertActive || !ns.gia_tri_den;
+        if (statusMatrixFilter === 'QUA_HAN') return isCertActive && ns.gia_tri_den && new Date(ns.gia_tri_den) <= new Date();
         if (statusMatrixFilter === 'SAP_HET_HAN') {
-          if (!ns.cc_atvsld || !ns.gia_tri_den) return false;
+          if (!isCertActive || !ns.gia_tri_den) return false;
           const daysLeft = Math.ceil((new Date(ns.gia_tri_den).getTime() - Date.now()) / (1000 * 3600 * 24));
           return daysLeft > 0 && daysLeft <= 60;
         }
         if (statusMatrixFilter === 'AN_TOAN') {
-          if (!ns.cc_atvsld) return false;
-          if (!ns.gia_tri_den) return true;
+          if (!isCertActive || !ns.gia_tri_den) return false;
           const daysLeft = Math.ceil((new Date(ns.gia_tri_den).getTime() - Date.now()) / (1000 * 3600 * 24));
           return daysLeft > 60;
         }
         // Trạng thái ALL: xuất tất cả nhân sự cần huấn luyện (chưa học, quá hạn hoặc sắp hết hạn < 60 ngày)
-        if (!ns.cc_atvsld) return true;
-        if (!ns.gia_tri_den) return true;
+        if (!isCertActive || !ns.gia_tri_den) return true;
         const expiryDate = new Date(ns.gia_tri_den);
         const limitDate = new Date();
         limitDate.setDate(limitDate.getDate() + 60);
@@ -1532,15 +1527,11 @@ export default function KhoaHocTab({
                         
                         let statusColor = 'bg-gray-100 text-gray-700 border-gray-200';
                         let statusText = 'Chưa huấn luyện';
-                        if (matchedPerson?.cc_atvsld) {
-                          if (matchedPerson.gia_tri_den) {
-                            const isExpired = new Date(matchedPerson.gia_tri_den) <= new Date();
-                            statusColor = isExpired ? 'bg-red-100 text-red-850 border-red-200' : 'bg-lime-100 text-lime-800 border-lime-200';
-                            statusText = isExpired ? 'Đã hết hạn' : 'Còn hiệu lực';
-                          } else {
-                            statusColor = 'bg-lime-100 text-lime-800 border-lime-200';
-                            statusText = 'Còn hiệu lực';
-                          }
+                        const isCertActive = matchedPerson?.cc_atvsld === true || String(matchedPerson?.cc_atvsld).toLowerCase() === 'true';
+                        if (isCertActive && matchedPerson?.gia_tri_den) {
+                          const isExpired = new Date(matchedPerson.gia_tri_den) <= new Date();
+                          statusColor = isExpired ? 'bg-red-100 text-red-850 border-red-200' : 'bg-lime-100 text-lime-800 border-lime-200';
+                          statusText = isExpired ? 'Đã hết hạn' : 'Còn hiệu lực';
                         }
 
                         return (

@@ -4,7 +4,8 @@ import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
   MonitorSmartphone, Building2, MapPin, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen,
   History, Calendar, Info, Eye, Cpu, Image as ImageIcon, FileText, Link as LinkIcon,
-  Sofa, Video, Package, Layers, Camera, QrCode, Printer, ClipboardPaste, ShieldCheck, BarChart3
+  Sofa, Video, Package, Layers, Camera, QrCode, Printer, ClipboardPaste, ShieldCheck, BarChart3,
+  RotateCcw, Sparkles, PlusCircle
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { DonVi, ThietBi, NhatKyThietBi, Personnel, NhaCungCap } from '../types';
@@ -1538,7 +1539,7 @@ export default function EquipmentPage() {
 
             {/* Bên phải: Nút thêm, Tìm kiếm, Lọc, Quét QR */}
             {activeMainTab === 'list' && (
-              <div className="flex flex-wrap w-full lg:w-auto gap-3 justify-start lg:justify-end items-center">
+              <div className="flex flex-wrap items-center justify-end gap-2 w-full lg:w-auto relative z-30">
                 {selectedItemsForPrint.length > 0 && (
                   <button
                     onClick={() => {
@@ -1546,24 +1547,18 @@ export default function EquipmentPage() {
                       setPrintItemsList(items);
                       setIsPrintModalOpen(true);
                     }}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap animate-in fade-in zoom-in duration-200"
+                    className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 h-[32px] rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap animate-in fade-in zoom-in duration-200 shrink-0 cursor-pointer"
                   >
-                    <Printer className="w-5 h-5" /> In {selectedItemsForPrint.length} nhãn
+                    <Printer size={14} /> In {selectedItemsForPrint.length} nhãn
                   </button>
                 )}
-                <button
-                  onClick={() => setIsScannerOpen(true)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"
-                  title="Quét mã QR qua Camera"
-                >
-                  <Camera className="w-5 h-5" /> Quét QR
-                </button>
+
                 {/* Lọc Phân loại chi tiết */}
-                <div className="w-full sm:w-44">
+                <div className="w-full sm:w-40 h-[32px] shrink-0">
                   <select
                     value={detailTypeFilter}
                     onChange={(e) => setDetailTypeFilter(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm font-bold text-gray-700 cursor-pointer"
+                    className="w-full h-[32px] px-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-xs text-xs font-bold text-gray-700 cursor-pointer"
                   >
                     <option value="">-- Tất cả loại --</option>
                     {uniqueDetailTypes.map(type => (
@@ -1571,44 +1566,103 @@ export default function EquipmentPage() {
                     ))}
                   </select>
                 </div>
-                <div className="relative w-full sm:w-60">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input type="text" placeholder="Tìm kiếm..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+
+                {/* 1. Ô tìm kiếm: 256 x 32 px, nền #FFFFF0, focus viền xanh dương */}
+                <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm tài sản, số seri..."
+                    className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
-                {/* Dropdown nút Thêm mới */}
-                <div className="relative w-full sm:w-auto" ref={addDropdownRef}>
+
+                {/* 2. Nút Đồng bộ dữ liệu (24 x 24 px) */}
+                <button
+                  onClick={() => {
+                    loadData();
+                    toast.success('Đang đồng bộ dữ liệu Trang thiết bị mới nhất từ Supabase...');
+                  }}
+                  title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
+                  disabled={loading}
+                  className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-[#05469B] rounded-md border border-gray-200 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
+                >
+                  <RotateCcw size={13} className={loading ? 'animate-spin text-[#05469B]' : ''} />
+                </button>
+
+                {/* 3. Nút Tính năng (119 x 32 px) - Màu xanh dương đặc trưng */}
+                <div className="relative z-50" ref={addDropdownRef}>
                   <button
                     onClick={() => setIsAddDropdownOpen(!isAddDropdownOpen)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                    className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${
+                      isAddDropdownOpen
+                        ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-sm'
+                        : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50 hover:text-[#05469B]'
+                    }`}
                   >
-                    <Plus className="w-5 h-5" />
-                    <span>Thêm mới</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isAddDropdownOpen ? 'rotate-180' : ''}`} />
+                    <Sparkles size={14} className={isAddDropdownOpen ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
+                    <span>Tính năng</span>
+                    <ChevronDown size={12} className={`transition-transform duration-200 ${isAddDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {isAddDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-xl py-2 z-[60] animate-in fade-in slide-in-from-top-2 duration-150">
-                      <button
-                        onClick={() => {
-                          setIsAddDropdownOpen(false);
-                          openTbModal('create');
-                        }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-gray-700 font-semibold text-sm flex items-center gap-2.5 transition-colors cursor-pointer"
-                      >
-                        <Plus size={16} className="text-[#05469B]" />
-                        <span>Thêm từng thiết bị</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsAddDropdownOpen(false);
-                          setIsPasteModalOpen(true);
-                        }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-indigo-700 font-semibold text-sm flex items-center gap-2.5 transition-colors cursor-pointer border-t border-gray-100"
-                      >
-                        <ClipboardPaste size={16} className="text-indigo-600" />
-                        <span>Thêm hàng loạt (Form)</span>
-                      </button>
-                    </div>
+                    <>
+                      <div className="fixed inset-0 z-[90]" onClick={() => setIsAddDropdownOpen(false)}></div>
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-[100] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                        {/* Mục 1: Quét QR */}
+                        <button
+                          onClick={() => {
+                            setIsAddDropdownOpen(false);
+                            setIsScannerOpen(true);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-md bg-emerald-100 text-emerald-600">
+                            <Camera size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 font-bold text-xs">Quét QR</div>
+                            <div className="text-[10px] text-gray-500 font-normal">Quét mã QR qua camera</div>
+                          </div>
+                        </button>
+
+                        {/* Mục 2: Thêm từng thiết bị */}
+                        <button
+                          onClick={() => {
+                            setIsAddDropdownOpen(false);
+                            openTbModal('create');
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 text-gray-700 hover:text-[#05469B] cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-md bg-blue-100 text-[#05469B]">
+                            <PlusCircle size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 font-bold text-xs">Thêm từng thiết bị</div>
+                            <div className="text-[10px] text-gray-500 font-normal">Tạo mới một thiết bị</div>
+                          </div>
+                        </button>
+
+                        {/* Mục 3: Thêm hàng loạt */}
+                        <button
+                          onClick={() => {
+                            setIsAddDropdownOpen(false);
+                            setIsPasteModalOpen(true);
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 cursor-pointer border-t border-gray-100 pt-1.5"
+                        >
+                          <div className="p-1.5 rounded-md bg-indigo-100 text-indigo-600">
+                            <ClipboardPaste size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 font-bold text-xs">Thêm hàng loạt</div>
+                            <div className="text-[10px] text-gray-500 font-normal">Dán dữ liệu Excel nhiều dòng</div>
+                          </div>
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

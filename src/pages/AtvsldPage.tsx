@@ -5,7 +5,7 @@ import {
   Building2, MapPin, PanelLeftClose, PanelLeftOpen, ChevronRight, ChevronDown, Plus,
   FileText, Users, Settings, Link as LinkIcon, CheckCircle2, XCircle,
   FileSpreadsheet, Download, AlertTriangle, CheckCheck, HelpCircle, ChevronLeft,
-  Wrench, Heart
+  Wrench, Heart, RotateCcw, Sparkles, PlusCircle
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { toast } from '../utils/toast';
@@ -78,6 +78,7 @@ export default function AtvsldPage() {
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
 
   // Tab Kế hoạch ATVSLĐ (Mới)
   const [safetySearchTerm, setSafetySearchTerm] = useState('');
@@ -512,29 +513,75 @@ export default function AtvsldPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto relative z-30">
               {activeTab === 'hoso' && (
-                <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                   <input
                     type="text"
                     placeholder="Tìm tên cơ sở, người phụ trách..."
-                    className="w-full pl-9 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none shadow-xs text-xs font-semibold"
+                    className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
               )}
 
+              {/* Nút Đồng bộ dữ liệu (24 x 24 px) */}
+              <button
+                type="button"
+                onClick={() => {
+                  loadData();
+                  toast.success('Đang đồng bộ dữ liệu ATVSLĐ mới nhất từ Supabase...');
+                }}
+                title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
+                disabled={loading}
+                className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-emerald-600 rounded-md border border-gray-200 dark:border-gray-700 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
+              >
+                <RotateCcw size={13} className={loading ? 'animate-spin text-emerald-600' : ''} />
+              </button>
+
+              {/* Nút Tính năng (119 x 32 px) - Màu xanh lá đặc trưng */}
               {(user?.quyen === 'ADMIN' || user?.quyen === 'USER') && activeTab === 'hoso' && (
-                <button
-                  type="button"
-                  onClick={() => openModal(selectedUnitFilter || '')}
-                  className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Thêm Báo cáo Cơ sở</span>
-                </button>
+                <div className="relative z-50">
+                  <button
+                    type="button"
+                    onClick={() => setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen)}
+                    className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${
+                      isFeaturesDropdownOpen
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white border-emerald-600 shadow-sm'
+                        : 'bg-white text-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 hover:text-emerald-600'
+                    }`}
+                  >
+                    <Sparkles size={14} className={isFeaturesDropdownOpen ? 'text-amber-300 animate-pulse' : 'text-emerald-600'} />
+                    <span>Tính năng</span>
+                    <ChevronDown size={12} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isFeaturesDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[90]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-[100] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsFeaturesDropdownOpen(false);
+                            openModal(selectedUnitFilter || '');
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-md bg-emerald-100 text-emerald-600">
+                            <PlusCircle size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 font-bold text-xs">Thêm Báo cáo Cơ sở</div>
+                            <div className="text-[10px] text-gray-500 font-normal">Tạo báo cáo ATVSLĐ mới</div>
+                          </div>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           </div>

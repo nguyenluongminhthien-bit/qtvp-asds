@@ -1332,14 +1332,21 @@ export default function PersonnelPage() {
         if (!finalDataToSave.ngay_nghi_viec) finalDataToSave.ngay_nghi_viec = null;
         if (!finalDataToSave.ngay_vao_lam_lai) finalDataToSave.ngay_vao_lam_lai = null;
 
-        if (finalDataToSave.nhom_doi_tuong) {
-          const nhom = String(finalDataToSave.nhom_doi_tuong).replace(/\D/g, '');
-          if (nhom === '1' || nhom === '2' || nhom === '6') finalDataToSave.chung_nhan = 'Giấy chứng nhận huấn luyện ATVSLĐ';
-          else if (nhom === '3') finalDataToSave.chung_nhan = 'Thẻ An toàn lao động';
-          else if (nhom === '4') finalDataToSave.chung_nhan = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
-          finalDataToSave.cc_atvsld = true;
+        const isCertChecked = formData.cc_atvsld === true || String(formData.cc_atvsld).toLowerCase() === 'true';
+        finalDataToSave.cc_atvsld = isCertChecked;
+
+        if (isCertChecked) {
+          if (finalDataToSave.nhom_doi_tuong) {
+            const nhom = String(finalDataToSave.nhom_doi_tuong).replace(/\D/g, '');
+            if (nhom === '1' || nhom === '2' || nhom === '6') finalDataToSave.chung_nhan = 'Giấy chứng nhận huấn luyện ATVSLĐ';
+            else if (nhom === '3') finalDataToSave.chung_nhan = 'Thẻ An toàn lao động';
+            else if (nhom === '4') finalDataToSave.chung_nhan = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
+          }
         } else {
           finalDataToSave.chung_nhan = null;
+          finalDataToSave.huan_luyen_tu = null;
+          finalDataToSave.huan_luyen_den = null;
+          finalDataToSave.gia_tri_den = null;
         }
 
         setDupConfirmModal({
@@ -1385,15 +1392,21 @@ export default function PersonnelPage() {
     if (!finalDataToSave.ngay_nghi_viec) finalDataToSave.ngay_nghi_viec = null;
     if (!finalDataToSave.ngay_vao_lam_lai) finalDataToSave.ngay_vao_lam_lai = null;
 
-    if (finalDataToSave.nhom_doi_tuong) {
-      const nhom = String(finalDataToSave.nhom_doi_tuong).replace(/\D/g, '');
-      if (nhom === '1' || nhom === '2' || nhom === '6') finalDataToSave.chung_nhan = 'Giấy chứng nhận huấn luyện ATVSLĐ';
-      else if (nhom === '3') finalDataToSave.chung_nhan = 'Thẻ An toàn lao động';
-      else if (nhom === '4') finalDataToSave.chung_nhan = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
+    const isCertChecked = formData.cc_atvsld === true || String(formData.cc_atvsld).toLowerCase() === 'true';
+    finalDataToSave.cc_atvsld = isCertChecked;
 
-      finalDataToSave.cc_atvsld = true;
+    if (isCertChecked) {
+      if (finalDataToSave.nhom_doi_tuong) {
+        const nhom = String(finalDataToSave.nhom_doi_tuong).replace(/\D/g, '');
+        if (nhom === '1' || nhom === '2' || nhom === '6') finalDataToSave.chung_nhan = 'Giấy chứng nhận huấn luyện ATVSLĐ';
+        else if (nhom === '3') finalDataToSave.chung_nhan = 'Thẻ An toàn lao động';
+        else if (nhom === '4') finalDataToSave.chung_nhan = 'Quyết định Công nhận Kết quả Huấn luyện ATVSLĐ';
+      }
     } else {
       finalDataToSave.chung_nhan = null;
+      finalDataToSave.huan_luyen_tu = null;
+      finalDataToSave.huan_luyen_den = null;
+      finalDataToSave.gia_tri_den = null;
     }
 
     await executeSave(finalDataToSave);
@@ -1806,7 +1819,7 @@ export default function PersonnelPage() {
           if (hlDen) item.huan_luyen_den = hlDen;
           if (giaTriDen) item.gia_tri_den = giaTriDen;
           if (certName) item.chung_nhan = certName;
-          if (nhomFormatted || hlTu || giaTriDen) item.cc_atvsld = true;
+          if (giaTriDen || hlDen || hlTu) item.cc_atvsld = true;
 
           if (khoiVal) item.khoi = khoiVal;
           if (diaDiemVal) item.dia_diem_lam_viec = diaDiemVal;
@@ -2017,12 +2030,12 @@ export default function PersonnelPage() {
             {activeTab !== 'cuoc_di_dong' && (
               <div className="flex flex-col items-end gap-2 w-full xl:w-auto">
                 <div className="flex flex-wrap items-center justify-end gap-2 w-full relative z-30">
-                  <div className="relative w-full sm:w-64">
+                  <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                     <input
                       type="text"
                       placeholder="Tìm Mã NV, Họ Tên, Thẻ xe, Chức vụ..."
-                      className="w-full pl-8 pr-3 py-1.5 bg-[#FFFFF0] border border-gray-200 rounded focus:ring-1 focus:ring-[#05469B] outline-none shadow-sm text-[11px] font-medium"
+                      className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
                       value={personnelSearchTerm}
                       onChange={(e) => setPersonnelSearchTerm(e.target.value)}
                     />
@@ -2037,7 +2050,7 @@ export default function PersonnelPage() {
                         setFilterChucDanh('');
                       }}
                       title="Xóa nhanh bộ lọc nâng cao"
-                      className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded border border-red-200 transition-all flex items-center gap-1 text-[11px] font-bold shadow-sm"
+                      className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 transition-all flex items-center gap-1 text-[11px] font-bold shadow-xs h-[32px]"
                     >
                       <RotateCcw size={13} /> <span className="hidden sm:inline">Xóa bộ lọc</span>
                       <span className="bg-red-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
@@ -2053,9 +2066,9 @@ export default function PersonnelPage() {
                     }}
                     title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
                     disabled={loading}
-                    className="p-1.5 bg-white hover:bg-gray-50 text-gray-700 hover:text-[#05469B] rounded border border-gray-200 transition-all flex items-center justify-center shadow-sm h-[29.5px] w-[29.5px] cursor-pointer"
+                    className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-[#05469B] rounded-md border border-gray-200 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
                   >
-                    <RotateCcw size={14} className={loading ? 'animate-spin text-[#05469B]' : ''} />
+                    <RotateCcw size={13} className={loading ? 'animate-spin text-[#05469B]' : ''} />
                   </button>
 
                   <div className="relative">
@@ -2064,19 +2077,19 @@ export default function PersonnelPage() {
                         setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen);
                         setIsAddNewExpanded(false);
                       }}
-                      className={`px-4 py-1.5 rounded text-[11px] font-bold flex items-center gap-2 border transition-all shadow-sm whitespace-nowrap ${isFeaturesDropdownOpen || showAdvancedFilters
-                        ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-md'
-                        : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50'
+                      className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${isFeaturesDropdownOpen || showAdvancedFilters
+                        ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-sm'
+                        : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50 hover:text-[#05469B]'
                         }`}
                     >
-                      <Sparkles size={15} className={isFeaturesDropdownOpen || showAdvancedFilters ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
+                      <Sparkles size={14} className={isFeaturesDropdownOpen || showAdvancedFilters ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
                       <span>Tính năng</span>
                       {(filterPhongBan || filterKhoi || filterChucVu || filterChucDanh) && !showAdvancedFilters && (
                         <span className="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
                           {[filterPhongBan, filterKhoi, filterChucVu, filterChucDanh].filter(Boolean).length}
                         </span>
                       )}
-                      <ChevronDown size={13} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={12} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {isFeaturesDropdownOpen && (

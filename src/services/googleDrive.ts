@@ -1,6 +1,7 @@
 // Service kết nối và tìm kiếm tệp tin từ Google Drive API v3
 export const GOOGLE_API_KEY = "AIzaSyA4P9hXbuk3Iusk5MWQpIE-1beErC2z8nU";
 export const ROOT_FOLDER_ID = "1hdwEa6aTBARJs720LGT7qxfwJFOg6U68";
+export const VEHICLE_FOLDER_ID = "1UZ5ZUTPrOZ4-ClAbxCgTQ8pbn8d6CzSa";
 
 // Trích xuất số hiệu dạng số nguyên kèm theo chữ cái hậu tố (ví dụ: "01/2026/TB" -> "01", "541A/2025/TB" -> "541A")
 export const extractDocNumber = (soHieu: string): string => {
@@ -136,3 +137,112 @@ export const searchGoogleDriveFile = async (
     throw error;
   }
 };
+
+/**
+ * Tìm kiếm link file hồ sơ xe trên Google Drive theo SỐ KHUNG (VIN):
+ * Quét trong folder "Hồ sơ Xe" (ID: 1UZ5ZUTPrOZ4-ClAbxCgTQ8pbn8d6CzSa)
+ * Tên file được đặt theo Số khung xe (ví dụ: RL4MC123456789.pdf, RL4MC-123456789.pdf, ...)
+ */
+export interface VehicleDriveMatch {
+  link: string;
+  name: string;
+  isFolder: boolean;
+}
+
+/**
+ * Tìm kiếm hồ sơ xe trên Google Drive (hỗ trợ cả Tệp tin PDF/RAR/ZIP... lẫn Thư mục mang tên Số khung)
+ * @param soKhung Số khung (VIN) của xe
+ */
+export const searchVehicleDriveFile = async (
+  soKhung: string
+): Promise<VehicleDriveMatch | null> => {
+  if (!soKhung || !soKhung.trim()) return null;
+  const cleanChassis = soKhung.toUpperCase().replace(/[\s\-\.]/g, '');
+  if (!cleanChassis) return null;
+
+  try {
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
+      `'${VEHICLE_FOLDER_ID}' in parents and trashed = false`
+    )}&key=${GOOGLE_API_KEY}&pageSize=1000&fields=files(id,name,mimeType,webViewLink)`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      if (response.status === 404) {
+        throw new Error(
+          "Không thể truy cập thư mục Hồ sơ Xe trên Google Drive (Lỗi 404). Vui lòng đảm bảo quyền truy cập chung của thư mục được bật là 'Bất kỳ ai có đường liên kết' -> 'Người xem'!"
+        );
+      }
+      throw new Error(err?.error?.message || `Lỗi Google Drive HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    const files: any[] = data.files || [];
+    if (files.length === 0) return null;
+
+    const getCleanName = (name: string) => {
+      return (name || '')
+        .toUpperCase()
+        .replace(/\.(PDF|RAR|ZIP|7Z|DOC|DOCX|XLS|XLSX|JPG|JPEG|PNG)$/i, '')
+        .replace(/[\s\-\.]/g, '');
+    };
+
+    const matchItem = (items: any[]) => {
+      // 1. Tìm khớp chính xác Số khung (áp dụng cho cả File hoặc Folder)
+      const exact = items.find(f => getCleanName(f.name) === cleanChassis);
+      if (exact) return exact;
+
+      // 2. Tìm khớp chứa Số khung đầy đủ (VD: "Hồ sơ WBS21DM0508G22436.pdf" hoặc folder)
+      const partial = items.find(f => getCleanName(f.name).includes(cleanChassis));
+      if (partial) return partial;
+
+      // 3. Tìm khớp phần đuôi số khung (nếu số khung dài >= 6 ký tự)
+      if (cleanChassis.length >= 6) {
+        const suffix6 = cleanChassis.slice(-6);
+        const suffixMatch = items.find(f => {
+          const clean = getCleanName(f.name);
+          return clean.endsWith(suffix6) || clean.includes(suffix6);
+        });
+        if (suffixMatch) return suffixMatch;
+      }
+
+      return null;
+    };
+
+    const buildResult = (matched: any): VehicleDriveMatch => {
+      const isFolder = matched.mimeType === 'application/vnd.google-apps.folder';
+      const link = isFolder
+        ? (matched.webViewLink || `https://drive.google.com/drive/folders/${matched.id}`)
+        : (matched.webViewLink || `https://drive.google.com/file/d/${matched.id}/view`);
+      return {
+        link,
+        name: matched.name,
+        isFolder,
+      };
+    };
+
+    let matched = matchItem(files);
+    if (matched) return buildResult(matched);
+
+    // Nếu chưa tìm thấy ở thư mục gốc, quét tiếp vào các thư mục con cấp 1
+    const subFolders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+    for (const folder of subFolders) {
+      const subUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
+        `'${folder.id}' in parents and trashed = false`
+      )}&key=${GOOGLE_API_KEY}&pageSize=1000&fields=files(id,name,mimeType,webViewLink)`;
+      const subRes = await fetch(subUrl);
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        const subFiles = subData.files || [];
+        matched = matchItem(subFiles);
+        if (matched) return buildResult(matched);
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Lỗi khi tìm kiếm tệp Hồ sơ Xe trên Google Drive:", error);
+    throw error;
+  }
+};
+
+

@@ -4,7 +4,7 @@ import {
   Flame, ShieldAlert, Building2, MapPin, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen,
   Calendar, FileText, Link as LinkIcon, Users, Droplets, Phone,
   PlusCircle, AlertTriangle, Sun, Moon, ShieldCheck, CheckCircle2, Siren, PhoneCall,
-  HardHat, UserCheck, Briefcase, ClipboardPaste
+  HardHat, UserCheck, Briefcase, ClipboardPaste, RotateCcw, Sparkles
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { DonVi } from '../types';
@@ -100,6 +100,7 @@ export default function FireSafetyPage() {
   // 🟢 STATE CHO THANH CẢNH BÁO PCCC
   const [isWarningOpen, setIsWarningOpen] = useState(true);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
 
   const loadData = async () => {
     setLoading(true); setError(null);
@@ -478,7 +479,7 @@ export default function FireSafetyPage() {
       <div className="flex-1 min-w-0 max-w-full overflow-hidden p-4 sm:p-6 relative transition-all duration-300 w-full flex flex-col">
         
         {/* FIXED HEADER */}
-        <div className="shrink-0 flex flex-col z-10">
+        <div className="shrink-0 flex flex-col relative z-30">
           <div className={`flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
             <div className="flex items-center gap-2.5 w-full sm:w-auto">
               {isListCollapsed && (
@@ -495,12 +496,70 @@ export default function FireSafetyPage() {
                 <p className="text-sm font-medium text-gray-500 mt-1">Đang xem: <span className="text-emerald-600 font-bold">{donViMap[selectedUnitFilter || ''] || 'Tất cả Đơn vị'}</span></p>
               </div>
             </div>
-            <div className="flex w-full sm:w-auto gap-3">
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input type="text" placeholder="Tìm giấy phép, đội trưởng..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none shadow-sm text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto relative z-30">
+              {/* Ô tìm kiếm 256 x 32 px */}
+              <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Tìm giấy phép, đội trưởng..."
+                  className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
-              <button onClick={() => openModal('create')} className="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"><Plus className="w-5 h-5" /> Thêm Hồ sơ PCCC</button>
+
+              {/* Nút Đồng bộ dữ liệu (24 x 24 px) */}
+              <button
+                onClick={() => {
+                  loadData();
+                  toast.success('Đang đồng bộ dữ liệu PCCC mới nhất từ Supabase...');
+                }}
+                title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
+                disabled={loading}
+                className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-red-600 rounded-md border border-gray-200 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
+              >
+                <RotateCcw size={13} className={loading ? 'animate-spin text-red-600' : ''} />
+              </button>
+
+              {/* Nút Tính năng (119 x 32 px) - Màu đỏ đặc trưng */}
+              <div className="relative z-50">
+                <button
+                  onClick={() => setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen)}
+                  className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${
+                    isFeaturesDropdownOpen
+                      ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white border-red-600 shadow-sm'
+                      : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50 hover:text-red-600'
+                  }`}
+                >
+                  <Sparkles size={14} className={isFeaturesDropdownOpen ? 'text-amber-300 animate-pulse' : 'text-red-600'} />
+                  <span>Tính năng</span>
+                  <ChevronDown size={12} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isFeaturesDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[90]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-[100] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                      <button
+                        onClick={() => {
+                          setIsFeaturesDropdownOpen(false);
+                          openModal('create');
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-red-50 text-gray-700 hover:text-red-700 cursor-pointer"
+                      >
+                        <div className="p-1.5 rounded-md bg-red-100 text-red-600">
+                          <PlusCircle size={15} />
+                        </div>
+                        <div>
+                          <div className="text-gray-800 font-bold text-xs">Thêm mới Hồ sơ PCCC</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Tạo hồ sơ cơ sở PCCC mới</div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm shrink-0"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}

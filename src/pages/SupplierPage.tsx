@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
   Building2, Phone, Mail, Calendar, Eye, Handshake, Filter, Info, CheckCircle2,
-  ExternalLink, PanelLeftOpen, FileText, Star, ShieldCheck, MapPin, User, Notebook
+  ExternalLink, PanelLeftOpen, FileText, Star, ShieldCheck, MapPin, User, Notebook,
+  RotateCcw, Sparkles, ChevronDown, PlusCircle
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { NhaCungCap, DonVi } from '../types';
@@ -243,6 +244,7 @@ export default function SupplierPage() {
   // Delete Modal
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
 
   const allowedDonViIds = useAllowedUnits(donViList);
   const hasInitializedRef = useRef(false);
@@ -533,7 +535,7 @@ export default function SupplierPage() {
 
       <div className="flex-1 min-w-0 max-w-full overflow-hidden p-4 sm:p-6 relative transition-all duration-300 w-full flex flex-col">
         {/* FIXED HEADER */}
-        <div className="shrink-0 flex flex-col z-10">
+        <div className="shrink-0 flex flex-col relative z-30">
           <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
             <div className="flex items-center gap-2.5">
               {isListCollapsed && (
@@ -580,24 +582,69 @@ export default function SupplierPage() {
                 ))}
               </select>
 
-              {/* Ô tìm kiếm */}
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              {/* Ô tìm kiếm 256 x 32 px */}
+              <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                 <input
                   type="text"
                   placeholder="Tìm công ty, mã số thuế, đầu mối..."
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm"
+                  className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
 
+              {/* Nút Đồng bộ dữ liệu (24 x 24 px) */}
               <button
-                onClick={() => openModal('create')}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2 rounded-lg font-bold shadow-sm transition-all whitespace-nowrap"
+                onClick={() => {
+                  loadData(true);
+                  toast.success('Đang đồng bộ dữ liệu Nhà cung cấp mới nhất từ Supabase...');
+                }}
+                title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
+                disabled={loading}
+                className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-[#05469B] rounded-md border border-gray-200 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
               >
-                <Plus className="w-5 h-5" /> Thêm Đối tác
+                <RotateCcw size={13} className={loading ? 'animate-spin text-[#05469B]' : ''} />
               </button>
+
+              {/* Nút Tính năng (119 x 32 px) - Màu xanh dương đặc trưng */}
+              <div className="relative z-50">
+                <button
+                  onClick={() => setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen)}
+                  className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${
+                    isFeaturesDropdownOpen
+                      ? 'bg-gradient-to-r from-[#05469B] to-[#0a5bc4] text-white border-[#05469B] shadow-sm'
+                      : 'bg-white text-gray-800 border-gray-200 hover:bg-gray-50 hover:text-[#05469B]'
+                  }`}
+                >
+                  <Sparkles size={14} className={isFeaturesDropdownOpen ? 'text-amber-300 animate-pulse' : 'text-[#05469B]'} />
+                  <span>Tính năng</span>
+                  <ChevronDown size={12} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isFeaturesDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[90]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-[100] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                      <button
+                        onClick={() => {
+                          setIsFeaturesDropdownOpen(false);
+                          openModal('create');
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 text-gray-700 hover:text-[#05469B] cursor-pointer"
+                      >
+                        <div className="p-1.5 rounded-md bg-blue-100 text-[#05469B]">
+                          <PlusCircle size={15} />
+                        </div>
+                        <div>
+                          <div className="text-gray-800 font-bold text-xs">Thêm Đối tác</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Tạo hồ sơ nhà cung cấp mới</div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
