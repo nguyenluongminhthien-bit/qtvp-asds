@@ -11,6 +11,7 @@ const VehiclePage = React.lazy(() => import('./pages/VehiclePage'));
 const DocumentPage = React.lazy(() => import('./pages/DocumentPage'));
 const PolicyPage = React.lazy(() => import('./pages/PolicyPage'));
 const EquipmentPage = React.lazy(() => import('./pages/EquipmentPage'));
+const CphcPage = React.lazy(() => import('./pages/CphcPage'));
 const SupplierPage = React.lazy(() => import('./pages/SupplierPage'));
 const FireSafetyPage = React.lazy(() => import('./pages/FireSafetyPage'));
 const AtvsldPage = React.lazy(() => import('./pages/AtvsldPage'));
@@ -57,6 +58,17 @@ function AppContent() {
 
   // Tùy chỉnh: Đặt 'dashboard' làm trang mặc định hiển thị đầu tiên
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [previousTab, setPreviousTab] = useState('dashboard');
+
+  const navigateToTab = (newTab: string) => {
+    if (newTab === 'cphc') {
+      if (activeTab !== 'cphc') setPreviousTab(activeTab);
+      window.history.pushState(null, '', '/modules/cphc');
+    } else if (activeTab === 'cphc') {
+      window.history.pushState(null, '', '/');
+    }
+    setActiveTab(newTab);
+  };
 
   // 🟢 TỰ ĐỘNG CHUYỂN TAB NẾU KHÔNG CÓ QUYỀN TRUY CẬP TAB HIỆN TẠI (Ví dụ: Dashboard)
   useEffect(() => {
@@ -69,6 +81,7 @@ function AppContent() {
       if (tab === 'atvsld') return checkPermission('ATVSLD');
       if (tab === 'vehicles') return checkPermission('Xe');
       if (tab === 'equipments') return checkPermission('ThietBi');
+      if (tab === 'cphc') return checkPermission('ChiPhi');
       if (tab === 'suppliers') return checkPermission('NhaCungCap');
       if (tab === 'documents') return checkPermission('VanBan');
       if (tab === 'policies') return checkPermission('QuyDinh');
@@ -88,6 +101,7 @@ function AppContent() {
         { tab: 'atvsld', key: 'ATVSLD' },
         { tab: 'vehicles', key: 'Xe' },
         { tab: 'equipments', key: 'ThietBi' },
+        { tab: 'cphc', key: 'ChiPhi' },
         { tab: 'suppliers', key: 'NhaCungCap' },
         { tab: 'documents', key: 'VanBan' },
         { tab: 'policies', key: 'QuyDinh' },
@@ -112,14 +126,25 @@ function AppContent() {
     const qrParam = params.get('qr');
     const tabParam = params.get('tab');
 
+    if (tabParam === 'cphc') {
+      setActiveTab('cphc');
+      return;
+    }
+
     if (qrParam || tabParam === 'equipment') {
       setActiveTab('equipments');
       return;
     }
 
-    // 2. Kiểm tra pathname trực tiếp (Ví dụ: /T24ATTS32120025)
+    // 2. Kiểm tra pathname trực tiếp (Ví dụ: /modules/cphc hoặc /T24ATTS32120025)
+    const normalizedPath = window.location.pathname.replace(/^\//, '').toLowerCase();
+    if (normalizedPath === 'modules/cphc' || normalizedPath === 'cphc') {
+      setActiveTab('cphc');
+      return;
+    }
+
     const path = window.location.pathname.replace(/^\//, ''); // Bỏ dấu / ở đầu
-    if (path && path.length >= 5 && !['dashboard', 'personnel', 'firesafety', 'atvsld', 'vehicles', 'equipments', 'suppliers', 'documents', 'policies', 'departments', 'accounts', 'logs', 'reports'].includes(path.toLowerCase())) {
+    if (path && path.length >= 5 && !['dashboard', 'personnel', 'firesafety', 'atvsld', 'vehicles', 'equipments', 'suppliers', 'documents', 'policies', 'departments', 'accounts', 'logs', 'reports', 'cphc', 'modules/cphc'].includes(path.toLowerCase())) {
       // Coi đây là Mã tài sản quét trực tiếp từ QR!
       // Thiết lập lại URL thành dạng query để EquipmentPage xử lý đồng bộ
       const newUrl = `${window.location.origin}/?tab=equipment&qr=${path}`;
@@ -127,6 +152,21 @@ function AppContent() {
       setActiveTab('equipments');
     }
   }, []);
+
+  // 🟢 LẮNG NGHE NÚT BACK / FORWARD CỦA TRÌNH DUYỆT ĐỂ ĐỒNG BỘ TAB VÀ ROUTE
+  useEffect(() => {
+    const handlePopState = () => {
+      const normalizedPath = window.location.pathname.replace(/^\//, '').toLowerCase();
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (normalizedPath === 'modules/cphc' || normalizedPath === 'cphc' || tabParam === 'cphc') {
+        setActiveTab('cphc');
+      } else if (activeTab === 'cphc') {
+        setActiveTab(previousTab || 'dashboard');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [activeTab, previousTab]);
 
   // LỚP 1: KIỂM TRA ĐĂNG NHẬP
   if (!user) {
@@ -138,8 +178,10 @@ function AppContent() {
   return (
     <div className="flex h-screen w-full bg-gray-100 overflow-hidden font-sans">
 
-      {/* Thanh Menu bên trái */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Thanh Menu bên trái: Ẩn khi mở toàn màn hình App Quản lý Chi phí */}
+      {activeTab !== 'cphc' && (
+        <Sidebar activeTab={activeTab} setActiveTab={navigateToTab} />
+      )}
 
       {/* Khu vực nội dung bên phải */}
       <main className="flex-1 min-w-0 max-w-full h-full overflow-hidden bg-[#f4f7f9] relative">
@@ -178,6 +220,14 @@ function AppContent() {
         {checkPermission('ThietBi') && (
           <TabContainer active={activeTab === 'equipments'}>
             <EquipmentPage />
+          </TabContainer>
+        )}
+
+        {checkPermission('ChiPhi') && (
+          <TabContainer active={activeTab === 'cphc'}>
+            <CphcPage onExit={() => {
+              navigateToTab(previousTab || 'dashboard');
+            }} />
           </TabContainer>
         )}
 
