@@ -16,6 +16,7 @@ const MODULE_LIST = [
   { id: 'ATVSLD', label: 'An toàn vệ sinh LĐ', icon: '⛑️' },
   { id: 'Xe', label: 'Thông tin Xe', icon: '🚗' },
   { id: 'ThietBi', label: 'Thông tin TTB VP', icon: '💻' },
+  { id: 'ChiPhi', label: 'Quản lý Chi phí', icon: '💰' },
   { id: 'NhaCungCap', label: 'Quản lý Nhà cung cấp', icon: '🤝' },
   { id: 'VanBan', label: 'Văn bản - Thông báo', icon: '📄' },
   { id: 'QuyDinh', label: 'Quy định - Quy trình', icon: '📖' },
