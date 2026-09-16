@@ -29,7 +29,20 @@ import {
   getChuKyATVSLD,
   getThietBiNghiemNgat,
   getKiemDinhTBNN,
-  getNhatKySuDungXe
+  getNhatKySuDungXe,
+  getDmKmp,
+  getDmBoPhan,
+  getDmBoPhanCap1,
+  getDmBoPhanCap2,
+  getDntt,
+  getDnttChiTiet,
+  getDnttPhanBo,
+  getChiPhiChotKy,
+  getChiPhiThongKe,
+  checkDnttBelongsToLockedPeriod,
+  chotKyChiPhi,
+  huyChotKyChiPhi,
+  updateDnttStatusBulk
 } from './modules';
 
 export const apiService = {
@@ -66,6 +79,19 @@ export const apiService = {
   getChuKyATVSLD,
   getThietBiNghiemNgat,
   getKiemDinhTBNN,
-  getNhatKySuDungXe
+  getNhatKySuDungXe,
+  getDmKmp,
+  getDmBoPhan,
+  getDmBoPhanCap1,
+  getDmBoPhanCap2,
+  getDntt,
+  getDnttChiTiet,
+  getDnttPhanBo,
+  getChiPhiChotKy,
+  getChiPhiThongKe,
+  checkDnttBelongsToLockedPeriod,
+  chotKyChiPhi,
+  huyChotKyChiPhi,
+  updateDnttStatusBulk
 };
 

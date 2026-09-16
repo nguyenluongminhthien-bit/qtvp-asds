@@ -11,7 +11,7 @@ const VehiclePage = React.lazy(() => import('./pages/VehiclePage'));
 const DocumentPage = React.lazy(() => import('./pages/DocumentPage'));
 const PolicyPage = React.lazy(() => import('./pages/PolicyPage'));
 const EquipmentPage = React.lazy(() => import('./pages/EquipmentPage'));
-const CphcPage = React.lazy(() => import('./pages/CphcPage'));
+const CostManagementPage = React.lazy(() => import('./pages/CostManagementPage'));
 const SupplierPage = React.lazy(() => import('./pages/SupplierPage'));
 const FireSafetyPage = React.lazy(() => import('./pages/FireSafetyPage'));
 const AtvsldPage = React.lazy(() => import('./pages/AtvsldPage'));
@@ -61,12 +61,6 @@ function AppContent() {
   const [previousTab, setPreviousTab] = useState('dashboard');
 
   const navigateToTab = (newTab: string) => {
-    if (newTab === 'cphc') {
-      if (activeTab !== 'cphc') setPreviousTab(activeTab);
-      window.history.pushState(null, '', '/modules/cphc');
-    } else if (activeTab === 'cphc') {
-      window.history.pushState(null, '', '/');
-    }
     setActiveTab(newTab);
   };
 
@@ -136,9 +130,9 @@ function AppContent() {
       return;
     }
 
-    // 2. Kiểm tra pathname trực tiếp (Ví dụ: /modules/cphc hoặc /T24ATTS32120025)
+    // 2. Kiểm tra pathname trực tiếp (Ví dụ: /cphc hoặc /T24ATTS32120025)
     const normalizedPath = window.location.pathname.replace(/^\//, '').toLowerCase();
-    if (normalizedPath === 'modules/cphc' || normalizedPath === 'cphc') {
+    if (normalizedPath === 'cphc') {
       setActiveTab('cphc');
       return;
     }
@@ -158,10 +152,8 @@ function AppContent() {
     const handlePopState = () => {
       const normalizedPath = window.location.pathname.replace(/^\//, '').toLowerCase();
       const tabParam = new URLSearchParams(window.location.search).get('tab');
-      if (normalizedPath === 'modules/cphc' || normalizedPath === 'cphc' || tabParam === 'cphc') {
+      if (normalizedPath === 'cphc' || tabParam === 'cphc') {
         setActiveTab('cphc');
-      } else if (activeTab === 'cphc') {
-        setActiveTab(previousTab || 'dashboard');
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -178,10 +170,8 @@ function AppContent() {
   return (
     <div className="flex h-screen w-full bg-gray-100 overflow-hidden font-sans">
 
-      {/* Thanh Menu bên trái: Ẩn khi mở toàn màn hình App Quản lý Chi phí */}
-      {activeTab !== 'cphc' && (
-        <Sidebar activeTab={activeTab} setActiveTab={navigateToTab} />
-      )}
+      {/* Thanh Menu bên trái (Sidebar luôn hiển thị đồng bộ ở mọi module) */}
+      <Sidebar activeTab={activeTab} setActiveTab={navigateToTab} />
 
       {/* Khu vực nội dung bên phải */}
       <main className="flex-1 min-w-0 max-w-full h-full overflow-hidden bg-[#f4f7f9] relative">
@@ -225,9 +215,7 @@ function AppContent() {
 
         {checkPermission('ChiPhi') && (
           <TabContainer active={activeTab === 'cphc'}>
-            <CphcPage onExit={() => {
-              navigateToTab(previousTab || 'dashboard');
-            }} />
+            <CostManagementPage />
           </TabContainer>
         )}
 

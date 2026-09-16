@@ -566,5 +566,82 @@ export const INITIAL_MOCK_DATA: Record<string, any[]> = {
       file_name: 'Phieu_De_Xuat_61A12345.pdf',
       created_at: '2026-08-15T08:30:00Z'
     }
+  ],
+
+  dm_bo_phan_cap1: [
+    { id: 'BP1_QTC', ma: 'QTC', ten: 'Nghiệp vụ QTC', yeu_cau_cap2: false, thu_tu: 1, active: true },
+    { id: 'BP1_KD',  ma: 'KD',  ten: 'Kinh doanh',    yeu_cau_cap2: true,  thu_tu: 2, active: true },
+    { id: 'BP1_DV',  ma: 'DV',  ten: 'Dịch vụ',       yeu_cau_cap2: true,  thu_tu: 3, active: true },
+    { id: 'BP1_XSC', ma: 'XSC', ten: 'Xưởng Sửa chữa',yeu_cau_cap2: true,  thu_tu: 4, active: true },
+    { id: 'BP1_DC',  ma: 'DC',  ten: 'Dùng chung & Khác', yeu_cau_cap2: false, thu_tu: 5, active: true }
+  ],
+
+  dm_bo_phan_cap2: [
+    { id: 'BP2_KIA',     ma: 'KIA',     ten: 'Kia',          thu_tu: 1, active: true },
+    { id: 'BP2_MAZDA',   ma: 'MAZDA',   ten: 'Mazda',        thu_tu: 2, active: true },
+    { id: 'BP2_PEUGEOT', ma: 'PEUGEOT', ten: 'Peugeot',      thu_tu: 3, active: true },
+    { id: 'BP2_BMW',     ma: 'BMW',     ten: 'BMW',          thu_tu: 4, active: true },
+    { id: 'BP2_TAIBUS',  ma: 'TAIBUS',  ten: 'Tải bus',      thu_tu: 5, active: true },
+    { id: 'BP2_MOTORRAD',ma: 'MOTORRAD',ten: 'BMW Motorrad', thu_tu: 6, active: true },
+    { id: 'BP2_RAM',     ma: 'RAM',     ten: 'RAM',          thu_tu: 7, active: true },
+    { id: 'BP2_JEEP',    ma: 'JEEP',    ten: 'JEEP',         thu_tu: 8, active: true }
+  ],
+
+  dm_kmp: [
+    { id: 'KMP1', ma_b7: 'B7.01', ma_b10: 'B10.01', nhom_chi_phi: 'Chi phí Năng lượng', dien_giai: 'Tiền điện Tổ hợp Showroom', trong_yeu: true, active: true },
+    { id: 'KMP2', ma_b7: 'B7.02', ma_b10: 'B10.02', nhom_chi_phi: 'Chi phí Năng lượng', dien_giai: 'Tiền nước sinh hoạt', trong_yeu: false, active: true },
+    { id: 'KMP3', ma_b7: 'B7.03', ma_b10: 'B10.03', nhom_chi_phi: 'Chi phí Dịch vụ ngoài', dien_giai: 'Dịch vụ vệ sinh công nghiệp', trong_yeu: true, active: true },
+    { id: 'KMP4', ma_b7: 'B7.04', ma_b10: 'B10.04', nhom_chi_phi: 'Chi phí Dịch vụ ngoài', dien_giai: 'Dịch vụ an ninh trật tự - bảo vệ', trong_yeu: true, active: true },
+    { id: 'KMP5', ma_b7: 'B7.05', ma_b10: 'B10.05', nhom_chi_phi: 'Chi phí Văn phòng phẩm', dien_giai: 'Giấy in, mực in, đồ dùng văn phòng', trong_yeu: false, active: true }
+  ],
+
+  dntt: [
+    {
+      id: 'DNTT1',
+      so_dntt: 'DNTT-2026-0001',
+      ngay_lap: '2026-08-20',
+      id_phap_nhan: 'PN1',
+      id_don_vi: 'SR1',
+      nguoi_de_nghi: 'Hồ Khánh Băng',
+      bo_phan_hien_thi: 'QTPV, AS & MTLV',
+      noi_dung_thanh_toan: 'Tiền điện tháng 08 năm 2026',
+      tong_so_tien: 76379844,
+      so_tien_bang_chu: 'Bảy mươi sáu triệu ba trăm bảy mươi chín nghìn tám trăm bốn mươi bốn đồng',
+      hinh_thuc_thanh_toan: 'Chuyển khoản',
+      ten_tai_khoan: 'CÔNG TY ĐIỆN LỰC ĐỒNG THÁP',
+      so_tai_khoan: '1234567890123',
+      ten_ngan_hang: 'Vietcombank',
+      chi_nhanh_ngan_hang: 'Chi nhánh Đồng Tháp',
+      trang_thai: 'Đã duyệt'
+    }
+  ],
+
+  dntt_chi_tiet: [
+    {
+      id: 'CT1',
+      dntt_id: 'DNTT1',
+      stt: 1,
+      noi_dung: 'Tiền điện Tổ hợp Showroom MKH: PB08080121471',
+      so_tien: 76379844
+    }
+  ],
+
+  dntt_phan_bo: [
+    { id: 'PB1',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 5346589, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_QTC', id_bo_phan_cap2: undefined, thu_tu: 1 },
+    { id: 'PB2',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 6110388, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_KD',  id_bo_phan_cap2: 'BP2_KIA', thu_tu: 2 },
+    { id: 'PB3',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 6110388, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_KD',  id_bo_phan_cap2: 'BP2_MAZDA', thu_tu: 3 },
+    { id: 'PB4',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 6110388, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_KD',  id_bo_phan_cap2: 'BP2_PEUGEOT', thu_tu: 4 },
+    { id: 'PB5',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 6110388, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_KD',  id_bo_phan_cap2: 'BP2_BMW', thu_tu: 5 },
+    { id: 'PB6',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3818992, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_DV',  id_bo_phan_cap2: 'BP2_KIA', thu_tu: 6 },
+    { id: 'PB7',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3818992, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_DV',  id_bo_phan_cap2: 'BP2_MAZDA', thu_tu: 7 },
+    { id: 'PB8',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 1527597, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_DV',  id_bo_phan_cap2: 'BP2_PEUGEOT', thu_tu: 8 },
+    { id: 'PB9',  dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 1527597, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_DV',  id_bo_phan_cap2: 'BP2_BMW', thu_tu: 9 },
+    { id: 'PB10', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 6874186, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_XSC', id_bo_phan_cap2: 'BP2_KIA', thu_tu: 10 },
+    { id: 'PB11', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 6874186, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_XSC', id_bo_phan_cap2: 'BP2_MAZDA', thu_tu: 11 },
+    { id: 'PB12', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3818992, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_XSC', id_bo_phan_cap2: 'BP2_PEUGEOT', thu_tu: 12 },
+    { id: 'PB13', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3818992, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_XSC', id_bo_phan_cap2: 'BP2_BMW', thu_tu: 13 },
+    { id: 'PB14', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3055194, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_KD',  id_bo_phan_cap2: 'BP2_TAIBUS', thu_tu: 14 },
+    { id: 'PB15', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3818992, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_DV',  id_bo_phan_cap2: 'BP2_TAIBUS', thu_tu: 15 },
+    { id: 'PB16', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 7637984, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_XSC', id_bo_phan_cap2: 'BP2_TAIBUS', thu_tu: 16 }
   ]
 };

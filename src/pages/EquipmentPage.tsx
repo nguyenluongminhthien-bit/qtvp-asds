@@ -1533,7 +1533,9 @@ export default function EquipmentPage() {
               )}
               <div>
                 <h2 className="text-2xl font-bold text-[#05469B] flex items-center gap-2"><Layers size={28} /> Quản lý Trang thiết bị VP/Tài sản</h2>
-                <p className="text-sm font-medium text-gray-500 mt-1.5">Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredTBs.length} khoản mục)</p>
+                <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({filteredTBs.length} khoản mục)</span>
+                </p>
               </div>
             </div>
 
@@ -1558,9 +1560,9 @@ export default function EquipmentPage() {
                   <select
                     value={detailTypeFilter}
                     onChange={(e) => setDetailTypeFilter(e.target.value)}
-                    className="w-full h-[32px] px-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-xs text-xs font-bold text-gray-700 cursor-pointer"
+                    className="w-full h-[32px] px-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium text-gray-700 dark:text-gray-200 cursor-pointer transition-all"
                   >
-                    <option value="">-- Tất cả loại --</option>
+                    <option value="">Tất cả loại</option>
                     {uniqueDetailTypes.map(type => (
                       <option key={type} value={type}>{type}</option>
                     ))}
@@ -1573,7 +1575,7 @@ export default function EquipmentPage() {
                   <input
                     type="text"
                     placeholder="Tìm kiếm tài sản, số seri..."
-                    className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
+                    className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[#05469B] focus:border-[#05469B] outline-none shadow-xs text-xs font-medium transition-all"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -1581,13 +1583,14 @@ export default function EquipmentPage() {
 
                 {/* 2. Nút Đồng bộ dữ liệu (24 x 24 px) */}
                 <button
+                  type="button"
                   onClick={() => {
                     loadData();
                     toast.success('Đang đồng bộ dữ liệu Trang thiết bị mới nhất từ Supabase...');
                   }}
                   title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
                   disabled={loading}
-                  className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white hover:bg-gray-50 text-gray-700 hover:text-[#05469B] rounded-md border border-gray-200 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
+                  className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-[#05469B] rounded-md border border-gray-200 dark:border-slate-700 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
                 >
                   <RotateCcw size={13} className={loading ? 'animate-spin text-[#05469B]' : ''} />
                 </button>
@@ -1669,8 +1672,8 @@ export default function EquipmentPage() {
             )}
           </div>
 
-          {/* HÀNG DƯỚI: TAB BAR */}
-          <div className={`mb-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10' : ''}`}>
+          {/* HÀNG TAB CHÍNH KÉO DÀI 100% CHIỀU DÀI BẢNG (w-full) VỚI HIỆU ỨNG TRƯỢT FLYONUI */}
+          <div className={`w-full transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
             <SegmentTabs
               tabs={equipmentTabs}
               activeTab={activeMainTab}
@@ -1678,7 +1681,9 @@ export default function EquipmentPage() {
                 setActiveMainTab(id as any);
                 if (id === 'report') setDrillDownValue(null);
               }}
-              layoutId="equipmentActiveBg"
+              layoutId="equipmentMainTabsSlide"
+              activeBgColor="#05469B"
+              fullWidth
             />
           </div>
 

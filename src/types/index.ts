@@ -665,3 +665,118 @@ export interface KhamSucKhoeCaNhanRecord {
   updated_at?: string;
   [key: string]: any;
 }
+
+// 🟢 MODULE QUẢN LÝ CHI PHÍ HÀNH CHÍNH (NATIVE SUPABASE)
+export interface DmKmp {
+  id: string;
+  ma_b7: string;
+  ma_b10?: string;
+  nhom_chi_phi: string;
+  dien_giai?: string;
+  trong_yeu: boolean;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+export interface DmBoPhan {
+  id: string;
+  ma_cap1: string;       // Mã Khối/Nghiệp vụ
+  ten_cap1: string;      // Tên Khối/Nghiệp vụ
+  ma_cap2: string;       // Mã Thương hiệu/Phòng/Bộ phận
+  ten_cap2: string;      // Tên Thương hiệu/Phòng/Bộ phận
+  thu_tu: number;
+  active: boolean;
+  created_at?: string;
+  [key: string]: any;
+}
+
+export interface BoPhanCap1 {
+  id: string;
+  ma: string;
+  ten: string;
+  yeu_cau_cap2: boolean;
+  thu_tu: number;
+  active: boolean;
+  created_at?: string;
+  [key: string]: any;
+}
+
+export interface BoPhanCap2 {
+  id: string;
+  ma: string;
+  ten: string;
+  thu_tu: number;
+  active: boolean;
+  created_at?: string;
+  [key: string]: any;
+}
+
+export interface DNTT {
+  id: string;
+  so_dntt?: string;
+  ngay_lap: string;
+  id_phap_nhan?: string;
+  id_don_vi?: string;
+  nguoi_de_nghi: string;
+  don_vi_hien_thi?: string;
+  bo_phan_hien_thi?: string;
+  noi_dung_thanh_toan?: string;
+  tong_so_tien: number;
+  so_tien_bang_chu?: string;
+  hinh_thuc_thanh_toan: 'Chuyển khoản' | 'Tiền mặt';
+  ten_tai_khoan?: string;
+  so_tai_khoan?: string;
+  ten_ngan_hang?: string;
+  chi_nhanh_ngan_hang?: string;
+  trang_thai: 'Nháp' | 'Chờ duyệt' | 'Đã duyệt' | 'Đã thanh toán' | 'Từ chối';
+  hien_thi_phan_bo?: boolean;
+  so_hoa_don?: string;
+  ngay_hoa_don?: string;
+  hien_thi_hoa_don?: boolean;
+  noi_dung_chuyen_khoan?: string;
+  ghi_chu?: string;
+  hien_thi_nd_ck?: boolean;
+  hien_thi_ghi_chu?: boolean;
+  ky_chuc_danh_1?: string;
+  ky_chuc_danh_2?: string;
+  ky_chuc_danh_3?: string;
+  ky_chuc_danh_4?: string;
+  ky_ho_ten_1?: string;
+  ky_ho_ten_2?: string;
+  ky_ho_ten_3?: string;
+  ky_ho_ten_4?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+}
+
+export interface DnttChiTiet {
+  id: string;
+  dntt_id: string;
+  stt: number;
+  noi_dung: string;
+  so_tien: number;
+  [key: string]: any;
+}
+
+export interface DnttPhanBo {
+  id: string;
+  dntt_id: string;
+  dntt_chi_tiet_id: string;
+  kieu_nhap: 'PHAN_TRAM' | 'SO_TIEN';
+  phan_tram?: number;
+  so_tien: number;
+  id_kmp: string;
+  thang: number;
+  nam: number;
+  id_bo_phan?: string;
+  id_bo_phan_cap1?: string;
+  id_bo_phan_cap2?: string;
+  thu_tu: number;
+  ghi_chu?: string;
+  created_at?: string;
+  [key: string]: any;
+}

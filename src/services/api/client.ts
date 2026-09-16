@@ -6,7 +6,7 @@ export const HEADERS = {
   "apikey": SUPABASE_ANON_KEY,
   "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
   "Content-Type": "application/json",
-  "Prefer": "return=representation" // Yêu cầu Supabase trả về dữ liệu sau khi thêm/sửa
+  "Prefer": "return=representation,resolution=merge-duplicates" // Tự động hợp nhất (upsert) nếu trùng khóa chính thay vì báo lỗi duplicate key
 };
 
 // Chế độ chạy API: 'SUPABASE' (kết nối database thật) hoặc 'MOCK' (chạy dữ liệu giả lập offline qua LocalStorage)

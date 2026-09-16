@@ -12,7 +12,14 @@ export const TABLE_MAP: Record<string, string> = {
   'HS_PCTT': 'hs_pctt',
   'NhaCungCap': 'dm_ncc',
   'HS_KhamSucKhoe': 'hs_kham_suc_khoe',
-  'NK_KhamSucKhoeCaNhan': 'nk_kham_suc_khoe_canhan'
+  'NK_KhamSucKhoeCaNhan': 'nk_kham_suc_khoe_canhan',
+  'DM_KMP': 'dm_kmp',
+  'DM_BoPhan': 'dm_bo_phan',
+  'DM_BoPhanCap1': 'dm_bo_phan_cap1',
+  'DM_BoPhanCap2': 'dm_bo_phan_cap2',
+  'DNTT': 'dntt',
+  'DNTT_ChiTiet': 'dntt_chi_tiet',
+  'DNTT_PhanBo': 'dntt_phan_bo'
 };
 
 export const resolveTable = (name: string) => TABLE_MAP[name] || name.toLowerCase();
@@ -42,6 +49,12 @@ export const CACHE_DEPENDENCIES: Record<string, string[]> = {
   'hs_hoc_vien_khoa_huan_luyen':   ['hs_khoa_huan_luyen', 'ns_dich_vu', 'hs_an_toan_lao_dong'],
   'ts_thiet_bi_nghiem_ngat':       ['nk_kiem_dinh_tbnn', 'hs_an_toan_lao_dong'],
   'nk_kiem_dinh_tbnn':             ['ts_thiet_bi_nghiem_ngat', 'hs_an_toan_lao_dong'],
+  'dntt':                          ['dntt_chi_tiet', 'dntt_phan_bo'],
+  'dntt_chi_tiet':                 ['dntt', 'dntt_phan_bo'],
+  'dntt_phan_bo':                  ['dntt', 'dntt_chi_tiet'],
+  'dm_bo_phan_cap1':               ['dm_bo_phan_cap2', 'dntt_phan_bo'],
+  'dm_bo_phan_cap2':               ['dm_bo_phan_cap1', 'dntt_phan_bo'],
+  'dm_kmp':                        ['dntt_phan_bo'],
 };
 
 // Helper đọc bộ đệm Layer 2 từ LocalStorage

@@ -1,4 +1,4 @@
-import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap } from '../../types';
+import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe } from '../../types';
 import { fetchWithCache, resolveTable, invalidateCache } from './cache';
 import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { writeLog } from './logs';
@@ -46,11 +46,59 @@ export const getChuKyATVSLD = (forceRefresh = false) => getWithFallback<any>('dm
 export const getThietBiNghiemNgat = () => getWithFallback<any>('ts_thiet_bi_nghiem_ngat');
 export const getKiemDinhTBNN = () => getWithFallback<any>('nk_kiem_dinh_tbnn');
 export const getNhatKySuDungXe = () => getWithFallback<any>('nk_su_dung_xe');
+export const getDmKmp = (forceRefresh = false) => getWithFallback<DmKmp>('dm_kmp', forceRefresh);
+export const getDmBoPhan = (forceRefresh = false) => getWithFallback<DmBoPhan>('dm_bo_phan', forceRefresh);
+export const getDmBoPhanCap1 = async (forceRefresh = false): Promise<BoPhanCap1[]> => {
+  const bpList = await getDmBoPhan(forceRefresh);
+  const seen = new Set<string>();
+  const list: BoPhanCap1[] = [];
+  (bpList || []).forEach(b => {
+    if (b.ma_cap1 && !seen.has(b.ma_cap1)) {
+      seen.add(b.ma_cap1);
+      list.push({
+        id: b.ma_cap1,
+        ma: b.ma_cap1,
+        ten: b.ten_cap1,
+        yeu_cau_cap2: b.yeu_cau_cap2,
+        thu_tu: b.thu_tu || 0,
+        active: b.active !== false
+      });
+    }
+  });
+  return list;
+};
+
+export const getDmBoPhanCap2 = async (forceRefresh = false): Promise<BoPhanCap2[]> => {
+  const bpList = await getDmBoPhan(forceRefresh);
+  const seen = new Set<string>();
+  const list: BoPhanCap2[] = [];
+  (bpList || []).forEach(b => {
+    if (b.ma_cap2 && !seen.has(b.ma_cap2)) {
+      seen.add(b.ma_cap2);
+      list.push({
+        id: b.ma_cap2,
+        ma: b.ma_cap2,
+        ten: b.ten_cap2,
+        thu_tu: b.thu_tu || 0,
+        active: b.active !== false
+      });
+    }
+  });
+  return list;
+};
+export const getDntt = (forceRefresh = false) => getWithFallback<DNTT>('dntt', forceRefresh);
+export const getDnttChiTiet = (forceRefresh = false) => getWithFallback<DnttChiTiet>('dntt_chi_tiet', forceRefresh);
+export const getDnttPhanBo = (forceRefresh = false) => getWithFallback<DnttPhanBo>('dntt_phan_bo', forceRefresh);
+export const getChiPhiChotKy = (forceRefresh = false) => getWithFallback<ChiPhiChotKy>('chi_phi_chot_ky', forceRefresh);
+export const getChiPhiThongKe = (forceRefresh = false) => getWithFallback<ChiPhiThongKe>('chi_phi_thong_ke', forceRefresh);
 
 // Helper làm sạch payload trước khi gửi lên Supabase (loại bỏ trường UI-only, rỗng "" -> null)
-function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false): Record<string, any> {
+function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false, tableName?: string): Record<string, any> {
   const cleaned: Record<string, any> = {};
-  const uiOnlyKeys = new Set(['STT', 'stt', 'isEditing', 'isSelected', 'action', '__rowNum__', 'showroom_ref']);
+  const uiOnlyKeys = new Set(['STT', 'isEditing', 'isSelected', 'action', '__rowNum__', 'showroom_ref']);
+  if (tableName !== 'dntt_chi_tiet') {
+    uiOnlyKeys.add('stt');
+  }
 
   Object.keys(item || {}).forEach(key => {
     // Loại bỏ các trường nội bộ bắt đầu bằng _ hoặc trường UI-only
@@ -160,7 +208,7 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
     // Xử lý lưu nhiều dòng (Mảng)
     if (Array.isArray(data)) {
       const cleanArray = data.map(item => {
-        const cleaned = sanitizePayload(item, false);
+        const cleaned = sanitizePayload(item, false, realTableName);
         if (realTableName === 'ns_dich_vu') {
           delete cleaned.phan_loai;
         }
@@ -190,7 +238,7 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
     }
 
     // Làm sạch dữ liệu Object (biến "" thành null, loại bỏ trường UI-only)
-    const cleanedData = sanitizePayload(data, action === 'update');
+    const cleanedData = sanitizePayload(data, action === 'update', realTableName);
     if (realTableName === 'ns_dich_vu') {
       delete cleanedData.phan_loai;
     }
@@ -295,5 +343,219 @@ export async function saveKhamSucKhoeCaNhanBatch(records: any[]): Promise<any[]>
 
 export async function deleteKhamSucKhoeCaNhan(id: string): Promise<boolean> {
   return deleteRecord(id, 'nk_kham_suc_khoe_canhan');
+}
+
+// 🟢 PHÂN HỆ QUẢN LÝ CHI PHÍ: CHỐT KỲ & THỐNG KÊ & BULK STATUS UPDATE
+export async function checkDnttBelongsToLockedPeriod(dnttId: string): Promise<boolean> {
+  try {
+    const dnttList = await getDntt();
+    const dntt = dnttList.find(d => d.id === dnttId);
+    if (!dntt || !dntt.ngay_lap) return false;
+    const date = new Date(dntt.ngay_lap);
+    if (isNaN(date.getTime())) return false;
+    const thang = date.getMonth() + 1;
+    const nam = date.getFullYear();
+    const chotKyList = await getChiPhiChotKy();
+    return chotKyList.some(ck => ck.nam === nam && ck.thang === thang && ck.trang_thai === 'da_chot');
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function chotKyChiPhi(
+  thang: number,
+  nam: number,
+  nguoiChot: string,
+  ghiChu?: string
+): Promise<{ chotKy: ChiPhiChotKy; so_dong_snapshot: number }> {
+  // 1. Kiểm tra xem kỳ này đã được chốt chưa
+  const currentChotKyList = await getChiPhiChotKy(true);
+  const existingActive = currentChotKyList.find(ck => ck.nam === nam && ck.thang === thang && ck.trang_thai === 'da_chot');
+  if (existingActive) {
+    throw new Error(`Kỳ Tháng ${thang}/${nam} đã được chốt số liệu trước đó!`);
+  }
+
+  // 2. Lấy dữ liệu DNTT và DNTT Phân bổ trong kỳ
+  const [allDntt, allPhanBo, allPhapNhan] = await Promise.all([
+    getDntt(true),
+    getDnttPhanBo(true),
+    getPhapNhan(true)
+  ]);
+
+  const dnttMap = new Map(allDntt.map(d => [d.id, d]));
+  const phapNhanMap = new Map((allPhapNhan || []).map((p: any) => [p.id, p]));
+
+  // Lọc các dòng phân bổ thuộc tháng/năm này của các DNTT Đã thanh toán / Hoàn tất
+  const targetAllocations = allPhanBo.filter(pb => {
+    if (pb.nam !== nam || pb.thang !== thang) return false;
+    const dntt = dnttMap.get(pb.dntt_id);
+    return dntt && (dntt.trang_thai === 'Đã thanh toán' || dntt.trang_thai === 'Hoàn tất' || !dntt.trang_thai);
+  });
+
+  // 3. Gom nhóm theo: thang, nam, id_kmp, id_bo_phan, id_don_vi, id_phap_nhan, ma_so_thue
+  const groupMap = new Map<string, {
+    id_kmp?: string;
+    id_bo_phan?: string;
+    id_don_vi?: string;
+    id_phap_nhan?: string;
+    ma_so_thue?: string;
+    tong_tien: number;
+    so_dong_phan_bo: number;
+  }>();
+
+  targetAllocations.forEach(pb => {
+    const dntt = dnttMap.get(pb.dntt_id);
+    const idDonVi = dntt?.id_don_vi || undefined;
+    const idPhapNhan = dntt?.id_phap_nhan || undefined;
+    const pn = idPhapNhan ? phapNhanMap.get(idPhapNhan) : null;
+    const maSoThue = pn?.ma_so_thue ? String(pn.ma_so_thue).trim() : undefined;
+    const idKmp = pb.id_kmp || undefined;
+    const idBoPhan = pb.id_bo_phan || pb.id_bo_phan_cap2 || pb.id_bo_phan_cap1 || undefined;
+
+    const groupKey = `${idKmp || ''}|${idBoPhan || ''}|${idDonVi || ''}|${idPhapNhan || ''}|${maSoThue || ''}`;
+    let item = groupMap.get(groupKey);
+    if (!item) {
+      item = {
+        id_kmp: idKmp,
+        id_bo_phan: idBoPhan,
+        id_don_vi: idDonVi,
+        id_phap_nhan: idPhapNhan,
+        ma_so_thue: maSoThue,
+        tong_tien: 0,
+        so_dong_phan_bo: 0
+      };
+      groupMap.set(groupKey, item);
+    }
+    item.tong_tien += Number(pb.so_tien || 0);
+    item.so_dong_phan_bo += 1;
+  });
+
+  // 4. Tạo bản ghi chi_phi_chot_ky
+  const chotKyId = `CK_${Date.now()}`;
+  const chotKyPayload: ChiPhiChotKy = {
+    id: chotKyId,
+    thang,
+    nam,
+    trang_thai: 'da_chot',
+    chot_boi: nguoiChot,
+    chot_luc: new Date().toISOString(),
+    ghi_chu: ghiChu || `Chốt kỳ Tháng ${thang}/${nam}`
+  };
+
+  await save(chotKyPayload, 'create', 'chi_phi_chot_ky');
+
+  // 5. Lưu snapshot các dòng chi_phi_thong_ke
+  const snapshotList = Array.from(groupMap.values());
+  let idx = 0;
+  for (const row of snapshotList) {
+    idx++;
+    const tkPayload: ChiPhiThongKe = {
+      id: `TK_${Date.now()}_${idx}`,
+      chot_ky_id: chotKyId,
+      thang,
+      nam,
+      id_kmp: row.id_kmp,
+      id_bo_phan: row.id_bo_phan,
+      id_don_vi: row.id_don_vi,
+      id_phap_nhan: row.id_phap_nhan,
+      ma_so_thue: row.ma_so_thue,
+      tong_tien: row.tong_tien,
+      so_dong_phan_bo: row.so_dong_phan_bo
+    };
+    await save(tkPayload, 'create', 'chi_phi_thong_ke');
+  }
+
+  invalidateCache('chi_phi_chot_ky');
+  invalidateCache('chi_phi_thong_ke');
+  void writeLog('CHỐT KỲ', `Chốt kỳ chi phí Tháng ${thang}/${nam} | Snapshot: ${snapshotList.length} nhóm | Người chốt: ${nguoiChot}`);
+
+  return { chotKy: chotKyPayload, so_dong_snapshot: snapshotList.length };
+}
+
+export async function huyChotKyChiPhi(chotKyId: string, nguoiHuy: string): Promise<boolean> {
+  const currentChotKyList = await getChiPhiChotKy(true);
+  const target = currentChotKyList.find(ck => ck.id === chotKyId);
+  if (!target) {
+    throw new Error('Không tìm thấy kỳ chốt cần hủy!');
+  }
+
+  // 1. Cập nhật chi_phi_chot_ky sang da_huy_chot
+  const updatedPayload: ChiPhiChotKy = {
+    ...target,
+    trang_thai: 'da_huy_chot',
+    huy_boi: nguoiHuy,
+    huy_luc: new Date().toISOString()
+  };
+  await save(updatedPayload, 'update', 'chi_phi_chot_ky');
+
+  // 2. Xóa các dòng snapshot chi_phi_thong_ke liên kết
+  const thongKeList = await getChiPhiThongKe(true);
+  const relatedTk = thongKeList.filter(tk => tk.chot_ky_id === chotKyId);
+  for (const tk of relatedTk) {
+    await deleteRecord(tk.id, 'chi_phi_thong_ke').catch(() => { });
+  }
+
+  invalidateCache('chi_phi_chot_ky');
+  invalidateCache('chi_phi_thong_ke');
+  void writeLog('HỦY CHỐT KỲ', `Hủy chốt kỳ Tháng ${target.thang}/${target.nam} | ID: ${chotKyId} | Người hủy: ${nguoiHuy}`);
+
+  return true;
+}
+
+export async function updateDnttStatusBulk(
+  dnttIds: string[],
+  newStatus: string,
+  nguoiCapNhat: string
+): Promise<{ updatedCount: number; skippedLockedCount: number }> {
+  if (!dnttIds || dnttIds.length === 0) {
+    return { updatedCount: 0, skippedLockedCount: 0 };
+  }
+
+  const [allDntt, chotKyList] = await Promise.all([
+    getDntt(true),
+    getChiPhiChotKy(true)
+  ]);
+
+  const activeClosedPeriods = chotKyList.filter(ck => ck.trang_thai === 'da_chot');
+  const lockedMonthYears = new Set(activeClosedPeriods.map(ck => `${ck.nam}_${ck.thang}`));
+
+  let updatedCount = 0;
+  let skippedLockedCount = 0;
+
+  for (const id of dnttIds) {
+    const dntt = allDntt.find(d => d.id === id);
+    if (!dntt) continue;
+
+    // Kiểm tra xem phiếu có rơi vào kỳ đã chốt không
+    let isLocked = false;
+    if (dntt.ngay_lap) {
+      const date = new Date(dntt.ngay_lap);
+      if (!isNaN(date.getTime())) {
+        const thang = date.getMonth() + 1;
+        const nam = date.getFullYear();
+        if (lockedMonthYears.has(`${nam}_${thang}`)) {
+          isLocked = true;
+        }
+      }
+    }
+
+    if (isLocked) {
+      skippedLockedCount++;
+      continue;
+    }
+
+    const payload = {
+      ...dntt,
+      trang_thai: newStatus,
+      updated_at: new Date().toISOString()
+    };
+    await save(payload, 'update', 'dntt');
+    updatedCount++;
+  }
+
+  invalidateCache('dntt');
+  void writeLog('CẬP NHẬT TRẠNG THÁI HÀNG LOẠT', `Cập nhật ${updatedCount} phiếu DNTT sang trạng thái "${newStatus}" | Bỏ qua ${skippedLockedCount} phiếu thuộc kỳ đã chốt | Người thực hiện: ${nguoiCapNhat}`);
+
+  return { updatedCount, skippedLockedCount };
 }
 
