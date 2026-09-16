@@ -73,6 +73,7 @@ src/
 | ATVSLĐ (`atvsld`) | `AtvsldPage.tsx` (676 dòng) — có 5 tab cấp 1: `hoso`, `daotao` (2 tab con `kehoach`/`khoahoc`), `thietbi`, `khamsuckhoe` | `HoSoTab.tsx`, `KeHoachTab.tsx`, `KhoaHocTab.tsx` (1742 dòng), `StrictEquipmentTab.tsx` (996 dòng), `SucKhoeTab.tsx` (705 dòng), modal `AtvsldModal`, component `SegmentTabs.tsx` | `hs_an_toan_lao_dong` (hồ sơ), `hs_khoa_huan_luyen`+`hs_hoc_vien_khoa_huan_luyen` (khóa học), `ts_thiet_bi_nghiem_ngat`+`nk_kiem_dinh_tbnn` (thiết bị nghiêm ngặt), `hs_kham_suc_khoe`+`hs_kham_suc_khoe_campaign` (khám sức khỏe) | ✅ |
 | Phương tiện (`vehicles`) | `VehiclePage.tsx` (1520 dòng) | `SegmentTabs.tsx`, tích hợp Google Drive (`googleDrive.ts`, `searchVehicleDriveFile` theo Số khung) | `ts_xe` (bổ sung cột `ho_so_xe`), `cp_hoat_dong_xe`, `nk_su_dung_xe` | ✅ |
 | Tài sản-Thiết bị (`equipments`) | `EquipmentPage.tsx` (3205 dòng) | `PasteImportModal`, `CustomAutocomplete`, `SegmentTabs.tsx` | `ts_thiet_bi`, `nk_thiet_bi`, `dm_phap_nhan` (lọc theo `id_don_vi`) | ✅ |
+| Quản lý Chi phí (`cphc`) | `CostManagementPage.tsx` | `DnttTab`, `CostDashboardTab`, `KmpConfigTab`, `AdminLegalTab`, `DnttAllocationModal`, `exportDnttDocx.ts` | `dm_kmp`, `dm_bo_phan_cap1`, `dm_bo_phan_cap2`, `dntt`, `dntt_chi_tiet`, `dntt_phan_bo` (tái sử dụng `dm_don_vi`, `dm_phap_nhan`) | ✅ (Native) |
 | Nhà cung cấp (`suppliers`) | `SupplierPage.tsx` (khoảng 600 dòng) | modal xem chi tiết, modal thêm/sửa | `dm_ncc` | ✅ |
 | Tài liệu (`documents`) | `DocumentPage.tsx` (1674 dòng) | Các component con hiển thị bảng theo tab nằm trong `src/components/document/` (`AllDocTable.tsx`, `ThongBaoTable.tsx`, `QuyetDinhTable.tsx`, `CongVanDenTable.tsx`, `CongVanDiTable.tsx`, `ToTrinhTable.tsx`), file helper `documentHelpers.ts`, component `SegmentTabs.tsx`, tích hợp Google Drive (`googleDrive.ts`, `searchGoogleDriveFile`). | `vb_tb` | ✅ |
 | Quy định (`policies`) | `PolicyPage.tsx` (557 dòng) | `SegmentTabs.tsx` | `qd_qt` | ✅ |
@@ -85,9 +86,9 @@ src/
 
 ---
 
-## 4. TOÀN BỘ 27 BẢNG SUPABASE THẬT (từ `services/api/modules.ts`)
+## 4. TOÀN BỘ 33 BẢNG SUPABASE THẬT (từ `services/api/modules.ts`)
 
-`ns_dich_vu`, `dm_don_vi`, `hs_an_ninh`, `ts_xe`, `cp_hoat_dong_xe`, `nk_su_dung_xe`, `dm_phap_nhan`, `dm_phong_hop`, `qd_qt`, `ts_thiet_bi`, `nk_thiet_bi`, `vb_tb`, `hs_pvhc`, `hs_an_toan_lao_dong`, `hs_pctt`, `hs_pccc`, `ts_pccc`, `config_users`, `sys_logs`, `dm_thue_bao`, `cp_cuoc_thang`, `hs_khoa_huan_luyen`, `hs_hoc_vien_khoa_huan_luyen`, `dm_chu_ky_atvsld`, `ts_thiet_bi_nghiem_ngat`, `nk_kiem_dinh_tbnn`, `dm_ncc`, `hs_kham_suc_khoe`, `hs_kham_suc_khoe_campaign`.
+`ns_dich_vu`, `dm_don_vi`, `hs_an_ninh`, `ts_xe`, `cp_hoat_dong_xe`, `nk_su_dung_xe`, `dm_phap_nhan`, `dm_phong_hop`, `qd_qt`, `ts_thiet_bi`, `nk_thiet_bi`, `vb_tb`, `hs_pvhc`, `hs_an_toan_lao_dong`, `hs_pctt`, `hs_pccc`, `ts_pccc`, `config_users`, `sys_logs`, `dm_thue_bao`, `cp_cuoc_thang`, `hs_khoa_huan_luyen`, `hs_hoc_vien_khoa_huan_luyen`, `dm_chu_ky_atvsld`, `ts_thiet_bi_nghiem_ngat`, `nk_kiem_dinh_tbnn`, `dm_ncc`, `hs_kham_suc_khoe`, `hs_kham_suc_khoe_campaign`, `dm_kmp`, `dm_bo_phan_cap1`, `dm_bo_phan_cap2`, `dntt`, `dntt_chi_tiet`, `dntt_phan_bo`.
 
 ---
 
