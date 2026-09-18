@@ -2030,15 +2030,23 @@ export default function VehiclePage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-250 cursor-pointer whitespace-nowrap outline-none border-none ${isActive
-                      ? `bg-[#005698] text-white font-black z-10 ${activeTab === 'list' ? 'rounded-t-xl rounded-b-none pb-2.5 sm:pb-3' : 'rounded-xl'}`
+                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${isActive
+                      ? `text-white font-black z-10 ${activeTab === 'list' ? 'pb-2.5 sm:pb-3' : ''}`
                       : 'text-gray-500 hover:text-[#005698] dark:hover:text-blue-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
                       }`}
                   >
-                    {tab.icon && <span className="shrink-0 flex items-center">{tab.icon}</span>}
-                    <span>{tab.label}</span>
+                    {isActive && (
+                      <motion.div
+                        layoutId="vehicleMainTabSlide"
+                        className={`absolute inset-0 z-0 shadow-xs ${activeTab === 'list' ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
+                        style={{ backgroundColor: '#005698' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    {tab.icon && <span className="relative z-10 shrink-0 flex items-center">{tab.icon}</span>}
+                    <span className="relative z-10">{tab.label}</span>
                     {tab.count !== undefined && (
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-500'}`}>
+                      <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-500'}`}>
                         {tab.count}
                       </span>
                     )}
@@ -2059,37 +2067,37 @@ export default function VehiclePage() {
                   className="overflow-hidden bg-[#005698]"
                 >
                   <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                    {/* Sub-tab: Hiện hữu */}
-                    <button
-                      type="button"
-                      onClick={() => setVehicleSubTab('active')}
-                      className={`py-1.5 px-4 text-xs font-bold transition-all duration-300 ease-in-out flex items-center justify-center gap-2 cursor-pointer ${vehicleSubTab === 'active'
-                        ? 'bg-[#00386b] text-white shadow-sm ring-1 ring-sky-400/40 rounded-lg font-black'
-                        : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                        }`}
-                    >
-                      <Car className="w-4 h-4" />
-                      <span>Hiện hữu</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${vehicleSubTab === 'active' ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
-                        {activeCarsCount}
-                      </span>
-                    </button>
-
-                    {/* Sub-tab: Thanh lý */}
-                    <button
-                      type="button"
-                      onClick={() => setVehicleSubTab('liquidated')}
-                      className={`py-1.5 px-4 text-xs font-bold transition-all duration-300 ease-in-out flex items-center justify-center gap-2 cursor-pointer ${vehicleSubTab === 'liquidated'
-                        ? 'bg-[#00386b] text-white shadow-sm ring-1 ring-sky-400/40 rounded-lg font-black'
-                        : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                        }`}
-                    >
-                      <Archive className="w-4 h-4" />
-                      <span>Thanh lý</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${vehicleSubTab === 'liquidated' ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
-                        {liquidatedCarsCount}
-                      </span>
-                    </button>
+                    {[
+                      { id: 'active', label: 'Hiện hữu', icon: <Car className="w-4 h-4" />, count: activeCarsCount },
+                      { id: 'liquidated', label: 'Thanh lý', icon: <Archive className="w-4 h-4" />, count: liquidatedCarsCount }
+                    ].map(st => {
+                      const isSubActive = vehicleSubTab === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setVehicleSubTab(st.id as any)}
+                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                            isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {isSubActive && (
+                            <motion.div
+                              layoutId="vehicleSubTabSlide"
+                              className="absolute inset-0 bg-[#00386b] rounded-lg shadow-sm ring-1 ring-sky-400/40 z-0"
+                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                            />
+                          )}
+                          <span className="relative z-10 flex items-center gap-1.5">
+                            {st.icon}
+                            <span>{st.label}</span>
+                          </span>
+                          <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
+                            {st.count}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}

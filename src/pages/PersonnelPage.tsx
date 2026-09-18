@@ -446,12 +446,6 @@ export default function PersonnelPage() {
     }
   }, [donViList, user, allowedDonViIds]);
 
-  const personnelTabs = useMemo(() => [
-    { id: 'info', label: 'Danh sách nhân sự', icon: <Users size={18} /> },
-    { id: 'stats', label: 'Thống kê', icon: <BarChart3 size={18} /> },
-    { id: 'cuoc', label: 'Cước điện thoại', icon: <Phone size={18} /> }
-  ], []);
-
   const calculateSeniority = (startDate: string, trangThai: string, endDate: string) => {
     if (!startDate) return 'Chưa có';
     const start = new Date(startDate);
@@ -809,6 +803,12 @@ export default function PersonnelPage() {
   const countOffboard = useMemo(() => {
     return filteredPersonnel.filter(p => p.trang_thai === 'Đã nghỉ việc' || p.trang_thai === 'Đã điều chuyển').length;
   }, [filteredPersonnel]);
+
+  const personnelTabs = useMemo(() => [
+    { id: 'info', label: 'Danh sách nhân sự', icon: <Users size={18} />, count: filteredPersonnel.length },
+    { id: 'stats', label: 'Thống kê', icon: <BarChart3 size={18} /> },
+    { id: 'cuoc', label: 'Cước điện thoại', icon: <Phone size={18} /> }
+  ], [filteredPersonnel.length]);
 
   const displayPersonnelList = useMemo(() => {
     if (activeSubTabPersonnel === 'ACTIVE') {
@@ -2371,14 +2371,27 @@ export default function PersonnelPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-250 cursor-pointer whitespace-nowrap outline-none border-none ${
+                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${
                       isActive
-                        ? `bg-[#00539c] text-white font-black z-10 ${activeTab === 'info' ? 'rounded-t-xl rounded-b-none pb-2.5 sm:pb-3' : 'rounded-xl'}`
+                        ? `text-white font-black z-10 ${activeTab === 'info' ? 'pb-2.5 sm:pb-3' : ''}`
                         : 'text-gray-500 hover:text-[#00539c] dark:hover:text-blue-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
                     }`}
                   >
-                    {tab.icon && <span className="shrink-0 flex items-center">{tab.icon}</span>}
-                    <span>{tab.label}</span>
+                    {isActive && (
+                      <motion.div
+                        layoutId="personnelMainTabSlide"
+                        className={`absolute inset-0 z-0 shadow-xs ${activeTab === 'info' ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
+                        style={{ backgroundColor: '#00539c' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    {tab.icon && <span className="relative z-10 shrink-0 flex items-center">{tab.icon}</span>}
+                    <span className="relative z-10">{tab.label}</span>
+                    {tab.count !== undefined && (
+                      <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-500'}`}>
+                        {tab.count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -2396,37 +2409,39 @@ export default function PersonnelPage() {
                   className="overflow-hidden bg-[#00539c]"
                 >
                   <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                    <button
-                      type="button"
-                      onClick={() => setActiveSubTabPersonnel('ACTIVE')}
-                      className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        activeSubTabPersonnel === 'ACTIVE'
-                          ? 'bg-[#00386b] text-white shadow-sm ring-1 ring-sky-400/40 rounded-lg font-black'
-                          : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                      }`}
-                    >
-                      <UserCheck className="w-4 h-4" />
-                      <span>Đang làm việc</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeSubTabPersonnel === 'ACTIVE' ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
-                        {countActive}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveSubTabPersonnel('OFFBOARD')}
-                      className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        activeSubTabPersonnel === 'OFFBOARD'
-                          ? 'bg-[#00386b] text-white shadow-sm ring-1 ring-sky-400/40 rounded-lg font-black'
-                          : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                      }`}
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>Đã nghỉ việc / Điều chuyển</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeSubTabPersonnel === 'OFFBOARD' ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
-                        {countOffboard}
-                      </span>
-                    </button>
+                    {[
+                      { id: 'ACTIVE', label: 'Đang làm việc', icon: <UserCheck className="w-4 h-4" />, count: countActive },
+                      { id: 'OFFBOARD', label: 'Đã nghỉ việc / Điều chuyển', icon: <LogOut className="w-4 h-4" />, count: countOffboard }
+                    ].map(st => {
+                      const isSubActive = activeSubTabPersonnel === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setActiveSubTabPersonnel(st.id as any)}
+                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                            isSubActive
+                              ? 'text-white font-black'
+                              : 'text-white/80 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {isSubActive && (
+                            <motion.div
+                              layoutId="personnelSubTabSlide"
+                              className="absolute inset-0 bg-[#00386b] rounded-lg shadow-sm ring-1 ring-sky-400/40 z-0"
+                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                            />
+                          )}
+                          <span className="relative z-10 flex items-center gap-1.5">
+                            {st.icon}
+                            <span>{st.label}</span>
+                          </span>
+                          <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
+                            {st.count}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}

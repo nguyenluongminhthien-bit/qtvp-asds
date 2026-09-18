@@ -749,7 +749,9 @@ export default function DocumentPage() {
   }, [filteredDocsWithoutPhanLoai, selectedPhanLoai]);
 
   const docTabs = useMemo(() => {
-    const list: { id: string; label: string; count: number; icon: React.ReactNode }[] = [];
+    const list: { id: string; label: string; count: number; icon: React.ReactNode }[] = [
+      { id: 'all', label: 'Tất cả', count: tabCounts.all, icon: <Layers size={16} /> }
+    ];
 
     if (canViewType('Quyết định')) {
       list.push({ id: 'Quyết định', label: 'Quyết định', count: tabCounts.quyetDinh, icon: <FileText size={16} /> });
@@ -769,8 +771,6 @@ export default function DocumentPage() {
     if (canViewType('Công văn đến')) {
       list.push({ id: 'Công văn đến', label: 'Công văn đến', count: tabCounts.cvDen, icon: <Inbox size={16} /> });
     }
-
-    list.push({ id: 'all', label: 'Tất cả', count: tabCounts.all, icon: <Layers size={16} /> });
 
     return list;
   }, [tabCounts, canViewType]);
@@ -1434,6 +1434,8 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
               setCurrentPage(1);
             }}
             layoutId="docActiveTabBackground"
+            activeBgColor="#05469B"
+            fullWidth
           />
         </div>
 

@@ -142,11 +142,6 @@ export default function EquipmentPage() {
   const [nccList, setNccList] = useState<NhaCungCap[]>([]);
   const [phapNhanList, setPhapNhanList] = useState<any[]>([]);
 
-  const equipmentTabs = useMemo(() => [
-    { id: 'list', label: 'Danh mục TTB/Tài sản', icon: <Package size={18} /> },
-    { id: 'report', label: 'Thống kê', icon: <BarChart3 size={18} /> }
-  ], []);
-
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -659,6 +654,11 @@ export default function EquipmentPage() {
     }
     return result;
   }, [tbData, searchTerm, selectedUnitFilter, detailTypeFilter, allowedDonViIds, donViList]);
+
+  const equipmentTabs = useMemo(() => [
+    { id: 'list', label: 'Danh mục TTB/Tài sản', icon: <Package size={18} />, count: filteredTBs.length },
+    { id: 'report', label: 'Thống kê', icon: <BarChart3 size={18} /> }
+  ], [filteredTBs.length]);
 
   // 🟢 TÍNH TOÁN THỐNG KÊ CHI TIẾT ĐỘNG THEO DỮ LIỆU ĐÃ LỌC
   const statsSummary = useMemo(() => {

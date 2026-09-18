@@ -1,10 +1,10 @@
-import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe } from '../../types';
+import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmNhomChiPhi, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe } from '../../types';
 import { fetchWithCache, resolveTable, invalidateCache } from './cache';
 import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { writeLog } from './logs';
 import { getLocalRecords, saveLocalRecord, deleteLocalRecord } from './localStore';
 import { currentUser } from './auth';
-import { getAllSubordinateIds } from '../../utils/hierarchy';
+import { getAllSubordinateIds, getUserPermittedUnitIds, isUserAdminOrAllAccess } from '../../utils/hierarchy';
 
 // Helper wrapper cho tất cả GET requests có chế độ fallback
 async function getWithFallback<T>(tableName: string, forceRefresh = false): Promise<T[]> {
@@ -46,6 +46,7 @@ export const getChuKyATVSLD = (forceRefresh = false) => getWithFallback<any>('dm
 export const getThietBiNghiemNgat = () => getWithFallback<any>('ts_thiet_bi_nghiem_ngat');
 export const getKiemDinhTBNN = () => getWithFallback<any>('nk_kiem_dinh_tbnn');
 export const getNhatKySuDungXe = () => getWithFallback<any>('nk_su_dung_xe');
+export const getDmNhomChiPhi = (forceRefresh = false) => getWithFallback<DmNhomChiPhi>('dm_nhom_chi_phi', forceRefresh);
 export const getDmKmp = (forceRefresh = false) => getWithFallback<DmKmp>('dm_kmp', forceRefresh);
 export const getDmBoPhan = (forceRefresh = false) => getWithFallback<DmBoPhan>('dm_bo_phan', forceRefresh);
 export const getDmBoPhanCap1 = async (forceRefresh = false): Promise<BoPhanCap1[]> => {
@@ -169,22 +170,24 @@ function extractRecordSummary(data: any, tableName: string): string {
 
 // Helper kiểm tra phạm vi ghi (chặn thật việc ghi dữ liệu ngoài phạm vi đơn vị)
 async function checkUnitPermission(item: any, tableName: string) {
-  if (!currentUser || currentUser.quyen === 'ADMIN') return;
+  if (!currentUser || isUserAdminOrAllAccess(currentUser)) return;
 
   const targetIdDonVi = item?.id_don_vi;
   if (targetIdDonVi === undefined || targetIdDonVi === null || String(targetIdDonVi).trim() === '') return;
 
   const strTargetId = String(targetIdDonVi).trim();
-  const userIdDonVi = String(currentUser.id_don_vi || (currentUser as any).idDonVi || '').trim();
-
-  if (!userIdDonVi || userIdDonVi === 'ALL' || userIdDonVi === 'HO' || userIdDonVi === 'DV_HO') return;
-
   const allUnits = await getDonVi();
-  const subIds = getAllSubordinateIds(userIdDonVi, allUnits);
-  const allowedIds = new Set([userIdDonVi, ...subIds].map(id => String(id).trim()));
+  const permittedSet = getUserPermittedUnitIds(currentUser, allUnits);
 
-  if (!allowedIds.has(strTargetId)) {
-    throw new Error(`Bạn không có quyền ghi dữ liệu cho đơn vị này (Mã ĐV: ${strTargetId}). Vui lòng liên hệ Quản trị viên nếu đây là nhầm lẫn.`);
+  // Nếu là tài khoản toàn quyền thì cho phép
+  if (!permittedSet) return;
+
+  // Hỗ trợ trường hợp id_don_vi chứa nhiều mã đơn vị phân tách bằng dấu phẩy
+  const targetIds = strTargetId.split(',').map(s => s.trim()).filter(Boolean);
+  const unauthorizedIds = targetIds.filter(id => !permittedSet.has(id));
+
+  if (unauthorizedIds.length > 0) {
+    throw new Error(`Bạn không có quyền ghi dữ liệu cho đơn vị này (Mã ĐV: ${unauthorizedIds.join(', ')}). Vui lòng liên hệ Quản trị viên nếu đây là nhầm lẫn.`);
   }
 }
 
@@ -348,15 +351,28 @@ export async function deleteKhamSucKhoeCaNhan(id: string): Promise<boolean> {
 // 🟢 PHÂN HỆ QUẢN LÝ CHI PHÍ: CHỐT KỲ & THỐNG KÊ & BULK STATUS UPDATE
 export async function checkDnttBelongsToLockedPeriod(dnttId: string): Promise<boolean> {
   try {
+    const [allPhanBo, chotKyList] = await Promise.all([
+      getDnttPhanBo(),
+      getChiPhiChotKy()
+    ]);
+    const activeClosed = new Set(
+      chotKyList.filter(ck => ck.trang_thai === 'da_chot').map(ck => `${ck.nam}_${ck.thang}`)
+    );
+    if (activeClosed.size === 0) return false;
+
+    // 1. Ưu tiên kiểm tra các dòng phân bổ của DNTT này
+    const relatedPb = allPhanBo.filter(pb => pb.dntt_id === dnttId);
+    if (relatedPb.length > 0) {
+      return relatedPb.some(pb => activeClosed.has(`${pb.nam}_${pb.thang}`));
+    }
+
+    // 2. Fallback qua ngày lập nếu chưa có dòng phân bổ nào
     const dnttList = await getDntt();
     const dntt = dnttList.find(d => d.id === dnttId);
     if (!dntt || !dntt.ngay_lap) return false;
     const date = new Date(dntt.ngay_lap);
     if (isNaN(date.getTime())) return false;
-    const thang = date.getMonth() + 1;
-    const nam = date.getFullYear();
-    const chotKyList = await getChiPhiChotKy();
-    return chotKyList.some(ck => ck.nam === nam && ck.thang === thang && ck.trang_thai === 'da_chot');
+    return activeClosed.has(`${date.getFullYear()}_${date.getMonth() + 1}`);
   } catch (e) {
     return false;
   }
@@ -375,21 +391,23 @@ export async function chotKyChiPhi(
     throw new Error(`Kỳ Tháng ${thang}/${nam} đã được chốt số liệu trước đó!`);
   }
 
-  // 2. Lấy dữ liệu DNTT và DNTT Phân bổ trong kỳ
-  const [allDntt, allPhanBo, allPhapNhan] = await Promise.all([
+  // 2. Lấy dữ liệu DNTT, Phân bổ, Pháp nhân, KMP trong kỳ
+  const [allDntt, allPhanBo, allPhapNhan, allKmp] = await Promise.all([
     getDntt(true),
     getDnttPhanBo(true),
-    getPhapNhan(true)
+    getPhapNhan(true),
+    getDmKmp(true)
   ]);
 
   const dnttMap = new Map(allDntt.map(d => [d.id, d]));
   const phapNhanMap = new Map((allPhapNhan || []).map((p: any) => [p.id, p]));
+  const kmpMap = new Map((allKmp || []).map(k => [k.id, k]));
 
-  // Lọc các dòng phân bổ thuộc tháng/năm này của các DNTT Đã thanh toán / Hoàn tất
+  // Lấy TOÀN BỘ dòng phân bổ thuộc tháng/năm này (KHÔNG lọc theo trang_thai vì cả Đã lưu và Lưu cập nhật đều là dữ liệu thật)
   const targetAllocations = allPhanBo.filter(pb => {
     if (pb.nam !== nam || pb.thang !== thang) return false;
     const dntt = dnttMap.get(pb.dntt_id);
-    return dntt && (dntt.trang_thai === 'Đã thanh toán' || dntt.trang_thai === 'Hoàn tất' || !dntt.trang_thai);
+    return Boolean(dntt);
   });
 
   // 3. Gom nhóm theo: thang, nam, id_kmp, id_bo_phan, id_don_vi, id_phap_nhan, ma_so_thue
@@ -399,6 +417,7 @@ export async function chotKyChiPhi(
     id_don_vi?: string;
     id_phap_nhan?: string;
     ma_so_thue?: string;
+    thuoc_bao_cao_hanh_chinh?: boolean;
     tong_tien: number;
     so_dong_phan_bo: number;
   }>();
@@ -410,6 +429,9 @@ export async function chotKyChiPhi(
     const pn = idPhapNhan ? phapNhanMap.get(idPhapNhan) : null;
     const maSoThue = pn?.ma_so_thue ? String(pn.ma_so_thue).trim() : undefined;
     const idKmp = pb.id_kmp || undefined;
+    const kmp = idKmp ? kmpMap.get(idKmp) : null;
+    // Đóng băng cờ phạm vi báo cáo hành chính tại đúng thời điểm chốt kỳ
+    const thuocBcHc = kmp ? (kmp.thuoc_bao_cao_hanh_chinh !== false) : true;
     const idBoPhan = pb.id_bo_phan || pb.id_bo_phan_cap2 || pb.id_bo_phan_cap1 || undefined;
 
     const groupKey = `${idKmp || ''}|${idBoPhan || ''}|${idDonVi || ''}|${idPhapNhan || ''}|${maSoThue || ''}`;
@@ -421,6 +443,7 @@ export async function chotKyChiPhi(
         id_don_vi: idDonVi,
         id_phap_nhan: idPhapNhan,
         ma_so_thue: maSoThue,
+        thuoc_bao_cao_hanh_chinh: thuocBcHc,
         tong_tien: 0,
         so_dong_phan_bo: 0
       };
@@ -459,6 +482,7 @@ export async function chotKyChiPhi(
       id_don_vi: row.id_don_vi,
       id_phap_nhan: row.id_phap_nhan,
       ma_so_thue: row.ma_so_thue,
+      thuoc_bao_cao_hanh_chinh: row.thuoc_bao_cao_hanh_chinh,
       tong_tien: row.tong_tien,
       so_dong_phan_bo: row.so_dong_phan_bo
     };

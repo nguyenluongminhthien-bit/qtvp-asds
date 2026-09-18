@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FileText, BarChart3, BarChart2, Tag, Building2, PanelLeftOpen, 
-  Wallet, RefreshCw, Loader2, Search, RotateCcw, Sparkles, ChevronDown, PlusCircle, Layers
+  Wallet, RefreshCw, Loader2, Search, RotateCcw, Sparkles, ChevronDown, PlusCircle, Layers, FileSpreadsheet
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { apiService } from '../services/api';
@@ -10,7 +10,7 @@ import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 import { 
   DonVi, PhapNhan, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2, 
-  DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe
+  DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe, DmNhomChiPhi
 } from '../types';
 import DnttTab from '../components/cost/DnttTab';
 import CostStatisticsTab from '../components/cost/CostStatisticsTab';
@@ -18,6 +18,7 @@ import CostDashboardTab from '../components/cost/CostDashboardTab';
 import KmpConfigTab from '../components/cost/KmpConfigTab';
 import AdminLegalTab from '../components/cost/AdminLegalTab';
 import { toast } from '../utils/toast';
+import { isCostManagementUnit, getUserPermittedUnitIds, getAllSubordinateIds } from '../utils/hierarchy';
 
 export default function CostManagementPage() {
   const { user } = useAuth();
@@ -31,16 +32,18 @@ export default function CostManagementPage() {
   // Sub-tabs State (Mặc định: 'dntt')
   const [activeTab, setActiveTab] = useState<'dntt' | 'thong_ke' | 'dashboard' | 'kmp' | 'admin'>('dntt');
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'bophan' | 'phapnhan'>('bophan');
+  const [activeThongKeSubTab, setActiveThongKeSubTab] = useState<'phan_tich' | 'quan_tri'>('phan_tich');
   const [costSearchTerm, setCostSearchTerm] = useState('');
   const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
   const [dnttCreateTrigger, setDnttCreateTrigger] = useState<number>(0);
 
-  const isLevel2Open = activeTab === 'admin';
+  const isLevel2Open = activeTab === 'admin' || activeTab === 'thong_ke';
 
   // Dữ liệu State
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [phapNhanList, setPhapNhanList] = useState<PhapNhan[]>([]);
   const [kmpList, setKmpList] = useState<DmKmp[]>([]);
+  const [nhomChiPhiList, setNhomChiPhiList] = useState<DmNhomChiPhi[]>([]);
   const [boPhanList, setBoPhanList] = useState<DmBoPhan[]>([]);
   const [cap1List, setCap1List] = useState<BoPhanCap1[]>([]);
   const [cap2List, setCap2List] = useState<BoPhanCap2[]>([]);
@@ -51,15 +54,72 @@ export default function CostManagementPage() {
   const [thongKeList, setThongKeList] = useState<ChiPhiThongKe[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Phân quyền đơn vị
-  const allowedDonViIds = useAllowedUnits(donViList);
+  // Danh sách Đơn vị chuẩn Quản trị chi phí (Chỉ gồm: Văn phòng, Công ty Tỉnh Thành, Showroom Quản trị)
+  const costDonViList = useMemo(() => {
+    return donViList.filter(isCostManagementUnit);
+  }, [donViList]);
+
+  // Phân quyền đơn vị của người dùng: Đơn vị mẹ + các đơn vị trực thuộc
+  const userPermittedUnitIds = useMemo(() => {
+    return getUserPermittedUnitIds(user, donViList);
+  }, [user, donViList]);
+
+  // Phân quyền đơn vị (áp dụng trên danh sách đơn vị quản trị chi phí)
+  const allowedDonViIds = useMemo(() => {
+    if (!userPermittedUnitIds) return costDonViList.map(dv => String(dv.id));
+    return costDonViList.filter(dv => userPermittedUnitIds.has(String(dv.id))).map(dv => String(dv.id));
+  }, [costDonViList, userPermittedUnitIds]);
+
+  // Tìm đơn vị mẹ quản lý của tài khoản (dành cho tài khoản cấp đơn vị)
+  const rootParentUnit = useMemo(() => {
+    if (!userPermittedUnitIds) return null;
+    return donViList.find(d => 
+      userPermittedUnitIds.has(String(d.id)) && 
+      (!d.cap_quan_ly || d.cap_quan_ly === 'HO' || d.cap_quan_ly === 'DV_HO')
+    ) || null;
+  }, [userPermittedUnitIds, donViList]);
+
+  // Nhãn hiển thị cho nút Tất cả Đơn vị trong bộ lọc
+  const allUnitsLabel = useMemo(() => {
+    if (!userPermittedUnitIds) return 'Tất cả Đơn vị Quản trị';
+    return 'Tất cả Đơn vị trực thuộc';
+  }, [userPermittedUnitIds]);
+
+  // Danh sách DNTT thuộc phạm vi phân quyền của tài khoản (Đơn vị mẹ + các đơn vị trực thuộc)
+  const permittedDnttList = useMemo(() => {
+    if (!userPermittedUnitIds) return dnttList;
+    return dnttList.filter(d => {
+      if (d.id_don_vi && userPermittedUnitIds.has(String(d.id_don_vi))) return true;
+      if (d.don_vi_hien_thi) {
+        const lower = d.don_vi_hien_thi.toLowerCase();
+        for (const uid of userPermittedUnitIds) {
+          const u = donViList.find(x => String(x.id) === uid);
+          if (u?.ten_don_vi && lower.includes(u.ten_don_vi.toLowerCase())) return true;
+        }
+      }
+      return false;
+    });
+  }, [dnttList, userPermittedUnitIds, donViList]);
+
+  // Danh sách Phân bổ DNTT thuộc phạm vi phân quyền của tài khoản
+  const permittedPhanBoList = useMemo(() => {
+    if (!userPermittedUnitIds) return phanBoList;
+    const permittedDnttIds = new Set(permittedDnttList.map(d => String(d.id)));
+    return phanBoList.filter(pb => permittedDnttIds.has(String(pb.dntt_id)));
+  }, [phanBoList, permittedDnttList, userPermittedUnitIds]);
+
+  // Danh sách Thống kê chốt kỳ thuộc phạm vi phân quyền của tài khoản
+  const permittedThongKeList = useMemo(() => {
+    if (!userPermittedUnitIds) return thongKeList;
+    return thongKeList.filter(tk => tk.id_don_vi && userPermittedUnitIds.has(String(tk.id_don_vi)));
+  }, [thongKeList, userPermittedUnitIds]);
 
   // Tải dữ liệu toàn bộ module
   const loadAllData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const [
-        dvRes, pnRes, kmpRes, bpRes, dnttRes, ctRes, pbRes, ckRes, tkRes
+        dvRes, pnRes, kmpRes, bpRes, dnttRes, ctRes, pbRes, ckRes, tkRes, ncpRes
       ] = await Promise.all([
         apiService.getDonVi ? apiService.getDonVi().catch(() => []) : Promise.resolve([]),
         apiService.getPhapNhan ? apiService.getPhapNhan().catch(() => []) : Promise.resolve([]),
@@ -69,12 +129,14 @@ export default function CostManagementPage() {
         apiService.getDnttChiTiet ? apiService.getDnttChiTiet(true).catch(() => []) : Promise.resolve([]),
         apiService.getDnttPhanBo ? apiService.getDnttPhanBo(true).catch(() => []) : Promise.resolve([]),
         apiService.getChiPhiChotKy ? apiService.getChiPhiChotKy().catch(() => []) : Promise.resolve([]),
-        apiService.getChiPhiThongKe ? apiService.getChiPhiThongKe().catch(() => []) : Promise.resolve([])
+        apiService.getChiPhiThongKe ? apiService.getChiPhiThongKe().catch(() => []) : Promise.resolve([]),
+        apiService.getDmNhomChiPhi ? apiService.getDmNhomChiPhi().catch(() => []) : Promise.resolve([])
       ]);
 
       setDonViList(dvRes || []);
       setPhapNhanList(pnRes || []);
       setKmpList(kmpRes || []);
+      setNhomChiPhiList(ncpRes || []);
       setBoPhanList(bpRes || []);
       setChotKyList(ckRes || []);
       setThongKeList(tkRes || []);
@@ -128,13 +190,38 @@ export default function CostManagementPage() {
     void loadAllData();
   }, []);
 
+  // Đơn vị hiện tại đang chọn
+  const currentUnitName = useMemo(() => {
+    if (!selectedUnitFilter || selectedUnitFilter === 'ALL') {
+      return allUnitsLabel;
+    }
+    const found = costDonViList.find(d => String(d.id) === String(selectedUnitFilter));
+    return found ? found.ten_don_vi : selectedUnitFilter;
+  }, [selectedUnitFilter, costDonViList, allUnitsLabel]);
+
+  // Số lượng DNTT đang hiển thị theo bộ lọc đơn vị đang chọn (tài khoản cấp đơn vị chỉ tính Đơn vị mẹ và đơn vị trực thuộc)
+  const activeDnttCount = useMemo(() => {
+    if (!selectedUnitFilter || selectedUnitFilter === 'ALL') {
+      return permittedDnttList.length;
+    }
+    const allowed = new Set([selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViList)]);
+    return permittedDnttList.filter(d => {
+      if (d.id_don_vi && allowed.has(String(d.id_don_vi))) return true;
+      if (d.don_vi_hien_thi) {
+        const target = donViList.find(u => String(u.id) === String(selectedUnitFilter));
+        if (target?.ten_don_vi && d.don_vi_hien_thi.toLowerCase().includes(target.ten_don_vi.toLowerCase())) return true;
+      }
+      return false;
+    }).length;
+  }, [permittedDnttList, selectedUnitFilter, donViList]);
+
   // Thiết lập danh sách Tab
   const tabs = useMemo(() => [
     {
       id: 'dntt',
       label: 'Đề nghị thanh toán',
       icon: <FileText size={16} />,
-      count: dnttList.length
+      count: activeDnttCount
     },
     {
       id: 'thong_ke',
@@ -157,14 +244,7 @@ export default function CostManagementPage() {
       label: 'Quản trị và Pháp nhân',
       icon: <Building2 size={16} />
     }
-  ], [dnttList.length, kmpList.length]);
-
-  // Đơn vị hiện tại đang chọn
-  const currentUnitName = useMemo(() => {
-    if (!selectedUnitFilter || selectedUnitFilter === 'ALL') return 'Toàn bộ Đơn vị';
-    const found = donViList.find(d => String(d.id) === String(selectedUnitFilter));
-    return found ? found.ten_don_vi : selectedUnitFilter;
-  }, [selectedUnitFilter, donViList]);
+  ], [activeDnttCount, kmpList.length]);
 
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] dark:bg-slate-900 overflow-hidden relative font-sans">
@@ -182,7 +262,7 @@ export default function CostManagementPage() {
 
       {/* 1. BỘ LỌC ĐƠN VỊ DÙNG CHUNG CỦA QTVP-ASDS */}
       <UnitFilterSidebar
-        donViList={donViList}
+        donViList={costDonViList}
         selectedUnitFilter={selectedUnitFilter}
         setSelectedUnitFilter={setSelectedUnitFilter}
         allowedDonViIds={allowedDonViIds}
@@ -193,7 +273,8 @@ export default function CostManagementPage() {
         isListCollapsed={isListCollapsed}
         setIsListCollapsed={setIsListCollapsed}
         themeColor="blue"
-        allUnitsLabel="Tất cả Đơn vị / Showroom"
+        allUnitsLabel={allUnitsLabel}
+        searchPlaceholder="Tìm đơn vị quản trị..."
       />
 
       {/* 2. KHU VỰC NỘI DUNG CHÍNH */}
@@ -221,7 +302,7 @@ export default function CostManagementPage() {
                   <Wallet size={28} /> Quản lý Chi phí
                 </h2>
                 <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>Đang xem: <span className="text-emerald-600 font-bold">{currentUnitName}</span> ({dnttList.length} phiếu DNTT)</span>
+                  <span>Đang xem: <span className="text-emerald-600 font-bold">{currentUnitName}</span> ({activeDnttCount} phiếu DNTT)</span>
                 </p>
               </div>
             </div>
@@ -361,16 +442,24 @@ export default function CostManagementPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-250 cursor-pointer whitespace-nowrap outline-none border-none ${
+                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${
                       isActive
-                        ? `bg-[#D97706] dark:bg-[#b45309] text-white font-black z-10 ${isLevel2Open ? 'rounded-t-xl rounded-b-none pb-2.5 sm:pb-3' : 'rounded-xl'}`
+                        ? `text-white font-black z-10 ${isLevel2Open ? 'pb-2.5 sm:pb-3' : ''}`
                         : 'text-gray-500 hover:text-[#D97706] dark:hover:text-amber-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
                     }`}
                   >
-                    {tab.icon && <span className="shrink-0 flex items-center">{tab.icon}</span>}
-                    <span>{tab.label}</span>
+                    {isActive && (
+                      <motion.div
+                        layoutId="costMainTabSlide"
+                        className={`absolute inset-0 z-0 shadow-xs ${isLevel2Open ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
+                        style={{ backgroundColor: '#D97706' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    {tab.icon && <span className="relative z-10 shrink-0 flex items-center">{tab.icon}</span>}
+                    <span className="relative z-10">{tab.label}</span>
                     {tab.count !== undefined && (
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300'}`}>
+                      <span className={`relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300'}`}>
                         {tab.count}
                       </span>
                     )}
@@ -379,50 +468,89 @@ export default function CostManagementPage() {
               })}
             </div>
 
-            {/* --- CẤP 2 (Chỉ mở khi chọn Quản trị và Pháp nhân) --- */}
+            {/* --- CẤP 2 (Mở khi chọn Quản trị và Pháp nhân HOẶC Thống kê) --- */}
             <AnimatePresence initial={false}>
               {isLevel2Open && (
                 <motion.div
-                  key="level2-admin"
+                  key={`level2-${activeTab}`}
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                   className="overflow-hidden bg-[#D97706] dark:bg-[#b45309]"
                 >
-                  <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                    <button
-                      type="button"
-                      onClick={() => setActiveAdminSubTab('bophan')}
-                      className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        activeAdminSubTab === 'bophan'
-                          ? 'bg-amber-800 dark:bg-amber-950 text-white shadow-sm ring-1 ring-amber-400/30 rounded-lg'
-                          : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                      }`}
-                    >
-                      <Layers className="w-4 h-4" />
-                      <span>Danh mục Bộ phận</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeAdminSubTab === 'bophan' ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
-                        {boPhanList.length > 0 ? boPhanList.length : 16}
-                      </span>
-                    </button>
+                  {activeTab === 'thong_ke' && (
+                    <div className="w-full flex flex-wrap gap-3 px-4 py-1.5 items-center transition-all duration-300">
+                      {[
+                        { id: 'phan_tich', label: 'Phân tích & Đối sánh', icon: <BarChart2 className="w-4 h-4" /> },
+                        { id: 'quan_tri', label: 'Quản trị Chi phí', icon: <FileSpreadsheet className="w-4 h-4" /> }
+                      ].map(st => {
+                        const isSubActive = activeThongKeSubTab === st.id;
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => setActiveThongKeSubTab(st.id as any)}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                              isSubActive
+                                ? 'text-white font-black'
+                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {isSubActive && (
+                              <motion.div
+                                layoutId="costThongKeSubTabSlide"
+                                className="absolute inset-0 bg-amber-800 dark:bg-amber-950 rounded-lg shadow-sm ring-1 ring-amber-400/30 z-0"
+                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                              />
+                            )}
+                            <span className="relative z-10 flex items-center gap-1.5">
+                              {st.icon}
+                              <span>{st.label}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                    <button
-                      type="button"
-                      onClick={() => setActiveAdminSubTab('phapnhan')}
-                      className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                        activeAdminSubTab === 'phapnhan'
-                          ? 'bg-amber-800 dark:bg-amber-950 text-white shadow-sm ring-1 ring-amber-400/30 rounded-lg'
-                          : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                      }`}
-                    >
-                      <Building2 className="w-4 h-4" />
-                      <span>Pháp nhân & Showroom</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeAdminSubTab === 'phapnhan' ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
-                        {phapNhanList.length}
-                      </span>
-                    </button>
-                  </div>
+                  {activeTab === 'admin' && (
+                    <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
+                      {[
+                        { id: 'bophan', label: 'Danh mục Bộ phận', icon: <Layers className="w-4 h-4" />, count: boPhanList.length > 0 ? boPhanList.length : 16 },
+                        { id: 'phapnhan', label: 'Pháp nhân & Showroom', icon: <Building2 className="w-4 h-4" />, count: phapNhanList.length }
+                      ].map(st => {
+                        const isSubActive = activeAdminSubTab === st.id;
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => setActiveAdminSubTab(st.id as any)}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                              isSubActive
+                                ? 'text-white font-black'
+                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {isSubActive && (
+                              <motion.div
+                                layoutId="costAdminSubTabSlide"
+                                className="absolute inset-0 bg-amber-800 dark:bg-amber-950 rounded-lg shadow-sm ring-1 ring-amber-400/30 z-0"
+                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                              />
+                            )}
+                            <span className="relative z-10 flex items-center gap-1.5">
+                              {st.icon}
+                              <span>{st.label}</span>
+                            </span>
+                            <span className={`relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
+                              {st.count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -441,14 +569,15 @@ export default function CostManagementPage() {
             <>
               {activeTab === 'dntt' && (
                 <DnttTab
-                  dnttList={dnttList}
+                  dnttList={permittedDnttList}
                   chiTietList={chiTietList}
                   phanBoList={phanBoList}
                   kmpList={kmpList}
                   boPhanList={boPhanList}
                   cap1List={cap1List}
                   cap2List={cap2List}
-                  donViList={donViList}
+                  donViList={costDonViList}
+                  allDonViList={donViList}
                   phapNhanList={phapNhanList}
                   chotKyList={chotKyList}
                   selectedUnitFilter={selectedUnitFilter}
@@ -462,19 +591,23 @@ export default function CostManagementPage() {
               {activeTab === 'thong_ke' && (
                 <div className="absolute inset-0 overflow-y-auto custom-scrollbar p-3 sm:p-4">
                   <CostStatisticsTab
-                    thongKeList={thongKeList}
+                    thongKeList={permittedThongKeList}
                     chotKyList={chotKyList}
-                    dnttList={dnttList}
-                    phanBoList={phanBoList}
+                    dnttList={permittedDnttList}
+                    phanBoList={permittedPhanBoList}
                     kmpList={kmpList}
+                    nhomChiPhiList={nhomChiPhiList}
                     boPhanList={boPhanList}
                     cap1List={cap1List}
                     cap2List={cap2List}
-                    donViList={donViList}
+                    donViList={costDonViList}
+                    fullDonViList={donViList}
                     phapNhanList={phapNhanList}
                     selectedUnitFilter={selectedUnitFilter}
                     onRefresh={() => loadAllData(true)}
                     loading={loading}
+                    activeSubTab={activeThongKeSubTab}
+                    onSubTabChange={setActiveThongKeSubTab}
                   />
                 </div>
               )}
@@ -482,13 +615,13 @@ export default function CostManagementPage() {
               {activeTab === 'dashboard' && (
                 <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
                   <CostDashboardTab
-                    dnttList={dnttList}
-                    phanBoList={phanBoList}
+                    dnttList={permittedDnttList}
+                    phanBoList={permittedPhanBoList}
                     kmpList={kmpList}
                     boPhanList={boPhanList}
                     cap1List={cap1List}
                     cap2List={cap2List}
-                    donViList={donViList}
+                    donViList={costDonViList}
                     selectedUnitFilter={selectedUnitFilter}
                     onRefresh={() => loadAllData(true)}
                     loading={loading}
@@ -509,7 +642,8 @@ export default function CostManagementPage() {
                   boPhanList={boPhanList}
                   cap1List={cap1List}
                   cap2List={cap2List}
-                  donViList={donViList}
+                  donViList={costDonViList}
+                  allDonViList={donViList}
                   phapNhanList={phapNhanList}
                   selectedUnitFilter={selectedUnitFilter}
                   onRefresh={() => loadAllData(true)}

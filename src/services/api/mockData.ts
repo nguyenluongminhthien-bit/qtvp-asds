@@ -587,12 +587,21 @@ export const INITIAL_MOCK_DATA: Record<string, any[]> = {
     { id: 'BP2_JEEP',    ma: 'JEEP',    ten: 'JEEP',         thu_tu: 8, active: true }
   ],
 
+  dm_nhom_chi_phi: [
+    { id: 'NCP_01', ten_nhom: 'Chi phí vận hành', so_la_ma: 'I', thu_tu: 1, active: true },
+    { id: 'NCP_02', ten_nhom: 'Chi phí tiện ích văn phòng', so_la_ma: 'II', thu_tu: 2, active: true },
+    { id: 'NCP_03', ten_nhom: 'Chi phí công tác', so_la_ma: 'III', thu_tu: 3, active: true },
+    { id: 'NCP_04', ten_nhom: 'Chi phí Hội họp và tiếp khách', so_la_ma: 'IV', thu_tu: 4, active: true },
+    { id: 'NCP_05', ten_nhom: 'Chi phí mua sắm, sửa chữa CCDC, TSCĐ', so_la_ma: 'V', thu_tu: 5, active: true },
+    { id: 'NCP_06', ten_nhom: 'Chi phí phục vụ Khách hàng', so_la_ma: 'VI', thu_tu: 6, active: true }
+  ],
+
   dm_kmp: [
-    { id: 'KMP1', ma_b7: 'B7.01', ma_b10: 'B10.01', nhom_chi_phi: 'Chi phí Năng lượng', dien_giai: 'Tiền điện Tổ hợp Showroom', trong_yeu: true, active: true },
-    { id: 'KMP2', ma_b7: 'B7.02', ma_b10: 'B10.02', nhom_chi_phi: 'Chi phí Năng lượng', dien_giai: 'Tiền nước sinh hoạt', trong_yeu: false, active: true },
-    { id: 'KMP3', ma_b7: 'B7.03', ma_b10: 'B10.03', nhom_chi_phi: 'Chi phí Dịch vụ ngoài', dien_giai: 'Dịch vụ vệ sinh công nghiệp', trong_yeu: true, active: true },
-    { id: 'KMP4', ma_b7: 'B7.04', ma_b10: 'B10.04', nhom_chi_phi: 'Chi phí Dịch vụ ngoài', dien_giai: 'Dịch vụ an ninh trật tự - bảo vệ', trong_yeu: true, active: true },
-    { id: 'KMP5', ma_b7: 'B7.05', ma_b10: 'B10.05', nhom_chi_phi: 'Chi phí Văn phòng phẩm', dien_giai: 'Giấy in, mực in, đồ dùng văn phòng', trong_yeu: false, active: true }
+    { id: 'KMP1', ma_b7: 'B7.01', ma_b10: 'B10.01', nhom_chi_phi: 'Chi phí vận hành', id_nhom_chi_phi: 'NCP_01', dien_giai: 'Tiền điện Tổ hợp Showroom', trong_yeu: true, thuoc_bao_cao_hanh_chinh: true, active: true },
+    { id: 'KMP2', ma_b7: 'B7.02', ma_b10: 'B10.02', nhom_chi_phi: 'Chi phí vận hành', id_nhom_chi_phi: 'NCP_01', dien_giai: 'Tiền nước sinh hoạt', trong_yeu: false, thuoc_bao_cao_hanh_chinh: true, active: true },
+    { id: 'KMP3', ma_b7: 'B7.03', ma_b10: 'B10.03', nhom_chi_phi: 'Chi phí vận hành', id_nhom_chi_phi: 'NCP_01', dien_giai: 'Dịch vụ vệ sinh công nghiệp', trong_yeu: true, thuoc_bao_cao_hanh_chinh: true, active: true },
+    { id: 'KMP4', ma_b7: 'B7.04', ma_b10: 'B10.04', nhom_chi_phi: 'Chi phí tiện ích văn phòng', id_nhom_chi_phi: 'NCP_02', dien_giai: 'Bưu phẩm, chuyển phát nhanh', trong_yeu: true, thuoc_bao_cao_hanh_chinh: true, active: true },
+    { id: 'KMP5', ma_b7: 'B7.05', ma_b10: 'B10.05', nhom_chi_phi: 'Chi phí tiện ích văn phòng', id_nhom_chi_phi: 'NCP_02', dien_giai: 'Giấy in, mực in, đồ dùng văn phòng', trong_yeu: false, thuoc_bao_cao_hanh_chinh: true, active: true }
   ],
 
   dntt: [
@@ -612,7 +621,7 @@ export const INITIAL_MOCK_DATA: Record<string, any[]> = {
       so_tai_khoan: '1234567890123',
       ten_ngan_hang: 'Vietcombank',
       chi_nhanh_ngan_hang: 'Chi nhánh Đồng Tháp',
-      trang_thai: 'Đã duyệt'
+      trang_thai: 'Đã lưu'
     }
   ],
 

@@ -597,14 +597,22 @@ export default function AtvsldPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-250 cursor-pointer whitespace-nowrap outline-none border-none ${
+                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${
                       isActive
-                        ? `bg-emerald-600 dark:bg-emerald-700 text-white font-black z-10 ${isLevel2Open ? 'rounded-t-xl rounded-b-none pb-2.5 sm:pb-3' : 'rounded-xl'}`
+                        ? `text-white font-black z-10 ${isLevel2Open ? 'pb-2.5 sm:pb-3' : ''}`
                         : 'text-gray-500 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
                     }`}
                   >
-                    {tab.icon && <span className="shrink-0 flex items-center">{tab.icon}</span>}
-                    <span>{tab.label}</span>
+                    {isActive && (
+                      <motion.div
+                        layoutId="atvsldMainTabSlide"
+                        className={`absolute inset-0 z-0 shadow-xs ${isLevel2Open ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
+                        style={{ backgroundColor: '#059669' }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    {tab.icon && <span className="relative z-10 shrink-0 flex items-center">{tab.icon}</span>}
+                    <span className="relative z-10">{tab.label}</span>
                   </button>
                 );
               })}
@@ -623,65 +631,70 @@ export default function AtvsldPage() {
                 >
                   {isDaotaoOpen ? (
                     <div className={`w-full flex flex-wrap gap-4 px-4 pt-1.5 items-center transition-all duration-300 ${isLevel3Open ? 'pb-0' : 'pb-1.5'}`}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveSubTab('khoahoc')}
-                        className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          activeSubTab === 'khoahoc'
-                            ? `bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-500/30 ${isLevel3Open ? 'rounded-t-lg rounded-b-none pb-2.5' : 'rounded-lg'}`
-                            : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                        }`}
-                      >
-                        <GraduationCap className="w-4 h-4" />
-                        <span>Khóa Đào tạo/Huấn luyện</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveSubTab('kehoach')}
-                        className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          activeSubTab === 'kehoach'
-                            ? 'bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-500/30 rounded-lg'
-                            : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                        }`}
-                      >
-                        <FileSpreadsheet className="w-4 h-4" />
-                        <span>Kế hoạch Đào tạo/Huấn luyện</span>
-                      </button>
+                      {[
+                        { id: 'khoahoc', label: 'Khóa Đào tạo/Huấn luyện', icon: <GraduationCap className="w-4 h-4" /> },
+                        { id: 'kehoach', label: 'Kế hoạch Đào tạo/Huấn luyện', icon: <FileSpreadsheet className="w-4 h-4" /> }
+                      ].map(st => {
+                        const isSubActive = activeSubTab === st.id;
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => setActiveSubTab(st.id as any)}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                              isSubActive
+                                ? `text-white font-black ${isLevel3Open && st.id === 'khoahoc' ? 'pb-2.5 rounded-b-none' : ''}`
+                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {isSubActive && (
+                              <motion.div
+                                layoutId="atvsldDaotaoSubTabSlide"
+                                className={`absolute inset-0 bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-500/30 z-0 ${isLevel3Open && st.id === 'khoahoc' ? 'rounded-t-lg rounded-b-none' : 'rounded-lg'}`}
+                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                              />
+                            )}
+                            <span className="relative z-10 flex items-center gap-1.5">
+                              {st.icon}
+                              <span>{st.label}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                      <button
-                        type="button"
-                        onClick={() => setActiveSubTabSuckhoe('tonghop')}
-                        className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          activeSubTabSuckhoe === 'tonghop'
-                            ? 'bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-500/30 rounded-lg'
-                            : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                        }`}
-                      >
-                        <Building2 className="w-4 h-4" />
-                        <span>Đợt KSK Tổng hợp cấp đơn vị</span>
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeSubTabSuckhoe === 'tonghop' ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
-                          {suckhoeCounts.campaignCount}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveSubTabSuckhoe('canhan')}
-                        className={`py-1.5 px-4 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          activeSubTabSuckhoe === 'canhan'
-                            ? 'bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-500/30 rounded-lg'
-                            : 'text-white/80 hover:text-white hover:bg-white/10 rounded-lg'
-                        }`}
-                      >
-                        <Users className="w-4 h-4" />
-                        <span>Lịch sử KSK chi tiết nhân sự</span>
-                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeSubTabSuckhoe === 'canhan' ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
-                          {suckhoeCounts.caNhanCount}
-                        </span>
-                      </button>
+                      {[
+                        { id: 'tonghop', label: 'Đợt KSK Tổng hợp cấp đơn vị', icon: <Building2 className="w-4 h-4" />, count: suckhoeCounts.campaignCount },
+                        { id: 'canhan', label: 'Lịch sử KSK chi tiết nhân sự', icon: <Users className="w-4 h-4" />, count: suckhoeCounts.caNhanCount }
+                      ].map(st => {
+                        const isSubActive = activeSubTabSuckhoe === st.id;
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => setActiveSubTabSuckhoe(st.id as any)}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                              isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {isSubActive && (
+                              <motion.div
+                                layoutId="atvsldSuckhoeSubTabSlide"
+                                className="absolute inset-0 bg-emerald-800 text-white shadow-sm ring-1 ring-emerald-500/30 rounded-lg z-0"
+                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                              />
+                            )}
+                            <span className="relative z-10 flex items-center gap-1.5">
+                              {st.icon}
+                              <span>{st.label}</span>
+                            </span>
+                            <span className={`relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
+                              {st.count}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </motion.div>
@@ -700,37 +713,37 @@ export default function AtvsldPage() {
                   className="overflow-hidden bg-emerald-800 dark:bg-emerald-900"
                 >
                   <div className="w-full flex flex-wrap gap-4 px-6 py-2 items-center">
-                    <button
-                      type="button"
-                      onClick={() => setActiveSubTab3('khoahoc')}
-                      className={`py-1.5 px-3.5 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer rounded-lg ${
-                        activeSubTab3 === 'khoahoc'
-                          ? 'bg-lime-600 text-white shadow-sm ring-1 ring-lime-400 font-black'
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <Building2 className="w-3.5 h-3.5" />
-                      <span>Khóa Đào tạo/Huấn luyện</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeSubTab3 === 'khoahoc' ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
-                        {level3Counts.khoaHocCount}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveSubTab3('canhan')}
-                      className={`py-1.5 px-3.5 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer rounded-lg ${
-                        activeSubTab3 === 'canhan'
-                          ? 'bg-lime-600 text-white shadow-sm ring-1 ring-lime-400 font-black'
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                      <span>Lịch Sử Đào Tạo Cá Nhân</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeSubTab3 === 'canhan' ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
-                        {level3Counts.caNhanCount} nhân sự
-                      </span>
-                    </button>
+                    {[
+                      { id: 'khoahoc', label: 'Khóa Đào tạo/Huấn luyện', icon: <Building2 className="w-3.5 h-3.5" />, count: level3Counts.khoaHocCount },
+                      { id: 'canhan', label: 'Lịch Sử Đào Tạo Cá Nhân', icon: <Users className="w-3.5 h-3.5" />, count: level3Counts.caNhanCount }
+                    ].map(st => {
+                      const isSubActive = activeSubTab3 === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setActiveSubTab3(st.id as any)}
+                          className={`relative py-1.5 px-3.5 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                            isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {isSubActive && (
+                            <motion.div
+                              layoutId="atvsldLevel3SubTabSlide"
+                              className="absolute inset-0 bg-lime-600 text-white shadow-sm ring-1 ring-lime-400 font-black rounded-lg z-0"
+                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                            />
+                          )}
+                          <span className="relative z-10 flex items-center gap-1.5">
+                            {st.icon}
+                            <span>{st.label}</span>
+                          </span>
+                          <span className={`relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
+                            {st.count}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </motion.div>
               )}

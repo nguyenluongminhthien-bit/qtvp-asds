@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, UserCog, Shield, Key, Building2, Mail, CheckSquare, ListChecks, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, UserCog, Shield, Key, Building2, Mail, CheckSquare, ListChecks, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { apiService } from '../services/api';
 import { User, DonVi } from '../types';
 import { buildHierarchicalOptions, getUnitEmoji, getAllSubordinateIds } from '../utils/hierarchy';
@@ -104,9 +104,13 @@ export default function AccountPage() {
     if (!targetDonViId || targetDonViId === 'ALL' || targetDonViId === 'HO') {
       return xeList;
     }
-    const childUnitIds = getAllSubordinateIds(targetDonViId, donViList);
-    const allowedUnitIds = [targetDonViId, ...childUnitIds];
-    return xeList.filter(car => allowedUnitIds.includes(car.id_don_vi));
+    const targetIds = targetDonViId.split(',').map(s => s.trim()).filter(Boolean);
+    const allowedUnitIds = new Set<string>();
+    targetIds.forEach(id => {
+      allowedUnitIds.add(id);
+      getAllSubordinateIds(id, donViList).forEach(cid => allowedUnitIds.add(cid));
+    });
+    return xeList.filter(car => allowedUnitIds.has(car.id_don_vi));
   }, [formData.id_don_vi, xeList, donViList]);
 
   const isHOAdmin = useMemo(() => {
@@ -133,15 +137,23 @@ export default function AccountPage() {
     return userQuyen === 'ADMIN';
   }, [currentUser]);
 
-  const myDonViId = useMemo(() => {
-    if (!currentUser) return '';
-    return String(currentUser.id_don_vi || (currentUser as any).idDonVi || '').trim();
+  const myDonViIds = useMemo(() => {
+    if (!currentUser) return [];
+    return String(currentUser.id_don_vi || (currentUser as any).idDonVi || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
   }, [currentUser]);
 
   const subordinateDonViIds = useMemo(() => {
-    if (!myDonViId || isHOAdmin) return (donViList || []).map(dv => String(dv.id || ''));
-    return getAllSubordinateIds(myDonViId, donViList || []);
-  }, [myDonViId, donViList, isHOAdmin]);
+    if (myDonViIds.length === 0 || isHOAdmin) return (donViList || []).map(dv => String(dv.id || ''));
+    const allSubs = new Set<string>();
+    myDonViIds.forEach(id => {
+      allSubs.add(id);
+      getAllSubordinateIds(id, donViList || []).forEach(sid => allSubs.add(sid));
+    });
+    return Array.from(allSubs);
+  }, [myDonViIds, donViList, isHOAdmin]);
 
   const visibleAccounts = useMemo(() => {
     if (!currentUser) return [];
@@ -151,9 +163,9 @@ export default function AccountPage() {
     return (data || []).filter(item => {
       const itemId = String(item.id || '').trim();
       const itemUserName = String(item.user_name || '').trim().toLowerCase();
-      const itemDv = String(item.id_don_vi || '').trim();
       if (itemId === myId || (myUserName && itemUserName === myUserName)) return true;
-      if (subordinateDonViIds.includes(itemDv)) return true;
+      const itemDvs = String(item.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (itemDvs.some(dv => subordinateDonViIds.includes(dv))) return true;
       return false;
     });
   }, [data, currentUser, isHOAdmin, subordinateDonViIds]);
@@ -170,17 +182,17 @@ export default function AccountPage() {
 
   const allowedModalDonViList = useMemo(() => {
     if (isHOAdmin) return donViList || [];
-    return (donViList || []).filter(dv => subordinateDonViIds.includes(String(dv.id || '')) || String(dv.id || '') === myDonViId);
-  }, [donViList, isHOAdmin, subordinateDonViIds, myDonViId]);
+    return (donViList || []).filter(dv => subordinateDonViIds.includes(String(dv.id || '')) || myDonViIds.includes(String(dv.id || '')));
+  }, [donViList, isHOAdmin, subordinateDonViIds, myDonViIds]);
 
   const canEditAccount = useCallback((item: any) => {
     if (!currentUser || !item) return false;
     if (isHOAdmin) return true;
     const itemId = String(item.id || '').trim();
     const myId = String(currentUser.id || '').trim();
-    const itemDv = String(item.id_don_vi || '').trim();
     if (itemId === myId) return true;
-    return subordinateDonViIds.includes(itemDv);
+    const itemDvs = String(item.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
+    return itemDvs.some(dv => subordinateDonViIds.includes(dv));
   }, [currentUser, isHOAdmin, subordinateDonViIds]);
 
   const canDeleteAccount = useCallback((item: any) => {
@@ -189,9 +201,91 @@ export default function AccountPage() {
     const itemId = String(item.id || '').trim();
     const myId = String(currentUser.id || '').trim();
     if (itemId === myId) return false; // Không tự xóa chính mình
-    const itemDv = String(item.id_don_vi || '').trim();
-    return subordinateDonViIds.includes(itemDv);
+    const itemDvs = String(item.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
+    return itemDvs.some(dv => subordinateDonViIds.includes(dv));
   }, [currentUser, isHOAdmin, subordinateDonViIds]);
+
+  // Multi-select dropdown state cho Đơn vị quản lý
+  const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
+  const [unitSearchQuery, setUnitSearchQuery] = useState('');
+  const unitDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (unitDropdownRef.current && !unitDropdownRef.current.contains(e.target as Node)) {
+        setIsUnitDropdownOpen(false);
+      }
+    };
+    if (isUnitDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isUnitDropdownOpen]);
+
+  // Danh sách ID đơn vị đang được chọn trong form
+  const selectedUnitIds = useMemo(() => {
+    if (!formData.id_don_vi) return [];
+    if (formData.id_don_vi === 'ALL') return ['ALL'];
+    return String(formData.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+  }, [formData.id_don_vi]);
+
+  // Toggle chọn/bỏ chọn đơn vị
+  const handleToggleUnit = (unitId: string) => {
+    if (!isAdmin) return;
+    setFormData(prev => {
+      const current = String(prev.id_don_vi || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => Boolean(s) && s !== 'ALL');
+      let next: string[];
+      if (current.includes(unitId)) {
+        next = current.filter(id => id !== unitId);
+      } else {
+        next = [...current, unitId];
+      }
+      return {
+        ...prev,
+        id_don_vi: next.length > 0 ? next.join(',') : null
+      };
+    });
+  };
+
+  // Chọn tất cả đơn vị được phép
+  const handleSelectAllUnits = () => {
+    if (!isAdmin) return;
+    const allIds = allowedModalDonViList.map(u => String(u.id));
+    setFormData(prev => ({
+      ...prev,
+      id_don_vi: allIds.join(',')
+    }));
+  };
+
+  // Bỏ chọn tất cả đơn vị
+  const handleClearAllUnits = () => {
+    if (!isAdmin) return;
+    setFormData(prev => ({
+      ...prev,
+      id_don_vi: null
+    }));
+  };
+
+  // Cây đơn vị phân cấp trong modal theo từ khóa tìm kiếm
+  const hierarchicalModalUnitOptions = useMemo(() => {
+    return buildHierarchicalOptions(allowedModalDonViList);
+  }, [allowedModalDonViList]);
+
+  const displayedModalUnitOptions = useMemo(() => {
+    if (!unitSearchQuery.trim()) {
+      return hierarchicalModalUnitOptions;
+    }
+    const q = stripAccents(unitSearchQuery.toLowerCase().trim());
+    return hierarchicalModalUnitOptions.filter(({ unit }) =>
+      stripAccents(String(unit.ten_don_vi || '').toLowerCase()).includes(q) ||
+      stripAccents(String(unit.id || '').toLowerCase()).includes(q) ||
+      stripAccents(String(unit.loai_hinh || '').toLowerCase()).includes(q)
+    );
+  }, [hierarchicalModalUnitOptions, unitSearchQuery]);
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
     if (item && mode === 'update' && !canEditAccount(item)) {
@@ -200,7 +294,9 @@ export default function AccountPage() {
     }
     setModalMode(mode);
     setShowPassword(false);
-    const defaultDv = isHOAdmin ? '' : (subordinateDonViIds[0] || myDonViId);
+    setIsUnitDropdownOpen(false);
+    setUnitSearchQuery('');
+    const defaultDv = isHOAdmin ? '' : (subordinateDonViIds[0] || (myDonViIds[0] || ''));
     setFormData(item ? { ...item } : { 
       id: '', user_name: '', password: '', ho_ten: '', id_don_vi: defaultDv, 
       quyen: 'USER', quyen_truy_cap: '', quyen_chi_tiet: '' 
@@ -431,7 +527,27 @@ export default function AccountPage() {
                        )}
                     </div>
                   </td>
-                  <td className="p-4 font-semibold text-gray-700">{donViMap[user.id_don_vi] || (!user.id_don_vi || user.id_don_vi === 'ALL' ? <span className="text-indigo-600 font-bold px-2 py-1 bg-indigo-50 rounded">TẤT CẢ ĐƠN VỊ (HO)</span> : user.id_don_vi)}</td>
+                  <td className="p-4 font-semibold text-gray-700">
+                    {(!user.id_don_vi || user.id_don_vi === 'ALL') ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-md">
+                        <span>🌐</span>
+                        <span>TẤT CẢ ĐƠN VỊ (HO)</span>
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1 max-w-sm">
+                        {String(user.id_don_vi).split(',').map(s => s.trim()).filter(Boolean).map(uid => (
+                          <span
+                            key={uid}
+                            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-blue-50 text-[#05469B] border border-blue-100 font-medium"
+                            title={donViMap[uid] || uid}
+                          >
+                            <Building2 size={12} className="text-blue-500 shrink-0" />
+                            <span className="truncate max-w-[160px]">{donViMap[uid] || uid}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1.5 rounded-md text-[10px] font-black border tracking-wider uppercase
                       ${String(user.quyen).toUpperCase() === 'ADMIN' ? 'bg-red-50 text-red-600 border-red-200' : 
@@ -473,69 +589,229 @@ export default function AccountPage() {
                 <div>
                   <h4 className="font-bold text-[#05469B] mb-3 flex items-center gap-2 border-b pb-2"><Shield size={18}/> 1. Thông tin Hành chính & Đăng nhập</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1">Mã User *</label><input type="text" required name="id" value={formData.id || ''} onChange={e=>setFormData({...formData, id: e.target.value})} disabled={modalMode==='update' || !isAdmin} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] disabled:opacity-70 font-medium" placeholder="VD: U01"/></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1">Họ và Tên *</label><input type="text" required name="ho_ten" value={formData.ho_ten || ''} onChange={e=>setFormData({...formData, ho_ten: e.target.value})} disabled={!isAdmin && String(formData.id) !== String(currentUser?.id)} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"/></div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Mã User *</label>
+                      <input 
+                        type="text" 
+                        required 
+                        name="id" 
+                        value={formData.id || ''} 
+                        onChange={e=>setFormData({...formData, id: e.target.value})} 
+                        disabled={modalMode==='update' || !isAdmin} 
+                        className="w-full h-[40px] px-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] disabled:opacity-70 font-medium" 
+                        placeholder="VD: U01"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Họ và Tên *</label>
+                      <input 
+                        type="text" 
+                        required 
+                        name="ho_ten" 
+                        value={formData.ho_ten || ''} 
+                        onChange={e=>setFormData({...formData, ho_ten: e.target.value})} 
+                        disabled={!isAdmin && String(formData.id) !== String(currentUser?.id)} 
+                        className="w-full h-[40px] px-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"
+                      />
+                    </div>
                     
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Tên đăng nhập (Email) *</label>
-                      <div className="relative"><Mail className="absolute left-3 top-3 text-gray-400" size={18}/><input type="text" required name="user_name" value={formData.user_name || ''} onChange={e=>setFormData({...formData, user_name: e.target.value})} disabled={!isAdmin} className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"/></div>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17}/>
+                        <input 
+                          type="text" 
+                          required 
+                          name="user_name" 
+                          value={formData.user_name || ''} 
+                          onChange={e=>setFormData({...formData, user_name: e.target.value})} 
+                          disabled={!isAdmin} 
+                          className="w-full h-[40px] pl-10 pr-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"
+                        />
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Mật khẩu *</label>
                       <div className="relative">
-                        <Key className="absolute left-3 top-3 text-gray-400" size={18}/>
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17}/>
                         <input 
                           type={showPassword ? "text" : "password"} 
                           required 
                           name="password" 
                           value={formData.password || ''} 
                           onChange={e=>setFormData({...formData, password: e.target.value})} 
-                          className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-mono tracking-widest text-indigo-700 font-bold"
+                          className="w-full h-[40px] pl-10 pr-10 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-mono tracking-widest text-indigo-700 font-bold"
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer p-1"
                         >
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                         </button>
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-gray-600 mb-1">Đơn vị quản lý</label>
-                      <div className="relative">
-                        <Building2 className="absolute left-3 top-3 text-gray-400" size={18}/>
-                        <select 
-                          name="id_don_vi" 
-                          value={formData.id_don_vi || ''} 
-                          onChange={e=>setFormData({...formData, id_don_vi: e.target.value})} 
+                      <label className="block text-xs font-bold text-gray-600 mb-1">
+                        Đơn vị quản lý
+                        {selectedUnitIds.length > 0 && selectedUnitIds[0] !== 'ALL' && (
+                          <span className="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-[#05469B] font-bold">
+                            {selectedUnitIds.length} đã chọn
+                          </span>
+                        )}
+                      </label>
+
+                      <div className="relative" ref={unitDropdownRef}>
+                        {/* Trigger button */}
+                        <button
+                          type="button"
                           disabled={!isAdmin}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B]"
-                          style={{ fontFamily: 'monospace, sans-serif' }}
+                          onClick={() => {
+                            setIsUnitDropdownOpen(!isUnitDropdownOpen);
+                            setUnitSearchQuery('');
+                          }}
+                          className={`w-full h-[40px] flex items-center justify-between pl-10 pr-3 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] text-left text-sm transition-all cursor-pointer ${
+                            isUnitDropdownOpen ? 'ring-2 ring-[#05469B] border-[#05469B]' : ''
+                          }`}
                         >
-                          {isHOAdmin && <option value="">-- Quản trị Toàn quốc (HO) --</option>}
-                          {buildHierarchicalOptions(allowedModalDonViList).map(({ unit, prefix }) => (
-                            <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
-                              {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
-                            </option>
-                          ))}
-                        </select>
+                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17} />
+                          <div className="flex-1 min-w-0 pr-1 truncate">
+                            {(!formData.id_don_vi || formData.id_don_vi === 'ALL') ? (
+                              <span className="text-indigo-600 font-bold text-sm flex items-center gap-1.5">
+                                <span>🌐</span>
+                                <span className="truncate">-- Quản trị Toàn quốc (HO) --</span>
+                              </span>
+                            ) : (
+                              <span className="truncate text-gray-700 font-medium block text-sm">
+                                {selectedUnitIds.map(uid => donViMap[uid] || uid).join(', ')}
+                              </span>
+                            )}
+                          </div>
+                          <ChevronDown
+                            size={17}
+                            className={`text-gray-400 transition-transform duration-200 shrink-0 ${
+                              isUnitDropdownOpen ? 'rotate-180 text-[#05469B]' : ''
+                            }`}
+                          />
+                        </button>
+
+                        {/* Popover Dropdown Panel */}
+                        {isUnitDropdownOpen && isAdmin && (
+                          <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 p-2.5 space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                            {/* Header có nút Chọn tất cả | Bỏ chọn */}
+                            <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
+                              <span className="text-[11px] font-bold text-gray-500 uppercase">
+                                Đã chọn: <strong className="text-[#05469B]">{selectedUnitIds.length}</strong>
+                              </span>
+                              <div className="flex items-center gap-2 text-[11px]">
+                                <button
+                                  type="button"
+                                  onClick={handleSelectAllUnits}
+                                  className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                                >
+                                  Chọn tất cả
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                  type="button"
+                                  onClick={handleClearAllUnits}
+                                  className="text-gray-500 hover:text-red-600 font-semibold cursor-pointer"
+                                >
+                                  Bỏ chọn
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Option Toàn quốc (HO) dành cho Admin HO */}
+                            {isHOAdmin && (
+                              <label
+                                className={`flex items-center gap-2 p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                  !formData.id_don_vi || formData.id_don_vi === 'ALL'
+                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-bold'
+                                    : 'bg-gray-50/70 border-gray-200 hover:bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!formData.id_don_vi || formData.id_don_vi === 'ALL'}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setFormData(p => ({ ...p, id_don_vi: null }));
+                                    }
+                                  }}
+                                  className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                                />
+                                <span className="text-xs">🌐 Quản trị Toàn quốc (HO)</span>
+                              </label>
+                            )}
+
+                            {/* Ô tìm kiếm nhanh đơn vị */}
+                            {allowedModalDonViList.length > 4 && (
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
+                                <input
+                                  type="text"
+                                  placeholder="Tìm đơn vị, showroom..."
+                                  value={unitSearchQuery}
+                                  onChange={(e) => setUnitSearchQuery(e.target.value)}
+                                  className="w-full pl-8 pr-3 h-[28px] text-xs bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#05469B]"
+                                  autoFocus
+                                />
+                              </div>
+                            )}
+
+                            {/* Cây danh sách đơn vị có checkbox */}
+                            <div className="max-h-56 overflow-y-auto p-1 bg-white rounded-lg border border-gray-100 custom-scrollbar space-y-0.5">
+                              {displayedModalUnitOptions.length === 0 ? (
+                                <div className="text-center py-4 text-xs text-gray-400">
+                                  Không tìm thấy đơn vị phù hợp
+                                </div>
+                              ) : (
+                                displayedModalUnitOptions.map(({ unit, prefix }) => {
+                                  const isChecked = selectedUnitIds.includes(String(unit.id));
+                                  return (
+                                    <label
+                                      key={unit.id}
+                                      className={`flex items-center gap-2 p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                                        isChecked
+                                          ? 'bg-blue-50 text-blue-900 font-semibold'
+                                          : 'hover:bg-gray-50 text-gray-700'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleUnit(String(unit.id))}
+                                        className="rounded text-[#05469B] focus:ring-[#05469B] w-3.5 h-3.5 cursor-pointer shrink-0"
+                                      />
+                                      <span className="font-mono text-[11px] text-gray-400 select-none shrink-0">
+                                        {prefix}
+                                      </span>
+                                      <span className="shrink-0">{getUnitEmoji(unit.loai_hinh)}</span>
+                                      <span className="truncate flex-1">{unit.ten_don_vi}</span>
+                                    </label>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-gray-600 mb-1">Cấp độ Thao tác (Quyền Cốt lõi) *</label>
                       <div className="relative">
-                        <Shield className="absolute left-3 top-3 text-gray-400" size={18}/>
+                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17}/>
                         <select 
                           required 
                           name="quyen" 
                           value={formData.quyen || 'USER'} 
                           onChange={e=>setFormData({...formData, quyen: e.target.value})} 
                           disabled={!isAdmin}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                          className="w-full h-[40px] pl-10 pr-3 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
                         >
                           <option value="USER">USER (Được quyền Thêm/Sửa/Xóa của mình)</option>
                           <option value="viewer_hanche">VIEWER (Chỉ xem, cấm click chi tiết)</option>

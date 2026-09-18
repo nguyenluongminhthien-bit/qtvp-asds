@@ -149,3 +149,107 @@ export const getDefaultUnitId = (user: any, donViList: DonVi[]): string | null =
 
   return userIdDonVi;
 };
+
+// 5. Kiểm tra đơn vị có thuộc phạm vi Quản trị Chi phí hay không:
+// Điều kiện: loai_hinh là 'Văn phòng', 'Công ty Tỉnh thành', 'Showroom Quản trị'
+export const isCostManagementUnit = (dv?: DonVi | null): boolean => {
+  if (!dv || !dv.loai_hinh) return false;
+  const lh = dv.loai_hinh.trim().toLowerCase();
+  // 1. Văn phòng
+  if (lh === 'văn phòng' || lh.includes('văn phòng') || lh === 'vpđh' || lh.includes('tổng công ty')) return true;
+  // 2. Công ty Tỉnh thành / Công ty Tỉnh Thành
+  if (lh === 'công ty tỉnh thành' || lh.includes('công ty tỉnh') || lh.includes('cttt')) return true;
+  // 3. Showroom Quản trị / Showroom quản trị
+  if (lh === 'showroom quản trị' || lh.includes('quản trị') || lh.includes('srqt')) return true;
+  return false;
+};
+
+// 6. Truy vết đơn vị quản trị cấp cha cho một đơn vị con (Showroom con, Đại lý con...)
+export const resolveCostManagementUnit = (
+  unitId?: string | null,
+  donViList: DonVi[] = []
+): DonVi | null => {
+  if (!unitId) return null;
+  const donViMap = new Map<string, DonVi>(donViList.map(d => [String(d.id), d]));
+  let current = donViMap.get(String(unitId));
+  if (!current) return null;
+  
+  const visited = new Set<string>();
+  while (current && !visited.has(String(current.id))) {
+    if (isCostManagementUnit(current)) {
+      return current;
+    }
+    visited.add(String(current.id));
+    const parentId = String(current.cap_quan_ly || '').trim();
+    if (!parentId || parentId === 'HO') break;
+    current = donViMap.get(parentId);
+  }
+  return null;
+};
+
+// 7. Kiểm tra tài khoản có phải toàn quyền / Admin hay không
+export const isUserAdminOrAllAccess = (user?: any): boolean => {
+  if (!user) return false;
+  const quyenUpper = String(user.quyen || '').toUpperCase();
+  const quyenTruyCap = String(user.quyen_truy_cap || '').toUpperCase();
+  const idDv = String(user.id_don_vi || (user as any).idDonVi || '').toUpperCase();
+  return (
+    quyenUpper === 'ADMIN' ||
+    quyenUpper === 'TOÀN QUYỀN' ||
+    quyenTruyCap.includes('ALL') ||
+    idDv === 'ALL' ||
+    idDv === 'HO' ||
+    idDv === 'DV_HO'
+  );
+};
+
+// 8. Lấy toàn bộ ID đơn vị thuộc phạm vi phân quyền của tài khoản:
+// Đối với tài khoản cấp đơn vị: trả về Set gồm Đơn vị mẹ quản lý + tất cả các đơn vị trực thuộc (Showroom con...)
+// Hỗ trợ trường hợp tài khoản được gán 2, 3, 4 đơn vị cùng lúc (phân tách bằng dấu phẩy)
+// Đối với tài khoản Admin / Toàn quyền: trả về null (toàn quyền truy cập tất cả)
+export const getUserPermittedUnitIds = (user: any, donViList: DonVi[]): Set<string> | null => {
+  if (!user || isUserAdminOrAllAccess(user)) {
+    return null;
+  }
+
+  const rawIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();
+  if (!rawIdDonVi) return null;
+
+  const unitIds = rawIdDonVi.split(',').map(s => s.trim()).filter(Boolean);
+  if (unitIds.length === 0) return null;
+  if (unitIds.includes('ALL') || unitIds.includes('HO') || unitIds.includes('DV_HO')) return null;
+
+  const thacoAutoUnit = donViList.find(d => String(d.ten_don_vi || '').trim().toUpperCase() === 'THACO AUTO');
+  const resultSet = new Set<string>();
+
+  for (const uid of unitIds) {
+    resultSet.add(uid);
+    let current = donViList.find(d => String(d.id) === uid);
+    if (!current) continue;
+
+    const visited = new Set<string>();
+    let rootUnit = current;
+
+    while (current && !visited.has(String(current.id))) {
+      visited.add(String(current.id));
+      const parentId = String(current.cap_quan_ly || '').trim();
+      if (!parentId || parentId === 'HO' || parentId === 'DV_HO' || (thacoAutoUnit && parentId === thacoAutoUnit.id)) {
+        rootUnit = current;
+        break;
+      }
+      const parent = donViList.find(d => String(d.id) === parentId);
+      if (parent) {
+        current = parent;
+        rootUnit = parent;
+      } else {
+        break;
+      }
+    }
+
+    resultSet.add(String(rootUnit.id));
+    const subIds = getAllSubordinateIds(rootUnit.id, donViList);
+    subIds.forEach(s => resultSet.add(String(s)));
+  }
+
+  return resultSet;
+};
