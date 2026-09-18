@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   DNTT, DnttChiTiet, DnttPhanBo, DmKmp, DmBoPhan, BoPhanCap1,
-  BoPhanCap2, PhapNhan, DonVi, ChiPhiChotKy
+  BoPhanCap2, PhapNhan, DonVi, ChiPhiChotKy, TrangThaiDNTT
 } from '../../types';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
