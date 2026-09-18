@@ -745,11 +745,12 @@ export default function DnttTab({
   const handleOpenEditDntt = (dntt: DNTT, overrideDetails?: DnttChiTiet[], overridePhanBo?: DnttPhanBo[]) => {
     // Tự động nhận diện đơn vị / Showroom:
     let resolvedUnitId = dntt.id_don_vi || currentUnit?.id || '';
-    if (dntt.don_vi_hien_thi) {
-      const matchedSub = selectableUnits.find(u =>
-        u.id !== resolvedUnitId &&
-        dntt.don_vi_hien_thi?.toLowerCase().includes(u.ten_don_vi.toLowerCase())
-      );
+    if (!dntt.id_don_vi && dntt.don_vi_hien_thi) {
+      const lower = dntt.don_vi_hien_thi.toLowerCase().trim();
+      const matchedSub = selectableUnits.find(u => {
+        const uName = (u.ten_don_vi || '').toLowerCase().trim();
+        return uName && (lower === uName || lower === `thaco auto - ${uName}` || lower === `thaco auto ${uName}`);
+      });
       if (matchedSub) {
         resolvedUnitId = matchedSub.id;
       }
@@ -1169,20 +1170,17 @@ export default function DnttTab({
 
       let matchUnit = !allowedUnitIds;
       if (allowedUnitIds) {
-        if (d.id_don_vi && allowedUnitIds.has(String(d.id_don_vi))) {
-          matchUnit = true;
+        if (d.id_don_vi) {
+          matchUnit = allowedUnitIds.has(String(d.id_don_vi));
         } else if (d.don_vi_hien_thi) {
-          if (currentUnit?.ten_don_vi && d.don_vi_hien_thi.toLowerCase().includes(currentUnit.ten_don_vi.toLowerCase().trim())) {
-            matchUnit = true;
-          } else {
-            for (const uid of allowedUnitIds) {
-              const u = fullDonViList.find(x => String(x.id) === uid);
-              if (u?.ten_don_vi && d.don_vi_hien_thi.toLowerCase().includes(u.ten_don_vi.toLowerCase().trim())) {
-                matchUnit = true;
-                break;
-              }
-            }
-          }
+          const lower = d.don_vi_hien_thi.toLowerCase().trim();
+          const matchedUnit = fullDonViList.find(u => {
+            const uName = (u.ten_don_vi || '').toLowerCase().trim();
+            return uName && (lower === uName || lower === `thaco auto - ${uName}` || lower === `thaco auto ${uName}`);
+          });
+          matchUnit = matchedUnit ? allowedUnitIds.has(String(matchedUnit.id)) : false;
+        } else {
+          matchUnit = false;
         }
       }
 
