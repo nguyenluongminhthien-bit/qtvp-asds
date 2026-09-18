@@ -20,6 +20,77 @@ interface Props {
   unitId?: string | null;
 }
 
+/**
+ * Tự động làm tròn và cân đối số tiền phân bổ khi kiểu nhập là % và tổng tỷ lệ đạt đúng 100%.
+ * Giúp triệt tiêu độ lệch làm tròn 1-2 VNĐ với số tiền dòng nội dung gốc đang so sánh (parentAmount).
+ */
+function balanceAllocationRows(rows: DnttPhanBo[], parentAmount: number): DnttPhanBo[] {
+  if (!rows || rows.length === 0 || parentAmount <= 0) return rows;
+
+  // Tính tổng % của tất cả các dòng
+  const totalPercent = rows.reduce((sum, r) => sum + (Number(r.phan_tram) || 0), 0);
+
+  // Điều kiện: tổng lại phải đúng là 100% (xử lý sai số làm tròn float trong JS)
+  const isExact100Percent = Math.abs(totalPercent - 100) < 0.001 || Math.round(totalPercent * 100) === 10000;
+
+  // Nếu chưa đạt đúng 100%, giữ nguyên các dòng
+  if (!isExact100Percent) {
+    return rows;
+  }
+
+  // 1. Tính toán lại số tiền cơ sở cho các dòng có kieu_nhap === 'PHAN_TRAM'
+  const updated = rows.map(r => {
+    if (r.kieu_nhap === 'PHAN_TRAM') {
+      const pct = Number(r.phan_tram) || 0;
+      return {
+        ...r,
+        so_tien: Math.round((pct / 100) * parentAmount)
+      };
+    }
+    return { ...r };
+  });
+
+  // 2. Tính tổng số tiền phân bổ và độ lệch so với parentAmount
+  const currentTotal = updated.reduce((sum, r) => sum + (Number(r.so_tien) || 0), 0);
+  const diff = parentAmount - currentTotal;
+
+  // Đã khớp hoàn toàn (diff === 0)
+  if (diff === 0) return updated;
+
+  // 3. Nếu còn lệch (thường là 1-2 VNĐ do làm tròn):
+  // Ưu tiên bù trừ vào dòng cuối cùng có kieu_nhap === 'PHAN_TRAM' và phan_tram > 0
+  let targetIndex = -1;
+  for (let i = updated.length - 1; i >= 0; i--) {
+    if (updated[i].kieu_nhap === 'PHAN_TRAM' && (Number(updated[i].phan_tram) || 0) > 0) {
+      if ((Number(updated[i].so_tien) || 0) + diff > 0) {
+        targetIndex = i;
+        break;
+      }
+    }
+  }
+
+  // Dự phòng: nếu không tìm thấy dòng % thỏa điều kiện, tìm dòng có số tiền lớn nhất
+  if (targetIndex === -1) {
+    let maxAmt = -Infinity;
+    for (let i = 0; i < updated.length; i++) {
+      const amt = Number(updated[i].so_tien) || 0;
+      if (amt > maxAmt && amt + diff > 0) {
+        maxAmt = amt;
+        targetIndex = i;
+      }
+    }
+  }
+
+  if (targetIndex !== -1) {
+    updated[targetIndex] = {
+      ...updated[targetIndex],
+      so_tien: (Number(updated[targetIndex].so_tien) || 0) + diff
+    };
+  }
+
+  return updated;
+}
+
 export default function DnttAllocationModal({
   isOpen,
   onClose,
@@ -79,7 +150,7 @@ export default function DnttAllocationModal({
   useEffect(() => {
     if (isOpen && parentItem) {
       if (allocations && allocations.length > 0) {
-        setRows([...allocations]);
+        setRows(balanceAllocationRows([...allocations], parentAmount));
       } else {
         // Mặc định tạo 1 dòng đầu tiên với 100% số tiền
         const defaultKmp = kmpList.find(k => k.active !== false)?.id || '';
@@ -159,7 +230,7 @@ export default function DnttAllocationModal({
         thu_tu: rows.length + 1,
         ghi_chu: prevRow.ghi_chu || ''
       };
-      setRows(p => [...p, newRow]);
+      setRows(p => balanceAllocationRows([...p, newRow], parentAmount));
       return;
     }
 
@@ -204,7 +275,7 @@ export default function DnttAllocationModal({
       toast.warning('Cần ít nhất 1 dòng phân bổ cho nội dung thanh toán này!');
       return;
     }
-    setRows(p => p.filter((_, i) => i !== index));
+    setRows(p => balanceAllocationRows(p.filter((_, i) => i !== index), parentAmount));
   };
 
   const handleChangeRow = (index: number, field: keyof DnttPhanBo, value: any) => {
@@ -262,7 +333,7 @@ export default function DnttAllocationModal({
       }
 
       clone[index] = row;
-      return clone;
+      return balanceAllocationRows(clone, parentAmount);
     });
   };
 
@@ -286,9 +357,12 @@ export default function DnttAllocationModal({
   };
 
   const handleSave = () => {
+    // Cân đối làm tròn để đảm bảo độ chính xác tuyệt đối trước khi lưu
+    const balancedRows = balanceAllocationRows(rows, parentAmount);
+
     // Kiểm tra hợp lệ từng dòng
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
+    for (let i = 0; i < balancedRows.length; i++) {
+      const r = balancedRows[i];
       if (!r.id_kmp) {
         toast.warning(`Dòng ${i + 1}: Vui lòng chọn Khoản mục phí!`);
         return;
@@ -316,13 +390,16 @@ export default function DnttAllocationModal({
       }
     }
 
-    if (!isMatched) {
-      toast.error(`Tổng số tiền phân bổ chưa khớp (Chênh lệch: ${Math.round(difference).toLocaleString('vi-VN')} VNĐ). Vui lòng điều chỉnh để chênh lệch bằng 0 trước khi lưu!`);
+    const currentTotalAlloc = balancedRows.reduce((acc, r) => acc + (Number(r.so_tien) || 0), 0);
+    const currentDiff = parentAmount - currentTotalAlloc;
+
+    if (Math.abs(currentDiff) !== 0) {
+      toast.error(`Tổng số tiền phân bổ chưa khớp (Chênh lệch: ${Math.round(currentDiff).toLocaleString('vi-VN')} VNĐ). Vui lòng điều chỉnh để chênh lệch bằng 0 trước khi lưu!`);
       return;
     }
 
     // Đánh lại số thứ tự
-    const finalized = rows.map((r, i) => ({ ...r, thu_tu: i + 1 }));
+    const finalized = balancedRows.map((r, i) => ({ ...r, thu_tu: i + 1 }));
     onSaveAllocations(parentItem.id, finalized);
     toast.success('Đã lưu phân bổ chi phí cho dòng nội dung này!');
     onClose();
