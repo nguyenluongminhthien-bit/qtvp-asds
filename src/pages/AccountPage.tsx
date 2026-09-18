@@ -63,7 +63,7 @@ export default function AccountPage() {
   }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'update'>('create');
+  const [modalMode, setModalMode] = useState<'create' | 'update' | 'view'>('create');
   const [showPassword, setShowPassword] = useState(false);
   
   // Mở rộng formData để chứa quyen_truy_cap và quyen_chi_tiet
@@ -187,23 +187,45 @@ export default function AccountPage() {
 
   const canEditAccount = useCallback((item: any) => {
     if (!currentUser || !item) return false;
-    if (isHOAdmin) return true;
     const itemId = String(item.id || '').trim();
     const myId = String(currentUser.id || '').trim();
+    // Luôn được sửa tài khoản của chính mình
     if (itemId === myId) return true;
+
+    // Nếu không phải Admin, TUYỆT ĐỐI không được sửa tài khoản người khác
+    if (!isAdmin) return false;
+
+    // Quản trị viên cấp cao nhất (HO Admin) được sửa tất cả tài khoản
+    if (isHOAdmin) return true;
+
+    // Admin cấp đơn vị: không được sửa tài khoản HO Admin
+    const itemQuyen = String(item.quyen || '').toUpperCase();
+    if (itemQuyen === 'ADMIN' && (!item.id_don_vi || item.id_don_vi === 'ALL')) {
+      return false;
+    }
+
+    // Admin cấp đơn vị: chỉ được sửa tài khoản thuộc đơn vị phụ trách
     const itemDvs = String(item.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
     return itemDvs.some(dv => subordinateDonViIds.includes(dv));
-  }, [currentUser, isHOAdmin, subordinateDonViIds]);
+  }, [currentUser, isAdmin, isHOAdmin, subordinateDonViIds]);
 
   const canDeleteAccount = useCallback((item: any) => {
     if (!currentUser || !item) return false;
-    if (isHOAdmin) return true;
     const itemId = String(item.id || '').trim();
     const myId = String(currentUser.id || '').trim();
     if (itemId === myId) return false; // Không tự xóa chính mình
+    if (!isAdmin) return false; // Người dùng thường không được xóa bất kỳ ai
+    if (isHOAdmin) return true;
+
+    // Admin cấp đơn vị: không được xóa tài khoản HO Admin
+    const itemQuyen = String(item.quyen || '').toUpperCase();
+    if (itemQuyen === 'ADMIN' && (!item.id_don_vi || item.id_don_vi === 'ALL')) {
+      return false;
+    }
+
     const itemDvs = String(item.id_don_vi || '').split(',').map(s => s.trim()).filter(Boolean);
     return itemDvs.some(dv => subordinateDonViIds.includes(dv));
-  }, [currentUser, isHOAdmin, subordinateDonViIds]);
+  }, [currentUser, isAdmin, isHOAdmin, subordinateDonViIds]);
 
   // Multi-select dropdown state cho Đơn vị quản lý
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
@@ -287,17 +309,19 @@ export default function AccountPage() {
     );
   }, [hierarchicalModalUnitOptions, unitSearchQuery]);
 
-  const openModal = (mode: 'create' | 'update', item?: any) => {
+  const openModal = (mode: 'create' | 'update' | 'view', item?: any) => {
     if (item && mode === 'update' && !canEditAccount(item)) {
-      toast.error('Bạn không có quyền chỉnh sửa tài khoản này!');
-      return;
+      mode = 'view';
     }
     setModalMode(mode);
     setShowPassword(false);
     setIsUnitDropdownOpen(false);
     setUnitSearchQuery('');
     const defaultDv = isHOAdmin ? '' : (subordinateDonViIds[0] || (myDonViIds[0] || ''));
-    setFormData(item ? { ...item } : { 
+    setFormData(item ? { 
+      ...item,
+      password: mode === 'view' ? '••••••••' : (item.password || '')
+    } : { 
       id: '', user_name: '', password: '', ho_ten: '', id_don_vi: defaultDv, 
       quyen: 'USER', quyen_truy_cap: '', quyen_chi_tiet: '' 
     });
@@ -430,7 +454,12 @@ export default function AccountPage() {
   };
 
   const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault(); setSubmitting(true); setError(null);
+    e.preventDefault(); 
+    if (modalMode === 'view' || (!isAdmin && String(formData.id) !== String(currentUser?.id))) {
+      toast.error('Bạn không có quyền can thiệp vào tài khoản này!');
+      return;
+    }
+    setSubmitting(true); setError(null);
     try {
       const finalData = { ...formData };
       if (finalData.id_don_vi === '') {
@@ -558,8 +587,22 @@ export default function AccountPage() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                      {canEditAccount(user) && (
-                        <button onClick={() => openModal('update', user)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title={isAdmin ? "Sửa thông tin / Đổi mật khẩu" : "Đổi mật khẩu"}><Edit size={16}/></button>
+                      {canEditAccount(user) ? (
+                        <button 
+                          onClick={() => openModal('update', user)} 
+                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" 
+                          title={isAdmin ? "Sửa thông tin / Đổi mật khẩu" : "Đổi mật khẩu & Thông tin của tôi"}
+                        >
+                          <Edit size={16}/>
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => openModal('view', user)} 
+                          className="p-2 text-gray-500 hover:bg-gray-100 rounded-md transition-colors" 
+                          title="Xem thông tin tài khoản (Chỉ xem)"
+                        >
+                          <Eye size={16}/>
+                        </button>
                       )}
                       {isAdmin && canDeleteAccount(user) && (
                         <button onClick={() => {setItemToDelete(user.id); setIsConfirmOpen(true)}} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors" title="Xóa tài khoản"><Trash2 size={16}/></button>
@@ -578,7 +621,16 @@ export default function AccountPage() {
           {/* 🟢 MỞ RỘNG MODAL THÀNH max-w-4xl ĐỂ CHỨA CHECKBOX */}
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl animate-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[95vh]">
             <div className="flex justify-between items-center p-5 border-b bg-[#05469B] text-white shrink-0">
-              <h3 className="text-xl font-bold flex items-center gap-2"><UserCog size={24}/> {modalMode === 'create' ? 'Cấp tài khoản mới' : isAdmin ? 'Cập nhật tài khoản' : 'Đổi mật khẩu & Thông tin tài khoản'}</h3>
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <UserCog size={24}/> 
+                {modalMode === 'create' 
+                  ? 'Cấp tài khoản mới' 
+                  : modalMode === 'view' 
+                    ? 'Xem thông tin tài khoản (Chỉ xem)' 
+                    : isAdmin 
+                      ? 'Cập nhật tài khoản' 
+                      : 'Đổi mật khẩu & Thông tin tài khoản'}
+              </h3>
               <button onClick={() => setIsModalOpen(false)} disabled={submitting} className="hover:bg-white/20 p-1.5 rounded-full transition-colors"><X size={20} /></button>
             </div>
             
@@ -597,7 +649,7 @@ export default function AccountPage() {
                         name="id" 
                         value={formData.id || ''} 
                         onChange={e=>setFormData({...formData, id: e.target.value})} 
-                        disabled={modalMode==='update' || !isAdmin} 
+                        disabled={modalMode==='update' || modalMode==='view' || !isAdmin} 
                         className="w-full h-[40px] px-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] disabled:opacity-70 font-medium" 
                         placeholder="VD: U01"
                       />
@@ -610,8 +662,8 @@ export default function AccountPage() {
                         name="ho_ten" 
                         value={formData.ho_ten || ''} 
                         onChange={e=>setFormData({...formData, ho_ten: e.target.value})} 
-                        disabled={!isAdmin && String(formData.id) !== String(currentUser?.id)} 
-                        className="w-full h-[40px] px-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"
+                        disabled={modalMode==='view' || (!isAdmin && String(formData.id) !== String(currentUser?.id))} 
+                        className="w-full h-[40px] px-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium disabled:opacity-70"
                       />
                     </div>
                     
@@ -625,8 +677,8 @@ export default function AccountPage() {
                           name="user_name" 
                           value={formData.user_name || ''} 
                           onChange={e=>setFormData({...formData, user_name: e.target.value})} 
-                          disabled={!isAdmin} 
-                          className="w-full h-[40px] pl-10 pr-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium"
+                          disabled={modalMode==='view' || !isAdmin} 
+                          className="w-full h-[40px] pl-10 pr-3.5 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-medium disabled:opacity-70"
                         />
                       </div>
                     </div>
@@ -636,20 +688,23 @@ export default function AccountPage() {
                       <div className="relative">
                         <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17}/>
                         <input 
-                          type={showPassword ? "text" : "password"} 
-                          required 
+                          type={modalMode === 'view' ? "password" : (showPassword ? "text" : "password")} 
+                          required={modalMode !== 'view'}
                           name="password" 
-                          value={formData.password || ''} 
+                          value={modalMode === 'view' ? '••••••••' : (formData.password || '')} 
                           onChange={e=>setFormData({...formData, password: e.target.value})} 
-                          className="w-full h-[40px] pl-10 pr-10 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B] font-mono tracking-widest text-indigo-700 font-bold"
+                          disabled={modalMode === 'view'}
+                          className="w-full h-[40px] pl-10 pr-10 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-mono tracking-widest text-indigo-700 font-bold disabled:opacity-70"
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer p-1"
-                        >
-                          {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                        </button>
+                        {modalMode !== 'view' && (
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer p-1"
+                          >
+                            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -667,8 +722,9 @@ export default function AccountPage() {
                         {/* Trigger button */}
                         <button
                           type="button"
-                          disabled={!isAdmin}
+                          disabled={modalMode === 'view' || !isAdmin}
                           onClick={() => {
+                            if (modalMode === 'view' || !isAdmin) return;
                             setIsUnitDropdownOpen(!isUnitDropdownOpen);
                             setUnitSearchQuery('');
                           }}
@@ -810,8 +866,8 @@ export default function AccountPage() {
                           name="quyen" 
                           value={formData.quyen || 'USER'} 
                           onChange={e=>setFormData({...formData, quyen: e.target.value})} 
-                          disabled={!isAdmin}
-                          className="w-full h-[40px] pl-10 pr-3 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-bold"
+                          disabled={modalMode === 'view' || !isAdmin}
+                          className="w-full h-[40px] pl-10 pr-3 text-sm border border-gray-200 rounded-lg bg-[#FFFFF0] disabled:bg-gray-100 outline-none focus:ring-2 focus:ring-[#05469B] font-bold disabled:opacity-70"
                         >
                           <option value="USER">USER (Được quyền Thêm/Sửa/Xóa của mình)</option>
                           <option value="viewer_hanche">VIEWER (Chỉ xem, cấm click chi tiết)</option>
@@ -822,8 +878,8 @@ export default function AccountPage() {
                   </div>
                 </div>
 
-                {/* HIỂN THỊ PHẦN 2 VÀ PHẦN 3 CHỈ KHI LÀ ADMIN */}
-                {isAdmin && (
+                {/* HIỂN THỊ PHẦN 2 VÀ PHẦN 3 CHỈ KHI LÀ ADMIN VÀ KHÔNG PHẢI CHẾ ĐỘ VIEW */}
+                {isAdmin && modalMode !== 'view' && (
                   <>
                     {/* MODULE TRUY CẬP */}
                     <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
@@ -994,8 +1050,23 @@ export default function AccountPage() {
             </div>
 
             <div className="p-5 border-t bg-gray-50 flex justify-end gap-3 shrink-0">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 bg-white text-gray-700 font-bold rounded-lg hover:bg-gray-100 border border-gray-200 transition-colors shadow-sm">Hủy</button>
-              <button type="submit" form="accountForm" disabled={submitting} className="px-8 py-2.5 bg-[#05469B] hover:bg-[#04367a] text-white font-bold rounded-lg flex items-center gap-2 shadow-md transition-colors">{submitting ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} Lưu Tài Khoản</button>
+              <button 
+                type="button" 
+                onClick={() => setIsModalOpen(false)} 
+                className="px-6 py-2.5 bg-white text-gray-700 font-bold rounded-lg hover:bg-gray-100 border border-gray-200 transition-colors shadow-sm"
+              >
+                {modalMode === 'view' ? 'Đóng' : 'Hủy'}
+              </button>
+              {modalMode !== 'view' && (
+                <button 
+                  type="submit" 
+                  form="accountForm" 
+                  disabled={submitting} 
+                  className="px-8 py-2.5 bg-[#05469B] hover:bg-[#04367a] text-white font-bold rounded-lg flex items-center gap-2 shadow-md transition-colors"
+                >
+                  {submitting ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} Lưu Tài Khoản
+                </button>
+              )}
             </div>
           </div>
         </div>
