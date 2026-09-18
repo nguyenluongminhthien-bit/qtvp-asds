@@ -118,6 +118,7 @@ export default function CostDashboardTab({
   const filteredPhanBo = useMemo(() => {
     return phanBoList.filter(pb => {
       const parentDntt = dnttMap.get(pb.dntt_id);
+      if (!parentDntt || parentDntt.trang_thai === 'Từ chối' || parentDntt.trang_thai === 'Lưu nháp') return false;
 
       // 1. Lọc theo Đơn vị (thông qua DNTT cha)
       if (selectedUnitFilter && selectedUnitFilter !== 'ALL') {

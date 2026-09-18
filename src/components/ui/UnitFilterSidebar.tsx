@@ -16,6 +16,7 @@ interface UnitFilterSidebarProps {
   setIsListCollapsed: (collapsed: boolean) => void;
   themeColor?: 'blue' | 'emerald' | 'red';
   allUnitsLabel?: string;
+  searchPlaceholder?: string;
 }
 
 export default function UnitFilterSidebar({
@@ -30,7 +31,8 @@ export default function UnitFilterSidebar({
   isListCollapsed,
   setIsListCollapsed,
   themeColor = 'blue',
-  allUnitsLabel = 'Tất cả Đơn vị Toàn quốc'
+  allUnitsLabel = 'Tất cả Đơn vị Toàn quốc',
+  searchPlaceholder = 'Tìm tên showroom...'
 }: UnitFilterSidebarProps) {
   
   // 🟢 HỆ THỐNG MÀU THEO CHỦ ĐỀ
@@ -92,7 +94,10 @@ export default function UnitFilterSidebar({
     return baseUnits.filter(item => matchedIds.has(item.id));
   }, [donViList, unitSearchTerm, allowedDonViIds]);
 
-  const parentUnits = useMemo(() => filteredUnits.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly), [filteredUnits]);
+  const filteredUnitIds = useMemo(() => new Set(filteredUnits.map(u => String(u.id))), [filteredUnits]);
+  const parentUnits = useMemo(() => filteredUnits.filter(item => 
+    item.cap_quan_ly === 'HO' || !item.cap_quan_ly || !filteredUnitIds.has(String(item.cap_quan_ly))
+  ), [filteredUnits, filteredUnitIds]);
   const getChildUnits = (parentId: string) => sortDonViByThuTu(filteredUnits.filter(item => item.cap_quan_ly === parentId));
 
   const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = useMemo(() => {
@@ -166,7 +171,7 @@ export default function UnitFilterSidebar({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
-              placeholder="Tìm tên showroom..."
+              placeholder={searchPlaceholder}
               className={`w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm ${colors.ring} outline-none focus:ring-2`}
               value={unitSearchTerm}
               onChange={(e) => setUnitSearchTerm(e.target.value)}

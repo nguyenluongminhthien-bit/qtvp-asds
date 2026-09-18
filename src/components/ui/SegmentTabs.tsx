@@ -58,7 +58,7 @@ export const SegmentTabs: React.FC<SegmentTabsProps> = ({
                     layoutId={layoutId}
                     className="absolute inset-0 rounded-xl z-0 shadow-xs"
                     style={{ backgroundColor: 'var(--active-color)' }}
-                    transition={{ type: 'spring', duration: 0.35, bounce: 0.05 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
 
@@ -115,7 +115,7 @@ export const SegmentTabs: React.FC<SegmentTabsProps> = ({
                   layoutId={layoutId}
                   className="absolute inset-0 rounded-full z-0"
                   style={{ backgroundColor: 'var(--active-color)' }}
-                  transition={{ type: 'spring', duration: 0.35, bounce: 0.05 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                 />
               )}
 

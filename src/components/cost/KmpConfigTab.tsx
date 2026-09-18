@@ -20,6 +20,7 @@ const EMPTY_KMP: Partial<DmKmp> = {
   nhom_chi_phi: '',
   dien_giai: '',
   trong_yeu: false,
+  thuoc_bao_cao_hanh_chinh: true,
   active: true
 };
 
@@ -27,6 +28,7 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
   const [filterTrongYeu, setFilterTrongYeu] = useState<'ALL' | 'YES' | 'NO'>('ALL');
+  const [filterHanhChinh, setFilterHanhChinh] = useState<'ALL' | 'YES' | 'NO'>('ALL');
   const [filterOnlyDuplicates, setFilterOnlyDuplicates] = useState(false);
 
   // Modal State
@@ -127,10 +129,13 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
       const matchTrongYeu = filterTrongYeu === 'ALL' ||
         (filterTrongYeu === 'YES' && item.trong_yeu) ||
         (filterTrongYeu === 'NO' && !item.trong_yeu);
+      const matchHanhChinh = filterHanhChinh === 'ALL' ||
+        (filterHanhChinh === 'YES' && item.thuoc_bao_cao_hanh_chinh !== false) ||
+        (filterHanhChinh === 'NO' && item.thuoc_bao_cao_hanh_chinh === false);
 
-      return matchSearch && matchGroup && matchTrongYeu;
+      return matchSearch && matchGroup && matchTrongYeu && matchHanhChinh;
     });
-  }, [kmpList, searchTerm, filterGroup, filterTrongYeu, filterOnlyDuplicates, duplicateAnalysis]);
+  }, [kmpList, searchTerm, filterGroup, filterTrongYeu, filterHanhChinh, filterOnlyDuplicates, duplicateAnalysis]);
 
   const handleOpenAdd = () => {
     setModalMode('create');
@@ -142,6 +147,17 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
     setModalMode('update');
     setFormData({ ...item });
     setIsModalOpen(true);
+  };
+
+  const handleToggleHanhChinh = async (item: DmKmp) => {
+    const newVal = item.thuoc_bao_cao_hanh_chinh === false ? true : false;
+    try {
+      await apiService.save({ ...item, thuoc_bao_cao_hanh_chinh: newVal }, 'update', 'dm_kmp');
+      toast.success(`Đã ${newVal ? 'bật' : 'tắt'} thuộc Báo cáo CPHC cho "${item.ma_b7}"!`);
+      await onRefresh();
+    } catch (err: any) {
+      toast.error('Lỗi khi cập nhật phạm vi CPHC của KMP!');
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -164,6 +180,7 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
         nhom_chi_phi: formData.nhom_chi_phi.trim(),
         dien_giai: formData.dien_giai?.trim() || null,
         trong_yeu: !!formData.trong_yeu,
+        thuoc_bao_cao_hanh_chinh: formData.thuoc_bao_cao_hanh_chinh !== false,
         active: formData.active !== false
       };
 
@@ -233,6 +250,16 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
               <option value="YES">Trọng yếu ⭐</option>
               <option value="NO">Thông thường</option>
             </select>
+
+            <select
+              value={filterHanhChinh}
+              onChange={(e) => setFilterHanhChinh(e.target.value as any)}
+              className="text-xs sm:text-sm border border-gray-200 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-700 font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#D97706]"
+            >
+              <option value="ALL">Tất cả Phạm vi CPHC</option>
+              <option value="YES">Thuộc Báo cáo CPHC</option>
+              <option value="NO">Ngoài Báo cáo CPHC</option>
+            </select>
           </div>
         </div>
 
@@ -283,14 +310,15 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
                 <th className="p-3 w-70">Nhóm chi phí</th>
                 <th className="p-3 min-w-[170px]">Diễn giải nội dung chi phí</th>
                 <th className="p-3 w-30 text-center">Trọng yếu</th>
-                <th className="p-3 w-30 text-center">Trạng thái</th>
-                <th className="p-3 w-25 text-center">Thao tác</th>
+                <th className="p-3 w-36 text-center">Báo cáo CPHC</th>
+                <th className="p-3 w-28 text-center">Trạng thái</th>
+                <th className="p-3 w-24 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-gray-700 dark:text-gray-300">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-400">
+                  <td colSpan={9} className="p-8 text-center text-gray-400">
                     <AlertCircle size={32} className="mx-auto mb-2 opacity-50" />
                     <p>Không tìm thấy khoản mục phí nào phù hợp.</p>
                   </td>
@@ -354,6 +382,27 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
                         ) : (
                           <span className="text-gray-400 text-xs">-</span>
                         )}
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleHanhChinh(item)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
+                            item.thuoc_bao_cao_hanh_chinh !== false
+                              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                              : 'bg-gray-100 dark:bg-slate-700 text-gray-400 border-gray-200 dark:border-slate-600 hover:text-gray-600'
+                          }`}
+                          title="Bấm để bật/tắt phạm vi Báo cáo CPHC (được đóng băng khi chốt kỳ)"
+                        >
+                          {item.thuoc_bao_cao_hanh_chinh !== false ? (
+                            <>
+                              <CheckCircle2 size={12} className="text-emerald-600" />
+                              <span>Thuộc CPHC</span>
+                            </>
+                          ) : (
+                            <span>Ngoài CPHC</span>
+                          )}
+                        </button>
                       </td>
                       <td className="p-3 text-center">
                         {item.active !== false ? (
@@ -504,6 +553,22 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
                   type="checkbox"
                   checked={!!formData.trong_yeu}
                   onChange={(e) => setFormData(p => ({ ...p, trong_yeu: e.target.checked }))}
+                  className="w-5 h-5 rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-700/50 rounded-xl border border-gray-200/60 dark:border-slate-600">
+                <div>
+                  <div className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                    <CheckCircle2 size={15} className="text-emerald-500" />
+                    Thuộc Báo cáo Chi phí Hành chính (CPHC)
+                  </div>
+                  <p className="text-xs text-gray-500">Đóng băng vào snapshot khi Chốt kỳ để hiển thị trên Báo cáo Quản trị CPHC</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.thuoc_bao_cao_hanh_chinh !== false}
+                  onChange={(e) => setFormData(p => ({ ...p, thuoc_bao_cao_hanh_chinh: e.target.checked }))}
                   className="w-5 h-5 rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer"
                 />
               </div>

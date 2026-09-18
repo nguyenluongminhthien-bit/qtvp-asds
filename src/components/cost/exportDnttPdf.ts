@@ -216,7 +216,7 @@ export function generateBangKePhanBoHtml(data: ExportDnttData): string {
       <div style="text-align: center; margin: 10pt 0 10pt 0;">
         <div style="font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">BẢNG KÊ PHÂN BỔ CHI PHÍ</div>
         <div style="font-size: 10pt; font-style: italic; margin-top: 2pt;">
-          (Đính kèm Giấy đề nghị thanh toán số: <strong>${dntt.so_dntt || '......'}</strong> - Ngày: ${ngay}/${thang}/${nam})
+          (Đính kèm Giấy đề nghị thanh toán ngày: ${ngay}/${thang}/${nam})
         </div>
       </div>
 
@@ -235,13 +235,13 @@ export function generateBangKePhanBoHtml(data: ExportDnttData): string {
           <tr style="height: 0.65cm; background: #f5f5f5;">
             <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 0.9cm; text-align: center;">STT</th>
             <th style="border: 1.0pt solid black; padding: 2pt 5pt; font-weight: bold; text-align: center;">Nội dung thanh toán</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.4cm; text-align: center;">Mã B7</th>
+            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.8cm; text-align: center;">Mã B7</th>
             <th style="border: 1.0pt solid black; padding: 2pt 5pt; font-weight: bold; width: 3.2cm; text-align: center;">Khoản mục phí</th>
             <th style="border: 1.0pt solid black; padding: 2pt 4pt; font-weight: bold; width: 2.6cm; text-align: center;">Khối / Nghiệp vụ</th>
             <th style="border: 1.0pt solid black; padding: 2pt 4pt; font-weight: bold; width: 2.6cm; text-align: center;">Thương hiệu / BP</th>
             <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.2cm; text-align: center;">Tỷ lệ</th>
             <th style="border: 1.0pt solid black; padding: 2pt 5pt; font-weight: bold; width: 2.6cm; text-align: center;">Số tiền (VNĐ)</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.8cm; text-align: center;">Ghi chú</th>
+            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.4cm; text-align: center;">Ghi chú</th>
           </tr>
         </thead>
         <tbody>

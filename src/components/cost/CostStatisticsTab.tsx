@@ -1,17 +1,19 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   BarChart2, Calendar, Filter, Download, Lock, Unlock, AlertCircle,
   TrendingUp, TrendingDown, CheckCircle2, ChevronDown, Layers,
-  Building, RefreshCw, X, ShieldAlert, Sparkles, PieChart, FileSpreadsheet
+  Building, RefreshCw, X, ShieldAlert, Sparkles, PieChart, FileSpreadsheet,
+  Search, CheckSquare, Square
 } from 'lucide-react';
 import {
   ChiPhiChotKy, ChiPhiThongKe, DNTT, DnttPhanBo, DmKmp,
-  DmBoPhan, BoPhanCap1, BoPhanCap2, DonVi, PhapNhan
+  DmBoPhan, BoPhanCap1, BoPhanCap2, DonVi, PhapNhan, DmNhomChiPhi
 } from '../../types';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from '../../utils/toast';
-import { getAllSubordinateIds } from '../../utils/hierarchy';
+import { getAllSubordinateIds, getUserPermittedUnitIds } from '../../utils/hierarchy';
+import CostMatrixView from './CostMatrixView';
 
 interface Props {
   thongKeList: ChiPhiThongKe[];
@@ -19,26 +21,40 @@ interface Props {
   dnttList: DNTT[];
   phanBoList: DnttPhanBo[];
   kmpList: DmKmp[];
+  nhomChiPhiList?: DmNhomChiPhi[];
   boPhanList?: DmBoPhan[];
   cap1List: BoPhanCap1[];
   cap2List: BoPhanCap2[];
   donViList: DonVi[];
+  fullDonViList?: DonVi[];
   phapNhanList: PhapNhan[];
   selectedUnitFilter: string | null;
   onRefresh: () => Promise<void>;
   loading: boolean;
+  activeSubTab?: 'phan_tich' | 'quan_tri';
+  onSubTabChange?: (sub: 'phan_tich' | 'quan_tri') => void;
 }
 
 type DimensionType =
-  | 'don_vi_phan_loai'
-  | 'mien'
-  | 'don_vi_quan_tri'
-  | 'phap_nhan_mst'
+  | 'phia'
+  | 'don_vi'
+  | 'loai_hinh'
   | 'showroom'
   | 'khoi_nghiep_vu'
-  | 'bo_phan_thuong_hieu';
+  | 'thuong_hieu_bo_phan'
+  | 'phap_nhan';
 
 type PeriodType = 'thang' | 'quy' | '6thang' | 'nam';
+
+const DIMENSION_CONFIG: Array<{ id: DimensionType; label: string; icon: string }> = [
+  { id: 'phia', label: 'Phía', icon: '🏢' },
+  { id: 'don_vi', label: 'Đơn vị', icon: '🏛️' },
+  { id: 'loai_hinh', label: 'Loại hình', icon: '🏷️' },
+  { id: 'showroom', label: 'Showroom', icon: '🏬' },
+  { id: 'khoi_nghiep_vu', label: 'Khối/Nghiệp vụ', icon: '💼' },
+  { id: 'thuong_hieu_bo_phan', label: 'Thương hiệu / Phòng / Bộ phận', icon: '🎯' },
+  { id: 'phap_nhan', label: 'Pháp nhân', icon: '📜' }
+];
 
 export default function CostStatisticsTab({
   thongKeList,
@@ -46,34 +62,75 @@ export default function CostStatisticsTab({
   dnttList,
   phanBoList,
   kmpList,
+  nhomChiPhiList = [],
   boPhanList = [],
   cap1List,
   cap2List,
   donViList,
+  fullDonViList,
   phapNhanList,
   selectedUnitFilter,
   onRefresh,
-  loading
+  loading,
+  activeSubTab,
+  onSubTabChange
 }: Props) {
   const { user } = useAuth();
 
-  // 1. STATE BỘ LỌC
+  // 1. STATE SUB-TABS & BỘ LỌC
+  const [internalSubTab, setInternalSubTab] = useState<'phan_tich' | 'quan_tri'>('phan_tich');
+  const currentSubTab = activeSubTab || internalSubTab;
+  const setCurrentSubTab = onSubTabChange || setInternalSubTab;
+
+  const [includeTemporary, setIncludeTemporary] = useState<boolean>(false);
+  const [onlyAdministrative, setOnlyAdministrative] = useState<boolean>(true);
+
   const now = new Date();
-  const [dimension, setDimension] = useState<DimensionType>('don_vi_phan_loai');
+  const [dimension, setDimension] = useState<DimensionType>('phia');
   const [periodType, setPeriodType] = useState<PeriodType>('thang');
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
   const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.ceil((now.getMonth() + 1) / 3));
   const [selectedHalf, setSelectedHalf] = useState<1 | 2>(now.getMonth() + 1 <= 6 ? 1 : 2);
   const [selectedKmpId, setSelectedKmpId] = useState<string>('ALL');
-  // Lọc theo trạng thái phiếu DNTT khi xem kỳ chưa chốt: 'ALL' (Tất cả DNTT) hoặc 'PAID' (Chỉ DNTT đã thanh toán)
-  const [dnttStatusFilter, setDnttStatusFilter] = useState<'ALL' | 'PAID'>('ALL');
 
-  // Đơn vị được lọc từ thanh bên ngoài
+  // Bộ lọc độc lập cho từng chiều phân tích (Cascading Multi-select Filters)
+  const [dimFilters, setDimFilters] = useState<Partial<Record<DimensionType, Set<string>>>>({});
+  const [openDropdownDim, setOpenDropdownDim] = useState<DimensionType | null>(null);
+  const [filterSearchTerm, setFilterSearchTerm] = useState('');
+  const dimFilterDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dimFilterDropdownRef.current && !dimFilterDropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdownDim(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Phạm vi phân quyền đơn vị của người dùng (Đơn vị mẹ + các đơn vị trực thuộc)
+  const userPermittedUnitIds = useMemo(() => {
+    return getUserPermittedUnitIds(user, fullDonViList || donViList);
+  }, [user, fullDonViList, donViList]);
+
+  // Đơn vị được lọc từ thanh bên ngoài và phân quyền tài khoản
   const allowedUnitIds = useMemo(() => {
-    if (!selectedUnitFilter || selectedUnitFilter === 'ALL') return null;
-    return new Set([selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViList)]);
-  }, [selectedUnitFilter, donViList]);
+    if (selectedUnitFilter && selectedUnitFilter !== 'ALL') {
+      const subIds = new Set([selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, fullDonViList || donViList)]);
+      if (userPermittedUnitIds) {
+        return new Set([...subIds].filter(id => userPermittedUnitIds.has(id)));
+      }
+      return subIds;
+    }
+    // Khi chọn "Tất cả Đơn vị trực thuộc" (selectedUnitFilter là null hoặc 'ALL'):
+    if (userPermittedUnitIds) {
+      return userPermittedUnitIds;
+    }
+    return null; // Quản trị viên toàn quyền
+  }, [selectedUnitFilter, fullDonViList, donViList, userPermittedUnitIds]);
 
   // Nhóm KMP theo nhóm chi phí
   const groupedKmp = useMemo(() => {
@@ -158,85 +215,507 @@ export default function CostStatisticsTab({
     return closed;
   }, [currentPeriodMonths, selectedYear, chotKyList]);
 
-  // 4. HÀM TRÍCH XUẤT NHÃN CHIỀU PHÂN TÍCH (SINGLE DIMENSION)
+  // Danh sách các đơn vị trong phạm vi phân quyền và bộ lọc
+  const permittedUnits = useMemo(() => {
+    if (!allowedUnitIds) return donViList;
+    return donViList.filter(d => allowedUnitIds.has(String(d.id)));
+  }, [donViList, allowedUnitIds]);
+
+  // Danh mục Bộ phận có hiệu lực theo đơn vị đang chọn (fallback mẫu chung)
+  const effectiveBoPhanList = useMemo(() => {
+    if (!boPhanList || boPhanList.length === 0) return [];
+    if (selectedUnitFilter && selectedUnitFilter !== 'ALL') {
+      const specific = boPhanList.filter(b => {
+        if (b.active === false || !b.id_don_vi) return false;
+        const ids = String(b.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+        return ids.includes(String(selectedUnitFilter));
+      });
+      if (specific.length > 0) return specific;
+    } else if (userPermittedUnitIds) {
+      // Khi chọn "Tất cả Đơn vị trực thuộc": kiểm tra bộ phận riêng của các đơn vị thuộc quyền
+      const specific = boPhanList.filter(b => {
+        if (b.active === false || !b.id_don_vi) return false;
+        const ids = String(b.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+        return ids.some(id => userPermittedUnitIds.has(id));
+      });
+      if (specific.length > 0) return specific;
+    }
+    const common = boPhanList.filter(b => !b.id_don_vi && b.active !== false);
+    return common.length > 0 ? common : boPhanList.filter(b => b.active !== false);
+  }, [boPhanList, selectedUnitFilter, userPermittedUnitIds]);
+
+  // Danh sách Khối / Nghiệp vụ duy nhất của đơn vị
+  const uniqueKhoiList = useMemo(() => {
+    const map = new Map<string, string>();
+    if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
+      effectiveBoPhanList.forEach(b => {
+        if (b.ma_cap1 && !map.has(b.ma_cap1)) {
+          map.set(b.ma_cap1, b.ten_cap1);
+        }
+      });
+    }
+    if (map.size === 0 && cap1List) {
+      cap1List.filter(c => c.active !== false).forEach(c => {
+        map.set(c.id || c.ma, c.ten);
+      });
+    }
+    return Array.from(map.entries()).map(([ma, ten]) => ({ ma, ten }));
+  }, [effectiveBoPhanList, cap1List]);
+
+  // --- A. CÁC HÀM CHUẨN HÓA DỮ LIỆU ĐƠN VỊ ---
+  const normalizePhia = (val?: string | null): string => {
+    if (!val) return 'Chưa phân loại Phía';
+    const p = val.trim();
+    if (/^CTTT\s+ph[íi]a\s+nam$/i.test(p)) return 'CTTT Phía Nam';
+    if (/^CTTT\s+ph[íi]a\s+b[ắa]c$/i.test(p)) return 'CTTT Phía Bắc';
+    if (/^VPĐH$/i.test(p)) return 'VPĐH';
+    return p;
+  };
+
+  const isShowroomUnit = (dv?: DonVi | null): boolean => {
+    if (!dv) return false;
+    return (
+      dv.loai_hinh === 'Showroom Quản trị' ||
+      dv.loai_hinh === 'Showroom' ||
+      (Boolean(dv.cap_quan_ly) && dv.cap_quan_ly !== 'HO' && dv.cap_quan_ly !== 'DV_HO')
+    );
+  };
+
+  const getParentUnitId = (dv?: DonVi | null): string => {
+    if (!dv) return 'UNKNOWN';
+    if (isShowroomUnit(dv) && dv.cap_quan_ly && dv.cap_quan_ly !== 'HO' && dv.cap_quan_ly !== 'DV_HO') {
+      return String(dv.cap_quan_ly);
+    }
+    return String(dv.id);
+  };
+
+  const normalizeLoaiHinh = (dv?: DonVi | null): string => {
+    if (!dv) return 'Khác';
+    const raw = (dv.loai_hinh || '').trim();
+    if (raw === 'Văn phòng' || dv.cap_quan_ly === 'HO') return 'VPĐH';
+    if (raw === 'Công ty Tỉnh thành') return 'Công ty Tỉnh thành';
+    if (raw === 'Showroom Quản trị' || raw === 'Showroom' || isShowroomUnit(dv)) return 'Showroom';
+    if (raw) return raw;
+    return 'Khác';
+  };
+
+  // --- B. TÍNH TOÁN 7 TẦNG TÙY CHỌN BỘ LỌC PHÂN CẤP (CASCADING OPTIONS) ---
+
+  // 1. Phía Options (VPĐH, CTTT Phía Nam, CTTT Phía Bắc)
+  const optionsPhia = useMemo((): Array<{ key: string; label: string; subLabel?: string }> => {
+    const phiaSet = new Set<string>();
+    permittedUnits.forEach(u => {
+      phiaSet.add(normalizePhia(u.phia));
+    });
+    const standard = ['VPĐH', 'CTTT Phía Nam', 'CTTT Phía Bắc'];
+    const result: string[] = [];
+    standard.forEach(p => {
+      if (phiaSet.has(p)) {
+        result.push(p);
+        phiaSet.delete(p);
+      }
+    });
+    phiaSet.forEach(p => result.push(p));
+    if (result.length === 0) return standard.map(p => ({ key: p, label: p }));
+    return result.map(p => ({ key: p, label: p }));
+  }, [permittedUnits]);
+
+  const selectedPhiaKeys = useMemo(() => {
+    const current = dimFilters.phia;
+    const allKeys = optionsPhia.map(o => o.key);
+    if (!current) return new Set(allKeys);
+    const validSet = new Set(allKeys);
+    const res = new Set<string>();
+    current.forEach(k => {
+      if (validSet.has(k)) res.add(k);
+    });
+    return res;
+  }, [dimFilters.phia, optionsPhia]);
+
+  // 2. Đơn vị Options (Phụ thuộc giá trị chọn theo Phía)
+  const optionsDonVi = useMemo((): Array<{ key: string; label: string; subLabel?: string }> => {
+    const unitsInPhia = permittedUnits.filter(u => selectedPhiaKeys.has(normalizePhia(u.phia)));
+    let list = unitsInPhia.filter(u => !isShowroomUnit(u));
+    if (list.length === 0) list = unitsInPhia;
+    return list.map(u => ({
+      key: String(u.id),
+      label: u.ten_don_vi,
+      subLabel: normalizeLoaiHinh(u)
+    }));
+  }, [permittedUnits, selectedPhiaKeys]);
+
+  const selectedDonViKeys = useMemo(() => {
+    const current = dimFilters.don_vi;
+    const allKeys = optionsDonVi.map(o => o.key);
+    if (!current) return new Set(allKeys);
+    const validSet = new Set(allKeys);
+    const res = new Set<string>();
+    current.forEach(k => {
+      if (validSet.has(k)) res.add(k);
+    });
+    return res;
+  }, [dimFilters.don_vi, optionsDonVi]);
+
+  // 3. Loại hình Options (Phụ thuộc giá trị chọn Đơn vị)
+  const optionsLoaiHinh = useMemo((): Array<{ key: string; label: string; subLabel?: string }> => {
+    const availableTypes = new Set<string>();
+    permittedUnits.forEach(u => {
+      const parentId = getParentUnitId(u);
+      if (selectedDonViKeys.has(String(u.id)) || selectedDonViKeys.has(parentId)) {
+        availableTypes.add(normalizeLoaiHinh(u));
+      }
+    });
+    const standard = ['VPĐH', 'Công ty Tỉnh thành', 'Showroom'];
+    const res: string[] = [];
+    standard.forEach(t => {
+      if (availableTypes.has(t)) {
+        res.push(t);
+        availableTypes.delete(t);
+      }
+    });
+    availableTypes.forEach(t => res.push(t));
+    if (res.length === 0) return standard.map(t => ({ key: t, label: t }));
+    return res.map(t => ({ key: t, label: t }));
+  }, [permittedUnits, selectedDonViKeys]);
+
+  const selectedLoaiHinhKeys = useMemo(() => {
+    const current = dimFilters.loai_hinh;
+    const allKeys = optionsLoaiHinh.map(o => o.key);
+    if (!current) return new Set(allKeys);
+    const validSet = new Set(allKeys);
+    const res = new Set<string>();
+    current.forEach(k => {
+      if (validSet.has(k)) res.add(k);
+    });
+    return res;
+  }, [dimFilters.loai_hinh, optionsLoaiHinh]);
+
+  // 4. Showroom Options (Phụ thuộc giá trị chọn Đơn vị)
+  const optionsShowroom = useMemo((): Array<{ key: string; label: string; subLabel?: string }> => {
+    const showrooms = permittedUnits.filter(u => {
+      if (!isShowroomUnit(u)) return false;
+      const parentId = getParentUnitId(u);
+      return selectedDonViKeys.has(parentId) || selectedDonViKeys.has(String(u.id));
+    });
+    return showrooms.map(u => ({
+      key: String(u.id),
+      label: u.ten_don_vi,
+      subLabel: u.cap_quan_ly ? donViMap.get(String(u.cap_quan_ly))?.ten_don_vi : undefined
+    }));
+  }, [permittedUnits, selectedDonViKeys, donViMap]);
+
+  const selectedShowroomKeys = useMemo(() => {
+    const current = dimFilters.showroom;
+    const allKeys = optionsShowroom.map(o => o.key);
+    if (!current) return new Set(allKeys);
+    const validSet = new Set(allKeys);
+    const res = new Set<string>();
+    current.forEach(k => {
+      if (validSet.has(k)) res.add(k);
+    });
+    return res;
+  }, [dimFilters.showroom, optionsShowroom]);
+
+  // TẬP HỢP CÁC ID ĐƠN VỊ & SHOWROOM TRONG PHẠM VI LỌC (inScopeUnitIds)
+  const inScopeUnitIds = useMemo(() => {
+    const set = new Set<string>();
+    permittedUnits.forEach(u => {
+      const parentId = getParentUnitId(u);
+      const isShowroom = isShowroomUnit(u);
+      const lh = normalizeLoaiHinh(u);
+
+      if (!selectedLoaiHinhKeys.has(lh)) return;
+
+      if (isShowroom) {
+        if (optionsShowroom.length > 0) {
+          if (selectedShowroomKeys.has(String(u.id))) set.add(String(u.id));
+        } else if (selectedDonViKeys.has(parentId)) {
+          set.add(String(u.id));
+        }
+      } else {
+        if (selectedDonViKeys.has(String(u.id))) set.add(String(u.id));
+      }
+    });
+    return set;
+  }, [permittedUnits, selectedLoaiHinhKeys, selectedShowroomKeys, selectedDonViKeys, optionsShowroom.length]);
+
+  // Danh mục bộ phận tạo riêng cho các đơn vị đang nằm trong phạm vi lọc (inScopeUnitIds)
+  const unitCustomDepts = useMemo(() => {
+    if (!boPhanList || boPhanList.length === 0) return [];
+    return boPhanList.filter(b => {
+      if (b.active === false || !b.id_don_vi) return false;
+      const ids = String(b.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+      return ids.some(id => inScopeUnitIds.has(id));
+    });
+  }, [boPhanList, inScopeUnitIds]);
+
+  // Bộ phận có hiệu lực trong phạm vi: Ưu tiên bộ phận tạo riêng của đơn vị, fallback mẫu dùng chung (!b.id_don_vi)
+  const effectiveScopeBoPhanList = useMemo(() => {
+    if (unitCustomDepts.length > 0) return unitCustomDepts;
+    const common = (boPhanList || []).filter(b => !b.id_don_vi && b.active !== false);
+    return common.length > 0 ? common : (boPhanList || []).filter(b => b.active !== false);
+  }, [unitCustomDepts, boPhanList]);
+
+  // 5. Khối / Nghiệp vụ Options (Tham chiếu danh mục bộ phận tạo riêng của Đơn vị hoặc fallback mẫu chung)
+  const optionsKhoi = useMemo((): Array<{ key: string; label: string; subLabel?: string }> => {
+    const map = new Map<string, string>();
+    if (effectiveScopeBoPhanList && effectiveScopeBoPhanList.length > 0) {
+      effectiveScopeBoPhanList.forEach(b => {
+        if (b.ma_cap1 && !map.has(b.ma_cap1)) {
+          map.set(b.ma_cap1, b.ten_cap1);
+        }
+      });
+    }
+    if (map.size === 0 && cap1List) {
+      cap1List.filter(c => c.active !== false).forEach(c => {
+        map.set(c.id || c.ma, c.ten);
+      });
+    }
+    const opts: Array<{ key: string; label: string; subLabel?: string }> = Array.from(map.entries()).map(([ma, ten]) => ({
+      key: ma,
+      label: ten
+    }));
+    opts.push({
+      key: 'NO_CAP1',
+      label: '(Chưa phân loại Khối)',
+      subLabel: 'Phân bổ chưa gán Khối/Nghiệp vụ'
+    });
+    return opts;
+  }, [effectiveScopeBoPhanList, cap1List]);
+
+  const selectedKhoiKeys = useMemo(() => {
+    const current = dimFilters.khoi_nghiep_vu;
+    const allKeys = optionsKhoi.map(o => o.key);
+    if (!current) return new Set(allKeys);
+    const validSet = new Set(allKeys);
+    const res = new Set<string>();
+    current.forEach(k => {
+      if (validSet.has(k)) res.add(k);
+    });
+    return res;
+  }, [dimFilters.khoi_nghiep_vu, optionsKhoi]);
+
+  // 6. Thương hiệu / Phòng / Bộ phận Options (Tham chiếu danh mục bộ phận tạo riêng của Đơn vị hoặc fallback mẫu chung)
+  const optionsBoPhan = useMemo((): Array<{ key: string; label: string; subLabel?: string }> => {
+    const opts: Array<{ key: string; label: string; subLabel?: string }> = [];
+    const seen = new Set<string>();
+
+    if (effectiveScopeBoPhanList && effectiveScopeBoPhanList.length > 0) {
+      effectiveScopeBoPhanList.forEach(b => {
+        const matchKhoi = b.ma_cap1 && selectedKhoiKeys.has(b.ma_cap1);
+        if (matchKhoi) {
+          const key = String(b.id);
+          if (!seen.has(key)) {
+            seen.add(key);
+            opts.push({
+              key,
+              label: `${b.ten_cap2} (${b.ma_cap2})`,
+              subLabel: b.ten_cap1
+            });
+          }
+        }
+      });
+    }
+
+    if (opts.length === 0 && cap2List) {
+      cap2List.forEach(c => {
+        if (c.active === false) return;
+        const key = String(c.id || c.ma);
+        if (!seen.has(key)) {
+          seen.add(key);
+          opts.push({
+            key,
+            label: c.ten,
+            subLabel: c.ma
+          });
+        }
+      });
+    }
+
+    opts.push({
+      key: 'NO_CAP2',
+      label: '(Chưa phân loại Thương hiệu)',
+      subLabel: 'Phân bổ chưa gán Thương hiệu/Phòng/Bộ phận'
+    });
+    return opts;
+  }, [effectiveScopeBoPhanList, cap2List, selectedKhoiKeys]);
+
+  const selectedBoPhanKeys = useMemo(() => {
+    const current = dimFilters.thuong_hieu_bo_phan;
+    const allKeys = optionsBoPhan.map(o => o.key);
+    if (!current) return new Set(allKeys);
+    const validSet = new Set(allKeys);
+    const res = new Set<string>();
+    current.forEach(k => {
+      if (validSet.has(k)) res.add(k);
+    });
+    return res;
+  }, [dimFilters.thuong_hieu_bo_phan, optionsBoPhan]);
+
+  // 7. Pháp nhân Options (Lựa chọn cuối cùng, phụ thuộc pháp nhân có ở Đơn vị và Showroom)
+  const optionsPhapNhan = useMemo((): Array<{ key: string; label: string; subLabel?: string }> => {
+    const filteredPn = phapNhanList.filter(pn => {
+      if (!pn.id_don_vi) return true;
+      const ids = String(pn.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+      return ids.some(id => inScopeUnitIds.has(id));
+    });
+    const opts: Array<{ key: string; label: string; subLabel?: string }> = filteredPn.map(pn => ({
+      key: String(pn.id),
+      label: pn.ten_cong_ty || pn.ten_phap_nhan || 'Chưa đặt tên',
+      subLabel: pn.ma_so_thue ? `MST: ${pn.ma_so_thue}` : undefined
+    }));
+    opts.push({
+      key: 'NO_PN',
+      label: '(Chưa gán Pháp nhân)',
+      subLabel: 'Phiếu chưa gán pháp nhân'
+    });
+    return opts;
+  }, [phapNhanList, inScopeUnitIds]);
+
+  const selectedPhapNhanKeys = useMemo(() => {
+    const current = dimFilters.phap_nhan;
+    const allKeys = optionsPhapNhan.map(o => o.key);
+    if (!current) return new Set(allKeys);
+    const validSet = new Set(allKeys);
+    const res = new Set<string>();
+    current.forEach(k => {
+      if (validSet.has(k)) res.add(k);
+    });
+    return res;
+  }, [dimFilters.phap_nhan, optionsPhapNhan]);
+
+  // --- C. HÀM TIỆN ÍCH TRUY XUẤT THEO CHIỀU PHÂN TÍCH ---
+  const getDimensionOptions = (dimId: DimensionType): Array<{ key: string; label: string; subLabel?: string }> => {
+    switch (dimId) {
+      case 'phia': return optionsPhia;
+      case 'don_vi': return optionsDonVi;
+      case 'loai_hinh': return optionsLoaiHinh;
+      case 'showroom': return optionsShowroom;
+      case 'khoi_nghiep_vu': return optionsKhoi;
+      case 'thuong_hieu_bo_phan': return optionsBoPhan;
+      case 'phap_nhan': return optionsPhapNhan;
+      default: return [];
+    }
+  };
+
+  const getDimensionSelectedKeys = (dimId: DimensionType): Set<string> => {
+    switch (dimId) {
+      case 'phia': return selectedPhiaKeys;
+      case 'don_vi': return selectedDonViKeys;
+      case 'loai_hinh': return selectedLoaiHinhKeys;
+      case 'showroom': return selectedShowroomKeys;
+      case 'khoi_nghiep_vu': return selectedKhoiKeys;
+      case 'thuong_hieu_bo_phan': return selectedBoPhanKeys;
+      case 'phap_nhan': return selectedPhapNhanKeys;
+      default: return new Set<string>();
+    }
+  };
+
+  const handleToggleDimFilter = (dimId: DimensionType, key: string) => {
+    const curSelected = getDimensionSelectedKeys(dimId);
+    const next = new Set(curSelected);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setDimFilters(prev => ({ ...prev, [dimId]: next }));
+  };
+
+  const handleSelectAllDim = (dimId: DimensionType) => {
+    const opts = getDimensionOptions(dimId);
+    setDimFilters(prev => ({ ...prev, [dimId]: new Set(opts.map(o => o.key)) }));
+  };
+
+  const handleClearAllDim = (dimId: DimensionType) => {
+    setDimFilters(prev => ({ ...prev, [dimId]: new Set() }));
+  };
+
+  const handleDimensionButtonClick = (dimId: DimensionType) => {
+    setDimension(dimId);
+    if (openDropdownDim === dimId) {
+      setOpenDropdownDim(null);
+    } else {
+      setOpenDropdownDim(dimId);
+      setFilterSearchTerm('');
+    }
+  };
+
+  // --- D. HÀM TRÍCH XUẤT NHÃN CHIỀU PHÂN TÍCH (SINGLE DIMENSION) ---
   const getDimensionKeyAndLabel = (
     donViId?: string,
     phapNhanId?: string,
     maSoThue?: string,
     cap1Id?: string,
-    cap2Id?: string
+    cap2Id?: string,
+    idBoPhan?: string
   ): { key: string; label: string } => {
     const dv = donViId ? donViMap.get(String(donViId)) : null;
 
-    if (dimension === 'don_vi_phan_loai') {
-      // 1. Phân loại đơn vị: VPĐH hay CTTT (dựa trên cột phia hoặc loai_hinh có sẵn trong dm_don_vi)
-      const isVpdh = dv?.phia === 'VPĐH' || dv?.loai_hinh === 'Văn phòng' || dv?.cap_quan_ly === 'HO' || dv?.cap_quan_ly === 'DV_HO';
-      if (isVpdh) return { key: 'VPDH', label: 'Văn phòng Điều hành (VPĐH)' };
-      return { key: 'CTTT', label: 'Công ty Tỉnh thành (CTTT)' };
+    if (dimension === 'phia') {
+      const phiaVal = normalizePhia(dv?.phia);
+      return { key: phiaVal, label: phiaVal };
     }
 
-    if (dimension === 'mien') {
-      // 2. Miền: Phía Bắc / Phía Nam / VPĐH
-      if (dv?.phia === 'CTTT Phía Bắc') return { key: 'BAC', label: 'Phía Bắc' };
-      if (dv?.phia === 'CTTT Phía Nam') return { key: 'NAM', label: 'Phía Nam' };
-      if (dv?.phia === 'VPĐH') return { key: 'VPDH', label: 'Văn phòng Điều hành' };
-      return { key: 'KHAC', label: 'Chưa phân miền' };
-    }
-
-    if (dimension === 'don_vi_quan_tri') {
-      // 3. Đơn vị quản trị (Công ty Tỉnh thành)
+    if (dimension === 'don_vi') {
       if (!dv) return { key: 'UNKNOWN', label: 'Không xác định đơn vị' };
-      if (dv.loai_hinh === 'Công ty Tỉnh thành') {
-        return { key: String(dv.id), label: dv.ten_don_vi };
-      }
-      if (dv.cap_quan_ly && dv.cap_quan_ly !== 'HO' && dv.cap_quan_ly !== 'DV_HO') {
-        const parent = donViMap.get(String(dv.cap_quan_ly));
-        if (parent) return { key: String(parent.id), label: parent.ten_don_vi };
-      }
-      return { key: String(dv.id), label: dv.ten_don_vi };
+      const parentId = getParentUnitId(dv);
+      const parent = donViMap.get(parentId);
+      return { key: parentId, label: parent ? parent.ten_don_vi : dv.ten_don_vi };
     }
 
-    if (dimension === 'phap_nhan_mst') {
-      // 4. Pháp nhân: gom nhóm theo Mã số thuế thật để xử lý triệt để trùng lặp pháp nhân
-      let mst = (maSoThue || '').trim();
-      let repName = '';
-      if (!mst && phapNhanId) {
-        const pn = phapNhanMap.get(String(phapNhanId));
-        if (pn?.ma_so_thue) mst = pn.ma_so_thue.trim();
-        if (pn?.ten_cong_ty || pn?.ten_phap_nhan) repName = pn.ten_cong_ty || pn.ten_phap_nhan || '';
-      }
-      if (!mst) return { key: 'NO_MST', label: 'Không có Mã số thuế' };
-      if (!repName) repName = mstRepresentativeMap.get(mst) || 'Pháp nhân chưa đặt tên';
-      return { key: mst, label: `${mst} - ${repName}` };
+    if (dimension === 'loai_hinh') {
+      const lh = normalizeLoaiHinh(dv);
+      return { key: lh, label: lh };
     }
 
     if (dimension === 'showroom') {
-      // 5. Showroom
       if (!dv) return { key: 'UNKNOWN', label: 'Không xác định đơn vị' };
-      if (dv.loai_hinh === 'Showroom' || (dv.cap_quan_ly && dv.cap_quan_ly !== 'HO' && dv.cap_quan_ly !== 'DV_HO')) {
-        return { key: String(dv.id), label: dv.ten_don_vi };
-      }
-      return { key: String(dv.id), label: `[Cơ sở] ${dv.ten_don_vi}` };
+      return { key: String(dv.id), label: dv.ten_don_vi };
     }
 
     if (dimension === 'khoi_nghiep_vu') {
-      // 6. Khối / Nghiệp vụ (Cấp 1)
-      if (!cap1Id) return { key: 'NO_CAP1', label: 'Chưa phân loại Khối' };
-      const c1 = cap1Map.get(String(cap1Id));
-      return { key: String(cap1Id), label: c1 ? c1.ten : `Khối: ${cap1Id}` };
+      let c1Id = cap1Id;
+      if (!c1Id && idBoPhan) {
+        const bp = boPhanList?.find(b => String(b.id) === String(idBoPhan));
+        if (bp?.ma_cap1) c1Id = bp.ma_cap1;
+      }
+      if (!c1Id) return { key: 'NO_CAP1', label: '(Chưa phân loại Khối)' };
+      const c1 = cap1Map.get(String(c1Id));
+      const opt = optionsKhoi.find(o => o.key === c1Id);
+      return { key: String(c1Id), label: c1 ? c1.ten : (opt ? opt.label : `Khối: ${c1Id}`) };
     }
 
-    if (dimension === 'bo_phan_thuong_hieu') {
-      // 7. Bộ phận / Thương hiệu (Cấp 2)
-      if (!cap2Id) return { key: 'NO_CAP2', label: 'Chưa phân loại Thương hiệu' };
-      const c2 = cap2Map.get(String(cap2Id));
-      return { key: String(cap2Id), label: c2 ? c2.ten : `Thương hiệu: ${cap2Id}` };
+    if (dimension === 'thuong_hieu_bo_phan') {
+      if (idBoPhan) {
+        const bp = boPhanList?.find(b => String(b.id) === String(idBoPhan));
+        if (bp) return { key: String(bp.id), label: `${bp.ten_cap2} (${bp.ma_cap2})` };
+      }
+      if (cap2Id) {
+        const bp = boPhanList?.find(b => b.ma_cap2 === cap2Id || String(b.id) === String(cap2Id));
+        if (bp) return { key: String(bp.id), label: `${bp.ten_cap2} (${bp.ma_cap2})` };
+        const c2 = cap2Map.get(String(cap2Id));
+        return { key: String(cap2Id), label: c2 ? `${c2.ten} (${c2.ma})` : `Thương hiệu: ${cap2Id}` };
+      }
+      return { key: 'NO_CAP2', label: '(Chưa phân loại Thương hiệu)' };
+    }
+
+    if (dimension === 'phap_nhan') {
+      let pn = phapNhanId ? phapNhanMap.get(String(phapNhanId)) : null;
+      let mst = (maSoThue || pn?.ma_so_thue || '').trim();
+      let repName = pn?.ten_cong_ty || pn?.ten_phap_nhan || '';
+
+      if (!repName && mst) {
+        repName = mstRepresentativeMap.get(mst) || '';
+      }
+
+      if (!mst && !repName && !pn) return { key: 'NO_PN', label: '(Chưa gán Pháp nhân)' };
+      const key = pn ? String(pn.id) : (mst || repName);
+      const label = repName && mst ? `${repName} (MST: ${mst})` : (repName || `MST: ${mst}`);
+      return { key, label };
     }
 
     return { key: 'OTHER', label: 'Khác' };
   };
 
-  // 5. TỔNG HỢP DỮ LIỆU BÁO CÁO (KỲ NÀY & CÙNG KỲ NĂM TRƯỚC)
+  // --- E. TỔNG HỢP DỮ LIỆU BÁO CÁO (KỲ NÀY & CÙNG KỲ NĂM TRƯỚC) ---
   const reportData = useMemo(() => {
     // Aggregator maps: key -> { label, currentAmount, prevAmount }
     const aggMap = new Map<string, { key: string; label: string; currentAmount: number; prevAmount: number }>();
@@ -253,107 +732,126 @@ export default function CostStatisticsTab({
     // DNTT Map để tra cứu thông tin phiếu
     const dnttMap = new Map(dnttList.map(d => [String(d.id), d]));
 
-    // --- A. KỲ NÀY (selectedYear) ---
-    currentPeriodMonths.forEach(m => {
-      const isMonthClosed = closedMonthsCurrentPeriod.has(m);
+    // Hàm kiểm tra một phân bổ có thỏa mãn cả 7 chiều lọc hay không
+    const matchFilters = (
+      unitId?: string,
+      phapNhanId?: string,
+      boPhanId?: string,
+      cap1Id?: string,
+      cap2Id?: string
+    ): boolean => {
+      const dv = unitId ? donViMap.get(String(unitId)) : null;
+      const phiaVal = normalizePhia(dv?.phia);
+      const parentUnitId = getParentUnitId(dv);
+      const loaiHinhVal = normalizeLoaiHinh(dv);
+      const isShowroom = isShowroomUnit(dv);
 
-      if (isMonthClosed) {
-        // Tháng đã chốt: Lấy từ snapshot chi_phi_thong_ke
-        const records = thongKeList.filter(tk => {
-          const matchTime = Number(tk.nam) === selectedYear && Number(tk.thang) === m;
-          const matchKmp = selectedKmpId === 'ALL' || String(tk.id_kmp) === String(selectedKmpId);
-          const matchUnit = !allowedUnitIds || (tk.id_don_vi && allowedUnitIds.has(String(tk.id_don_vi)));
-          return matchTime && matchKmp && matchUnit;
-        });
+      // 1. Phía
+      if (!selectedPhiaKeys.has(phiaVal)) return false;
 
-        records.forEach(tk => {
-          // Tra cứu cap1/cap2 nếu cần
-          const bp = tk.id_bo_phan ? boPhanList.find(b => b.id === tk.id_bo_phan) : null;
-          const cap1Id = bp?.ma_cap1;
-          const cap2Id = bp?.ma_cap2;
-
-          const { key, label } = getDimensionKeyAndLabel(
-            tk.id_don_vi,
-            tk.id_phap_nhan,
-            tk.ma_so_thue,
-            cap1Id,
-            cap2Id
-          );
-          const item = getOrCreate(key, label);
-          item.currentAmount += Number(tk.tong_tien || 0);
-        });
-      } else {
-        // Tháng chưa chốt: Lấy từ dntt_phan_bo
-        const activeAllocations = phanBoList.filter(pb => {
-          if (Number(pb.nam) !== selectedYear || Number(pb.thang) !== m) return false;
-          if (selectedKmpId !== 'ALL' && String(pb.id_kmp) !== String(selectedKmpId)) return false;
-          const dntt = dnttMap.get(String(pb.dntt_id));
-          if (!dntt) return false;
-          const matchUnit = !allowedUnitIds || (dntt.id_don_vi && allowedUnitIds.has(String(dntt.id_don_vi)));
-          if (!matchUnit) return false;
-          const matchStatus = dnttStatusFilter === 'ALL'
-            ? dntt.trang_thai !== 'Từ chối'
-            : (dntt.trang_thai === 'Đã thanh toán' || dntt.trang_thai === 'Hoàn tất' || !dntt.trang_thai);
-          return matchStatus;
-        });
-
-        activeAllocations.forEach(pb => {
-          const dntt = dnttMap.get(String(pb.dntt_id));
-          const { key, label } = getDimensionKeyAndLabel(
-            dntt?.id_don_vi,
-            dntt?.id_phap_nhan,
-            undefined,
-            pb.id_bo_phan_cap1,
-            pb.id_bo_phan_cap2
-          );
-          const item = getOrCreate(key, label);
-          item.currentAmount += Number(pb.so_tien || 0);
-        });
+      // 2. Đơn vị
+      if (optionsDonVi.length > 0 && !selectedDonViKeys.has(parentUnitId) && !selectedDonViKeys.has(String(dv?.id))) {
+        return false;
       }
+
+      // 3. Loại hình
+      if (!selectedLoaiHinhKeys.has(loaiHinhVal)) return false;
+
+      // 4. Showroom
+      if (isShowroom && optionsShowroom.length > 0) {
+        if (!selectedShowroomKeys.has(String(dv?.id))) return false;
+      }
+
+      // 5. Khối/Nghiệp vụ
+      const bp = boPhanId ? boPhanList?.find(b => String(b.id) === String(boPhanId)) : null;
+      const c1Key = cap1Id || bp?.ma_cap1 || 'NO_CAP1';
+      if (!selectedKhoiKeys.has(c1Key)) return false;
+
+      // 6. Thương hiệu / Phòng / Bộ phận
+      const bpKey = boPhanId ? String(boPhanId) : (bp?.id ? String(bp.id) : (cap2Id ? String(cap2Id) : 'NO_CAP2'));
+      const cap2Key = cap2Id ? String(cap2Id) : undefined;
+      const matchBoPhan = selectedBoPhanKeys.has(bpKey) || (cap2Key ? selectedBoPhanKeys.has(cap2Key) : false);
+      if (!matchBoPhan) return false;
+
+      // 7. Pháp nhân
+      const pnKey = phapNhanId ? String(phapNhanId) : 'NO_PN';
+      if (!selectedPhapNhanKeys.has(pnKey)) return false;
+
+      return true;
+    };
+
+    // --- 1. KỲ NÀY (selectedYear) ---
+    currentPeriodMonths.forEach(m => {
+      const activeAllocations = phanBoList.filter(pb => {
+        if (Number(pb.nam) !== selectedYear || Number(pb.thang) !== m) return false;
+        if (selectedKmpId !== 'ALL' && String(pb.id_kmp) !== String(selectedKmpId)) return false;
+
+        if (onlyAdministrative) {
+          const kmp = kmpMap.get(String(pb.id_kmp));
+          if (kmp && kmp.thuoc_bao_cao_hanh_chinh === false) return false;
+        }
+
+        const dntt = dnttMap.get(String(pb.dntt_id));
+        if (!dntt || dntt.trang_thai === 'Từ chối' || dntt.trang_thai === 'Lưu nháp') return false;
+
+        const matchUnitScope = !allowedUnitIds || (dntt.id_don_vi && allowedUnitIds.has(String(dntt.id_don_vi)));
+        if (!matchUnitScope) return false;
+
+        return matchFilters(
+          dntt.id_don_vi,
+          dntt.id_phap_nhan,
+          pb.id_bo_phan,
+          pb.id_bo_phan_cap1,
+          pb.id_bo_phan_cap2
+        );
+      });
+
+      activeAllocations.forEach(pb => {
+        const dntt = dnttMap.get(String(pb.dntt_id));
+        const { key, label } = getDimensionKeyAndLabel(
+          dntt?.id_don_vi,
+          dntt?.id_phap_nhan,
+          undefined,
+          pb.id_bo_phan_cap1,
+          pb.id_bo_phan_cap2,
+          pb.id_bo_phan
+        );
+        const item = getOrCreate(key, label);
+        item.currentAmount += Number(pb.so_tien || 0);
+      });
     });
 
-    // --- B. CÙNG KỲ NĂM TRƯỚC (selectedYear - 1) ---
+    // --- 2. CÙNG KỲ NĂM TRƯỚC (selectedYear - 1) ---
     const prevYear = selectedYear - 1;
+    let prevPhanBoFound = false;
+
     prevPeriodMonths.forEach(m => {
-      const isMonthClosed = chotKyList.some(ck => Number(ck.nam) === prevYear && Number(ck.thang) === m && ck.trang_thai === 'da_chot');
+      const activeAllocations = phanBoList.filter(pb => {
+        if (Number(pb.nam) !== prevYear || Number(pb.thang) !== m) return false;
+        if (selectedKmpId !== 'ALL' && String(pb.id_kmp) !== String(selectedKmpId)) return false;
 
-      if (isMonthClosed) {
-        const records = thongKeList.filter(tk => {
-          const matchTime = Number(tk.nam) === prevYear && Number(tk.thang) === m;
-          const matchKmp = selectedKmpId === 'ALL' || String(tk.id_kmp) === String(selectedKmpId);
-          const matchUnit = !allowedUnitIds || (tk.id_don_vi && allowedUnitIds.has(String(tk.id_don_vi)));
-          return matchTime && matchKmp && matchUnit;
-        });
+        if (onlyAdministrative) {
+          const kmp = kmpMap.get(String(pb.id_kmp));
+          if (kmp && kmp.thuoc_bao_cao_hanh_chinh === false) return false;
+        }
 
-        records.forEach(tk => {
-          const bp = tk.id_bo_phan ? boPhanList.find(b => b.id === tk.id_bo_phan) : null;
-          const cap1Id = bp?.ma_cap1;
-          const cap2Id = bp?.ma_cap2;
+        const dntt = dnttMap.get(String(pb.dntt_id));
+        if (!dntt || dntt.trang_thai === 'Từ chối' || dntt.trang_thai === 'Lưu nháp') return false;
 
-          const { key, label } = getDimensionKeyAndLabel(
-            tk.id_don_vi,
-            tk.id_phap_nhan,
-            tk.ma_so_thue,
-            cap1Id,
-            cap2Id
-          );
-          const item = getOrCreate(key, label);
-          item.prevAmount += Number(tk.tong_tien || 0);
-        });
-      } else {
-        const activeAllocations = phanBoList.filter(pb => {
-          if (Number(pb.nam) !== prevYear || Number(pb.thang) !== m) return false;
-          if (selectedKmpId !== 'ALL' && String(pb.id_kmp) !== String(selectedKmpId)) return false;
-          const dntt = dnttMap.get(String(pb.dntt_id));
-          if (!dntt) return false;
-          const matchUnit = !allowedUnitIds || (dntt.id_don_vi && allowedUnitIds.has(String(dntt.id_don_vi)));
-          if (!matchUnit) return false;
-          const matchStatus = dnttStatusFilter === 'ALL'
-            ? dntt.trang_thai !== 'Từ chối'
-            : (dntt.trang_thai === 'Đã thanh toán' || dntt.trang_thai === 'Hoàn tất' || !dntt.trang_thai);
-          return matchStatus;
-        });
+        const matchUnitScope = !allowedUnitIds || (dntt.id_don_vi && allowedUnitIds.has(String(dntt.id_don_vi)));
+        if (!matchUnitScope) return false;
 
+        return matchFilters(
+          dntt.id_don_vi,
+          dntt.id_phap_nhan,
+          pb.id_bo_phan,
+          pb.id_bo_phan_cap1,
+          pb.id_bo_phan_cap2
+        );
+      });
+
+      if (activeAllocations.length > 0) {
+        prevPhanBoFound = true;
         activeAllocations.forEach(pb => {
           const dntt = dnttMap.get(String(pb.dntt_id));
           const { key, label } = getDimensionKeyAndLabel(
@@ -361,7 +859,8 @@ export default function CostStatisticsTab({
             dntt?.id_phap_nhan,
             undefined,
             pb.id_bo_phan_cap1,
-            pb.id_bo_phan_cap2
+            pb.id_bo_phan_cap2,
+            pb.id_bo_phan
           );
           const item = getOrCreate(key, label);
           item.prevAmount += Number(pb.so_tien || 0);
@@ -369,32 +868,75 @@ export default function CostStatisticsTab({
       }
     });
 
+    // Fallback nếu năm trước chưa có phiếu trong phanBoList (dữ liệu snapshot cũ)
+    if (!prevPhanBoFound && thongKeList.length > 0) {
+      prevPeriodMonths.forEach(m => {
+        const records = thongKeList.filter(tk => {
+          const matchTime = Number(tk.nam) === prevYear && Number(tk.thang) === m;
+          const matchKmp = selectedKmpId === 'ALL' || String(tk.id_kmp) === String(selectedKmpId);
+          const matchUnitScope = !allowedUnitIds || (tk.id_don_vi && allowedUnitIds.has(String(tk.id_don_vi)));
+          if (onlyAdministrative) {
+            const kmp = kmpMap.get(String(tk.id_kmp));
+            const isCpAdmin = tk.thuoc_bao_cao_hanh_chinh !== false && (kmp ? kmp.thuoc_bao_cao_hanh_chinh !== false : true);
+            if (!isCpAdmin) return false;
+          }
+          if (!matchTime || !matchKmp || !matchUnitScope) return false;
+
+          const bp = tk.id_bo_phan ? boPhanList?.find(b => String(b.id) === String(tk.id_bo_phan)) : null;
+          return matchFilters(
+            tk.id_don_vi,
+            tk.id_phap_nhan,
+            tk.id_bo_phan,
+            bp?.ma_cap1,
+            bp?.ma_cap2
+          );
+        });
+
+        records.forEach(tk => {
+          const bp = tk.id_bo_phan ? boPhanList?.find(b => String(b.id) === String(tk.id_bo_phan)) : null;
+          const cap1Id = bp?.ma_cap1;
+          const cap2Id = bp?.ma_cap2;
+
+          const { key, label } = getDimensionKeyAndLabel(
+            tk.id_don_vi,
+            tk.id_phap_nhan,
+            tk.ma_so_thue,
+            cap1Id,
+            cap2Id,
+            tk.id_bo_phan
+          );
+          const item = getOrCreate(key, label);
+          item.prevAmount += Number(tk.tong_tien || 0);
+        });
+      });
+    }
+
     // Chuyển map thành mảng và tính toán chênh lệch, sắp xếp giảm dần theo số tiền kỳ này
     const rows = Array.from(aggMap.values())
       .filter(r => r.currentAmount > 0 || r.prevAmount > 0)
       .map(r => {
         const diff = r.currentAmount - r.prevAmount;
-        let percent = 0;
+        let percent: number | null = null;
         if (r.prevAmount > 0) {
           percent = (diff / r.prevAmount) * 100;
-        } else if (r.currentAmount > 0) {
-          percent = 100;
+        } else {
+          percent = null;
         }
-        return {
-          ...r,
-          diff,
-          percent
-        };
+        return { ...r, diff, percent };
       })
       .sort((a, b) => b.currentAmount - a.currentAmount);
 
-    const totalCurrent = rows.reduce((s, r) => s + r.currentAmount, 0);
-    const totalPrev = rows.reduce((s, r) => s + r.prevAmount, 0);
+    // Lọc theo đối tượng được tick chọn trong chiều phân tích hiện tại
+    const activeSelectedKeys = getDimensionSelectedKeys(dimension);
+    const filteredRows = rows.filter(r => activeSelectedKeys.has(r.key));
+
+    const totalCurrent = filteredRows.reduce((s, r) => s + r.currentAmount, 0);
+    const totalPrev = filteredRows.reduce((s, r) => s + r.prevAmount, 0);
     const totalDiff = totalCurrent - totalPrev;
-    const totalPercent = totalPrev > 0 ? (totalDiff / totalPrev) * 100 : (totalCurrent > 0 ? 100 : 0);
+    const totalPercent = totalPrev > 0 ? (totalDiff / totalPrev) * 100 : null;
 
     return {
-      rows,
+      rows: filteredRows,
       totalCurrent,
       totalPrev,
       totalDiff,
@@ -417,8 +959,19 @@ export default function CostStatisticsTab({
     cap1Map,
     cap2Map,
     chotKyList,
-    dnttStatusFilter,
-    allowedUnitIds
+    includeTemporary,
+    onlyAdministrative,
+    kmpMap,
+    allowedUnitIds,
+    selectedPhiaKeys,
+    selectedDonViKeys,
+    selectedLoaiHinhKeys,
+    selectedShowroomKeys,
+    selectedKhoiKeys,
+    selectedBoPhanKeys,
+    selectedPhapNhanKeys,
+    optionsDonVi.length,
+    optionsShowroom.length
   ]);
 
   // 6. XỬ LÝ CHỐT KỲ MỚI
@@ -471,13 +1024,13 @@ export default function CostStatisticsTab({
     }
 
     const dimensionTitleMap: Record<DimensionType, string> = {
-      don_vi_phan_loai: 'Phân loại Đơn vị (VPĐH / CTTT)',
-      mien: 'Miền (Bắc / Nam)',
-      don_vi_quan_tri: 'Đơn vị Quản trị (Công ty Tỉnh thành)',
-      phap_nhan_mst: 'Pháp nhân theo Mã số thuế',
-      showroom: 'Showroom / Cơ sở trực thuộc',
-      khoi_nghiep_vu: 'Khối / Nghiệp vụ (Cấp 1)',
-      bo_phan_thuong_hieu: 'Bộ phận / Thương hiệu (Cấp 2)'
+      phia: 'Phía',
+      don_vi: 'Đơn vị',
+      loai_hinh: 'Loại hình',
+      showroom: 'Showroom',
+      khoi_nghiep_vu: 'Khối/Nghiệp vụ',
+      thuong_hieu_bo_phan: 'Thương hiệu / Phòng / Bộ phận',
+      phap_nhan: 'Pháp nhân'
     };
 
     const dimTitle = dimensionTitleMap[dimension];
@@ -508,7 +1061,9 @@ export default function CostStatisticsTab({
         <Cell ss:StyleID="sNumber"><Data ss:Type="Number">${r.currentAmount}</Data></Cell>
         <Cell ss:StyleID="sNumber"><Data ss:Type="Number">${r.prevAmount}</Data></Cell>
         <Cell ss:StyleID="${r.diff >= 0 ? 'sNumberDiffPos' : 'sNumberDiffNeg'}"><Data ss:Type="Number">${r.diff}</Data></Cell>
-        <Cell ss:StyleID="sPercent"><Data ss:Type="Number">${(r.percent / 100).toFixed(4)}</Data></Cell>
+        ${r.percent !== null 
+          ? `<Cell ss:StyleID="sPercent"><Data ss:Type="Number">${(r.percent / 100).toFixed(4)}</Data></Cell>` 
+          : `<Cell ss:StyleID="sCenter"><Data ss:Type="String">—</Data></Cell>`}
       </Row>
     `).join('');
 
@@ -519,7 +1074,9 @@ export default function CostStatisticsTab({
         <Cell ss:StyleID="sTotalNumber"><Data ss:Type="Number">${reportData.totalCurrent}</Data></Cell>
         <Cell ss:StyleID="sTotalNumber"><Data ss:Type="Number">${reportData.totalPrev}</Data></Cell>
         <Cell ss:StyleID="sTotalNumber"><Data ss:Type="Number">${reportData.totalDiff}</Data></Cell>
-        <Cell ss:StyleID="sTotalPercent"><Data ss:Type="Number">${(reportData.totalPercent / 100).toFixed(4)}</Data></Cell>
+        ${reportData.totalPercent !== null 
+          ? `<Cell ss:StyleID="sTotalPercent"><Data ss:Type="Number">${(reportData.totalPercent / 100).toFixed(4)}</Data></Cell>` 
+          : `<Cell ss:StyleID="sTotalCenter"><Data ss:Type="String">—</Data></Cell>`}
       </Row>
     `;
 
@@ -695,354 +1252,476 @@ export default function CostStatisticsTab({
 
   return (
     <div className="flex flex-col h-full space-y-4">
-      {/* 1. TOP STATS BAR */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Card 1: Kỳ này */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-xs text-gray-500 font-medium">Chi phí {periodLabel}</div>
-            <div className="text-lg font-bold font-mono text-[#D97706] mt-1">
-              {reportData.totalCurrent.toLocaleString('vi-VN')} <span className="text-xs font-sans text-gray-400">VNĐ</span>
+      {currentSubTab === 'quan_tri' ? (
+        <CostMatrixView
+          year={selectedYear}
+          onYearChange={setSelectedYear}
+          thongKeList={thongKeList}
+          chotKyList={chotKyList}
+          dnttList={dnttList}
+          phanBoList={phanBoList}
+          kmpList={kmpList}
+          nhomChiPhiList={nhomChiPhiList}
+          donViList={donViList}
+          fullDonViList={fullDonViList}
+          boPhanList={boPhanList}
+          selectedUnitFilter={selectedUnitFilter}
+          userPermittedUnitIds={userPermittedUnitIds}
+          includeTemporary={includeTemporary}
+          onToggleIncludeTemporary={setIncludeTemporary}
+          onlyAdministrative={onlyAdministrative}
+          onToggleOnlyAdministrative={setOnlyAdministrative}
+          onOpenChotKyModal={() => setChotKyModalOpen(true)}
+        />
+      ) : (
+        <>
+          {/* 1. TOP STATS BAR */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Card 1: Kỳ này */}
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
+              <div>
+                <div className="text-xs text-gray-500 font-medium">Chi phí {periodLabel}</div>
+                <div className="text-lg font-bold font-mono text-[#D97706] mt-1">
+                  {reportData.totalCurrent.toLocaleString('vi-VN')} <span className="text-xs font-sans text-gray-400">VNĐ</span>
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-[#D97706] flex items-center justify-center">
+                <BarChart2 size={20} />
+              </div>
+            </div>
+
+            {/* Card 2: Cùng kỳ */}
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
+              <div>
+                <div className="text-xs text-gray-500 font-medium">Cùng kỳ ({prevPeriodLabel})</div>
+                <div className="text-lg font-bold font-mono text-gray-700 dark:text-gray-200 mt-1">
+                  {reportData.totalPrev.toLocaleString('vi-VN')} <span className="text-xs font-sans text-gray-400">VNĐ</span>
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 flex items-center justify-center">
+                <Calendar size={20} />
+              </div>
+            </div>
+
+            {/* Card 3: Chênh lệch */}
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
+              <div>
+                <div className="text-xs text-gray-500 font-medium">Chênh lệch cùng kỳ</div>
+                <div className={`text-lg font-bold font-mono mt-1 flex items-center gap-1.5 ${
+                  reportData.totalDiff > 0 ? 'text-amber-600' : (reportData.totalDiff < 0 ? 'text-emerald-600' : 'text-gray-600')
+                }`}>
+                  <span>{reportData.totalDiff > 0 ? `+${reportData.totalDiff.toLocaleString('vi-VN')}` : reportData.totalDiff.toLocaleString('vi-VN')}</span>
+                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-slate-700">
+                    {reportData.totalPercent !== null 
+                      ? (reportData.totalPercent > 0 ? `+${reportData.totalPercent.toFixed(1)}%` : `${reportData.totalPercent.toFixed(1)}%`)
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                reportData.totalDiff > 0
+                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600'
+                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600'
+              }`}>
+                {reportData.totalDiff >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+              </div>
+            </div>
+
+            {/* Card 4: Tình trạng ghi nhận số liệu */}
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
+              <div>
+                <div className="text-xs text-gray-500 font-medium">Cơ chế ghi nhận</div>
+                <div className="text-sm font-bold mt-1 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 size={16} />
+                  <span>Dữ liệu Live (Thời gian thực)</span>
+                </div>
+                <div className="text-[11px] text-gray-400 mt-0.5">
+                  Tự động cập nhật ngay khi Lưu phiếu DNTT
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
+                <Sparkles size={20} />
+              </div>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-[#D97706] flex items-center justify-center">
-            <BarChart2 size={20} />
-          </div>
-        </div>
 
-        {/* Card 2: Cùng kỳ */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-xs text-gray-500 font-medium">Cùng kỳ ({prevPeriodLabel})</div>
-            <div className="text-lg font-bold font-mono text-gray-700 dark:text-gray-200 mt-1">
-              {reportData.totalPrev.toLocaleString('vi-VN')} <span className="text-xs font-sans text-gray-400">VNĐ</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 flex items-center justify-center">
-            <Calendar size={20} />
-          </div>
-        </div>
-
-        {/* Card 3: Chênh lệch */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-xs text-gray-500 font-medium">Chênh lệch cùng kỳ</div>
-            <div className={`text-lg font-bold font-mono mt-1 flex items-center gap-1.5 ${
-              reportData.totalDiff > 0 ? 'text-amber-600' : (reportData.totalDiff < 0 ? 'text-emerald-600' : 'text-gray-600')
-            }`}>
-              <span>{reportData.totalDiff > 0 ? `+${reportData.totalDiff.toLocaleString('vi-VN')}` : reportData.totalDiff.toLocaleString('vi-VN')}</span>
-              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-slate-700">
-                {reportData.totalPercent > 0 ? `+${reportData.totalPercent.toFixed(1)}%` : `${reportData.totalPercent.toFixed(1)}%`}
-              </span>
-            </div>
-          </div>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-            reportData.totalDiff > 0
-              ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600'
-              : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600'
-          }`}>
-            {reportData.totalDiff >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
-          </div>
-        </div>
-
-        {/* Card 4: Tình trạng chốt kỳ */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="text-xs text-gray-500 font-medium">Trạng thái kỳ này</div>
-            <div className="text-sm font-bold mt-1 flex items-center gap-1.5">
-              {closedMonthsCurrentPeriod.size === currentPeriodMonths.length ? (
-                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                  <CheckCircle2 size={16} /> Đã chốt số liệu ({closedMonthsCurrentPeriod.size}/{currentPeriodMonths.length} tháng)
+          {/* 2. THANH CÔNG CỤ BỘ LỌC ĐA CHIỀU */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Lọc chiều phân tích (7 mục lựa chọn dạng Dropdown Đa chọn) */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="text-xs font-bold text-gray-600 dark:text-gray-300 flex items-center gap-1.5 shrink-0">
+                  <Layers size={15} className="text-[#D97706]" />
+                  <span>Chiều phân tích:</span>
                 </span>
-              ) : closedMonthsCurrentPeriod.size > 0 ? (
-                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
-                  <Lock size={16} /> Chốt 1 phần ({closedMonthsCurrentPeriod.size}/{currentPeriodMonths.length} tháng)
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold">
-                  <Unlock size={16} /> Chưa chốt (Dữ liệu live)
-                </span>
-              )}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setChotKyModalOpen(true)}
-            className="px-2.5 py-1.5 bg-[#D97706] hover:bg-[#b45309] text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer flex items-center gap-1"
-          >
-            <Lock size={14} />
-            <span>Quản lý</span>
-          </button>
-        </div>
-      </div>
 
-      {/* 2. THANH CÔNG CỤ BỘ LỌC ĐA CHIỀU */}
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Lọc chiều phân tích (Single Dimension) */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 flex items-center gap-1">
-              <Layers size={15} className="text-[#D97706]" />
-              <span>Chiều phân tích:</span>
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { id: 'don_vi_phan_loai', label: 'VPĐH / CTTT' },
-                { id: 'mien', label: 'Miền (Bắc / Nam)' },
-                { id: 'don_vi_quan_tri', label: 'Đơn vị Quản trị' },
-                { id: 'phap_nhan_mst', label: 'Pháp nhân (theo MST)' },
-                { id: 'showroom', label: 'Showroom' },
-                { id: 'khoi_nghiep_vu', label: 'Khối (Cấp 1)' },
-                { id: 'bo_phan_thuong_hieu', label: 'Thương hiệu (Cấp 2)' }
-              ].map(opt => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setDimension(opt.id as DimensionType)}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                    dimension === opt.id
-                      ? 'bg-[#D97706] text-white shadow-xs font-bold'
-                      : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
+                <div className="flex flex-wrap items-center gap-1.5" ref={dimFilterDropdownRef}>
+                  {DIMENSION_CONFIG.map(dim => {
+                    const isActive = dimension === dim.id;
+                    const isOpen = openDropdownDim === dim.id;
+                    const opts = getDimensionOptions(dim.id);
+                    const selectedKeys = getDimensionSelectedKeys(dim.id);
+                    const isFiltered = selectedKeys.size < opts.length;
 
-          {/* Nút Xuất Excel & Refresh */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer active:scale-95"
-            >
-              <FileSpreadsheet size={15} />
-              <span>Xuất Excel</span>
-            </button>
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={loading}
-              className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-              title="Làm mới dữ liệu"
-            >
-              <RefreshCw size={16} className={loading ? 'animate-spin text-[#D97706]' : ''} />
-            </button>
-          </div>
-        </div>
+                    const filteredOpts = filterSearchTerm.trim()
+                      ? opts.filter(o =>
+                          o.label.toLowerCase().includes(filterSearchTerm.toLowerCase().trim()) ||
+                          (o.subLabel && o.subLabel.toLowerCase().includes(filterSearchTerm.toLowerCase().trim()))
+                        )
+                      : opts;
 
-        {/* Hàng bộ lọc thời gian & KMP */}
-        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100 dark:border-slate-700 text-xs">
-          {/* Kiểu kỳ: Tháng / Quý / 6 Tháng / Năm */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 p-0.5 rounded-lg">
-            {(['thang', 'quy', '6thang', 'nam'] as PeriodType[]).map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriodType(p)}
-                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                  periodType === p
-                    ? 'bg-white dark:bg-slate-800 text-[#D97706] font-bold shadow-xs'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-                }`}
-              >
-                {p === 'thang' ? 'Tháng' : p === 'quy' ? 'Quý' : p === '6thang' ? '6 Tháng' : 'Cả Năm'}
-              </button>
-            ))}
-          </div>
-
-          {/* Chọn tháng cụ thể */}
-          {periodType === 'thang' && (
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-            >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                <option key={m} value={m}>Tháng {m}</option>
-              ))}
-            </select>
-          )}
-
-          {/* Chọn quý cụ thể */}
-          {periodType === 'quy' && (
-            <select
-              value={selectedQuarter}
-              onChange={(e) => setSelectedQuarter(Number(e.target.value))}
-              className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-            >
-              <option value={1}>Quý 1 (Tháng 1 - 3)</option>
-              <option value={2}>Quý 2 (Tháng 4 - 6)</option>
-              <option value={3}>Quý 3 (Tháng 7 - 9)</option>
-              <option value={4}>Quý 4 (Tháng 10 - 12)</option>
-            </select>
-          )}
-
-          {/* Chọn 6 tháng cụ thể */}
-          {periodType === '6thang' && (
-            <select
-              value={selectedHalf}
-              onChange={(e) => setSelectedHalf(Number(e.target.value) as 1 | 2)}
-              className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-            >
-              <option value={1}>6 tháng đầu năm (T1 - T6)</option>
-              <option value={2}>6 tháng cuối năm (T7 - T12)</option>
-            </select>
-          )}
-
-          {/* Chọn Năm */}
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-          >
-            {[now.getFullYear() + 1, now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map(y => (
-              <option key={y} value={y}>Năm {y}</option>
-            ))}
-          </select>
-
-          {/* Lọc trạng thái phiếu DNTT (khi chưa chốt kỳ) */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-gray-500 font-medium">Trạng thái:</span>
-            <select
-              value={dnttStatusFilter}
-              onChange={(e) => setDnttStatusFilter(e.target.value as 'ALL' | 'PAID')}
-              className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 text-gray-800 dark:text-gray-100 font-semibold focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-              title="Lọc trạng thái phiếu ĐNTT khi xem dữ liệu chưa chốt kỳ"
-            >
-              <option value="ALL">Tất cả phiếu DNTT</option>
-              <option value="PAID">Chỉ phiếu Đã thanh toán</option>
-            </select>
-          </div>
-
-          {/* Chọn Khoản mục phí (KMP) */}
-          <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-gray-500 font-medium">Khoản mục phí:</span>
-            <select
-              value={selectedKmpId}
-              onChange={(e) => setSelectedKmpId(e.target.value)}
-              className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 text-gray-800 dark:text-gray-100 max-w-[280px] focus:outline-none focus:ring-1 focus:ring-[#D97706] text-xs font-medium"
-            >
-              <option value="ALL">-- Tất cả Khoản mục phí ({kmpList.length}) --</option>
-              {groupedKmp.map(([group, items]) => (
-                <optgroup key={group} label={`📁 ${group}`}>
-                  {items.map(k => {
-                    const code = k.ma_b7 || k.ma_b10;
-                    const name = k.dien_giai || k.nhom_chi_phi || 'Khoản mục';
-                    const star = k.trong_yeu ? ' ⭐' : '';
                     return (
-                      <option key={k.id} value={k.id}>
-                        {code ? `${code} - ${name}${star}` : `${name}${star}`}
-                      </option>
+                      <div key={dim.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => handleDimensionButtonClick(dim.id)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer shadow-2xs ${
+                            isActive
+                              ? 'bg-[#D97706] text-white font-bold ring-2 ring-amber-400/40 shadow-sm'
+                              : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                          }`}
+                          title={`Xem và lọc chi phí theo ${dim.label}`}
+                        >
+                          <span>{dim.icon}</span>
+                          <span>{dim.label}</span>
+                          {isFiltered && (
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                              isActive
+                                ? 'bg-white/30 text-white'
+                                : 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200'
+                            }`}>
+                              {selectedKeys.size}/{opts.length}
+                            </span>
+                          )}
+                          <ChevronDown size={13} className={`transition-transform duration-150 ${isOpen ? 'rotate-180 opacity-100' : 'opacity-70'}`} />
+                        </button>
+
+                        {/* Multi-select Dropdown Popover */}
+                        {isOpen && (
+                          <div className={`absolute top-full mt-1.5 w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50 p-2.5 space-y-2 animate-in fade-in zoom-in-95 duration-100 ${
+                            dim.id === 'thuong_hieu_bo_phan' || dim.id === 'phap_nhan' || dim.id === 'khoi_nghiep_vu' || dim.id === 'showroom' ? 'right-0' : 'left-0'
+                          }`}>
+                            {/* Header: Đã chọn & Nút thao tác nhanh */}
+                            <div className="flex items-center justify-between pb-1.5 border-b border-gray-100 dark:border-slate-700">
+                              <span className="text-[11px] font-bold text-gray-500 uppercase">
+                                {dim.label}: <strong className="text-[#D97706]">{selectedKeys.size}/{opts.length}</strong>
+                              </span>
+                              <div className="flex items-center gap-2 text-[11px]">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectAllDim(dim.id)}
+                                  className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                                >
+                                  Chọn tất cả
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleClearAllDim(dim.id)}
+                                  className="text-gray-500 hover:text-red-600 font-semibold cursor-pointer"
+                                >
+                                  Bỏ chọn
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Ô tìm kiếm nhanh nếu có hơn 4 options */}
+                            {opts.length > 4 && (
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  placeholder={`Tìm kiếm ${dim.label.toLowerCase()}...`}
+                                  value={filterSearchTerm}
+                                  onChange={(e) => setFilterSearchTerm(e.target.value)}
+                                  className="w-full px-2.5 py-1 text-xs bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+                                  autoFocus
+                                />
+                              </div>
+                            )}
+
+                            {/* Danh sách Checkbox các đối tượng */}
+                            <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1">
+                              {filteredOpts.length === 0 ? (
+                                <div className="text-center py-4 text-xs text-gray-400">Không tìm thấy đối tượng phù hợp</div>
+                              ) : (
+                                filteredOpts.map(opt => {
+                                  const isChecked = selectedKeys.has(opt.key);
+                                  return (
+                                    <label
+                                      key={opt.key}
+                                      className="flex items-center gap-2 p-1.5 hover:bg-amber-50/60 dark:hover:bg-slate-700/60 rounded-lg cursor-pointer transition-colors text-xs"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleDimFilter(dim.id, opt.key)}
+                                        className="rounded text-[#D97706] focus:ring-[#D97706] h-3.5 w-3.5 cursor-pointer"
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <span className={`block truncate ${isChecked ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400'}`}>
+                                          {opt.label}
+                                        </span>
+                                        {opt.subLabel && (
+                                          <span className="text-[10px] text-gray-400 block truncate">
+                                            {opt.subLabel}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </label>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
+                </div>
+              </div>
 
-      {/* 3. BẢNG PIVOT ĐỐI SÁNH CÙNG KỲ */}
-      <div className="flex-1 bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-gray-200/80 dark:border-slate-700/80 overflow-hidden flex flex-col min-h-0">
-        <div className="flex-1 overflow-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse text-xs sm:text-sm">
-            <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700/80 text-gray-600 dark:text-gray-200 font-semibold border-b border-gray-200 dark:border-slate-600">
-              <tr>
-                <th className="p-3 w-12 text-center">TT</th>
-                <th className="p-3 min-w-[240px]">
-                  {dimension === 'don_vi_phan_loai' && 'Phân loại Đơn vị'}
-                  {dimension === 'mien' && 'Miền'}
-                  {dimension === 'don_vi_quan_tri' && 'Đơn vị Quản trị (Công ty Tỉnh thành)'}
-                  {dimension === 'phap_nhan_mst' && 'Pháp nhân theo Mã số thuế'}
-                  {dimension === 'showroom' && 'Showroom / Cơ sở'}
-                  {dimension === 'khoi_nghiep_vu' && 'Khối / Nghiệp vụ (Cấp 1)'}
-                  {dimension === 'bo_phan_thuong_hieu' && 'Bộ phận / Thương hiệu (Cấp 2)'}
-                </th>
-                <th className="p-3 w-44 text-right">Kỳ này ({periodLabel})</th>
-                <th className="p-3 w-44 text-right">Cùng kỳ ({prevPeriodLabel})</th>
-                <th className="p-3 w-40 text-right">Chênh lệch (VNĐ)</th>
-                <th className="p-3 w-28 text-right">% Tăng/Giảm</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-gray-700 dark:text-gray-300">
-              {reportData.rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-400">
-                    <BarChart2 size={36} className="mx-auto mb-2 opacity-50 text-[#D97706]" />
-                    <p className="font-semibold text-gray-600 dark:text-gray-300">Chưa có số liệu chi phí cho kỳ và bộ lọc đã chọn.</p>
-                    <p className="text-xs text-gray-400 mt-1">Hãy thử chọn kỳ khác hoặc kiểm tra lại các phiếu ĐNTT đã thanh toán.</p>
-                  </td>
-                </tr>
-              ) : (
-                reportData.rows.map((r, idx) => (
-                  <tr key={r.key} className="hover:bg-amber-50/30 dark:hover:bg-slate-700/40 transition-colors">
-                    <td className="p-3 text-center text-gray-400 font-mono text-xs">{idx + 1}</td>
-                    <td className="p-3 font-semibold text-gray-900 dark:text-gray-100">{r.label}</td>
-                    <td className="p-3 text-right font-mono font-bold text-[#D97706]">
-                      {r.currentAmount.toLocaleString('vi-VN')}
-                    </td>
-                    <td className="p-3 text-right font-mono text-gray-600 dark:text-gray-400">
-                      {r.prevAmount.toLocaleString('vi-VN')}
-                    </td>
-                    <td className={`p-3 text-right font-mono font-bold ${
-                      r.diff > 0 ? 'text-amber-600' : (r.diff < 0 ? 'text-emerald-600' : 'text-gray-400')
-                    }`}>
-                      {r.diff > 0 ? `+${r.diff.toLocaleString('vi-VN')}` : r.diff.toLocaleString('vi-VN')}
-                    </td>
-                    <td className="p-3 text-right font-mono">
-                      <span className={`inline-flex px-1.5 py-0.5 rounded-md text-xs font-semibold ${
-                        r.diff > 0
-                          ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
-                          : r.diff < 0
-                          ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {r.percent > 0 ? `+${r.percent.toFixed(1)}%` : `${r.percent.toFixed(1)}%`}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+              {/* Nút Xuất Excel & Refresh */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer active:scale-95"
+                >
+                  <FileSpreadsheet size={15} />
+                  <span>Xuất Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={loading}
+                  className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                  title="Làm mới dữ liệu"
+                >
+                  <RefreshCw size={16} className={loading ? 'animate-spin text-[#D97706]' : ''} />
+                </button>
+              </div>
+            </div>
+
+            {/* Hàng bộ lọc thời gian & KMP & Tùy chọn số liệu */}
+            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100 dark:border-slate-700 text-xs">
+              {/* Kiểu kỳ: Tháng / Quý / 6 Tháng / Năm */}
+              <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 p-0.5 rounded-lg">
+                {(['thang', 'quy', '6thang', 'nam'] as PeriodType[]).map(p => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPeriodType(p)}
+                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                      periodType === p
+                        ? 'bg-white dark:bg-slate-800 text-[#D97706] font-bold shadow-xs'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+                    }`}
+                  >
+                    {p === 'thang' ? 'Tháng' : p === 'quy' ? 'Quý' : p === '6thang' ? '6 Tháng' : 'Cả Năm'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chọn tháng cụ thể */}
+              {periodType === 'thang' && (
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={m}>Tháng {m}</option>
+                  ))}
+                </select>
               )}
-            </tbody>
-            {/* Dòng TỔNG CỘNG */}
-            {reportData.rows.length > 0 && (
-              <tfoot className="sticky bottom-0 z-10 bg-amber-50/90 dark:bg-slate-700 text-gray-900 dark:text-gray-100 font-bold border-t-2 border-amber-300 dark:border-amber-600">
-                <tr>
-                  <td className="p-3 text-center text-xs">TỔNG</td>
-                  <td className="p-3 uppercase text-xs tracking-wide text-[#D97706]">
-                    TỔNG CỘNG ({reportData.rows.length} chỉ tiêu)
-                  </td>
-                  <td className="p-3 text-right font-mono text-base text-[#D97706]">
-                    {reportData.totalCurrent.toLocaleString('vi-VN')}
-                  </td>
-                  <td className="p-3 text-right font-mono text-sm text-gray-700 dark:text-gray-300">
-                    {reportData.totalPrev.toLocaleString('vi-VN')}
-                  </td>
-                  <td className={`p-3 text-right font-mono text-sm ${
-                    reportData.totalDiff > 0 ? 'text-amber-700' : (reportData.totalDiff < 0 ? 'text-emerald-700' : 'text-gray-700')
-                  }`}>
-                    {reportData.totalDiff > 0 ? `+${reportData.totalDiff.toLocaleString('vi-VN')}` : reportData.totalDiff.toLocaleString('vi-VN')}
-                  </td>
-                  <td className="p-3 text-right font-mono text-sm">
-                    <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-bold ${
-                      reportData.totalDiff > 0
-                        ? 'bg-amber-200/70 text-amber-900'
-                        : reportData.totalDiff < 0
-                        ? 'bg-emerald-200/70 text-emerald-900'
-                        : 'bg-gray-200 text-gray-700'
-                    }`}>
-                      {reportData.totalPercent > 0 ? `+${reportData.totalPercent.toFixed(1)}%` : `${reportData.totalPercent.toFixed(1)}%`}
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
+
+              {/* Chọn quý cụ thể */}
+              {periodType === 'quy' && (
+                <select
+                  value={selectedQuarter}
+                  onChange={(e) => setSelectedQuarter(Number(e.target.value))}
+                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+                >
+                  <option value={1}>Quý 1 (Tháng 1 - 3)</option>
+                  <option value={2}>Quý 2 (Tháng 4 - 6)</option>
+                  <option value={3}>Quý 3 (Tháng 7 - 9)</option>
+                  <option value={4}>Quý 4 (Tháng 10 - 12)</option>
+                </select>
+              )}
+
+              {/* Chọn 6 tháng cụ thể */}
+              {periodType === '6thang' && (
+                <select
+                  value={selectedHalf}
+                  onChange={(e) => setSelectedHalf(Number(e.target.value) as 1 | 2)}
+                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+                >
+                  <option value={1}>6 tháng đầu năm (T1 - T6)</option>
+                  <option value={2}>6 tháng cuối năm (T7 - T12)</option>
+                </select>
+              )}
+
+              {/* Chọn Năm */}
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+              >
+                {[now.getFullYear() + 1, now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map(y => (
+                  <option key={y} value={y}>Năm {y}</option>
+                ))}
+              </select>
+
+
+              {/* Checkbox: Chỉ hiển thị Chi phí hành chính */}
+              <label className="flex items-center gap-1.5 cursor-pointer bg-gray-50 dark:bg-slate-700/50 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 select-none hover:bg-gray-100 dark:hover:bg-slate-600/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={onlyAdministrative}
+                  onChange={(e) => setOnlyAdministrative(e.target.checked)}
+                  className="w-3.5 h-3.5 text-[#D97706] rounded border-gray-300 focus:ring-[#D97706]"
+                />
+                <span className="font-semibold">
+                  Chỉ CP Hành chính
+                </span>
+              </label>
+
+              {/* Chọn Khoản mục phí (KMP) */}
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="text-gray-500 font-medium">Khoản mục phí:</span>
+                <select
+                  value={selectedKmpId}
+                  onChange={(e) => setSelectedKmpId(e.target.value)}
+                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 text-gray-800 dark:text-gray-100 max-w-[280px] focus:outline-none focus:ring-1 focus:ring-[#D97706] text-xs font-medium"
+                >
+                  <option value="ALL">-- Tất cả Khoản mục phí ({kmpList.length}) --</option>
+                  {groupedKmp.map(([group, items]) => (
+                    <optgroup key={group} label={`📁 ${group}`}>
+                      {items.map(k => {
+                        const code = k.ma_b7 || k.ma_b10;
+                        const name = k.dien_giai || k.nhom_chi_phi || 'Khoản mục';
+                        const star = k.trong_yeu ? ' ⭐' : '';
+                        return (
+                          <option key={k.id} value={k.id}>
+                            {code ? `${code} - ${name}${star}` : `${name}${star}`}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. BẢNG PIVOT ĐỐI SÁNH CÙNG KỲ */}
+          <div className="flex-1 bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-gray-200/80 dark:border-slate-700/80 overflow-hidden flex flex-col min-h-0">
+            <div className="flex-1 overflow-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700/80 text-gray-600 dark:text-gray-200 font-semibold border-b border-gray-200 dark:border-slate-600">
+                  <tr>
+                    <th className="p-3 w-12 text-center">TT</th>
+                    <th className="p-3 min-w-[240px]">
+                      {dimension === 'phia' && 'Phía'}
+                      {dimension === 'don_vi' && 'Đơn vị'}
+                      {dimension === 'loai_hinh' && 'Loại hình'}
+                      {dimension === 'showroom' && 'Showroom'}
+                      {dimension === 'khoi_nghiep_vu' && 'Khối/Nghiệp vụ'}
+                      {dimension === 'thuong_hieu_bo_phan' && 'Thương hiệu / Phòng / Bộ phận'}
+                      {dimension === 'phap_nhan' && 'Pháp nhân'}
+                    </th>
+                    <th className="p-3 w-44 text-right">Kỳ này ({periodLabel})</th>
+                    <th className="p-3 w-44 text-right">Cùng kỳ ({prevPeriodLabel})</th>
+                    <th className="p-3 w-40 text-right">Chênh lệch (VNĐ)</th>
+                    <th className="p-3 w-28 text-right">% Tăng/Giảm</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-gray-700 dark:text-gray-300">
+                  {reportData.rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-400">
+                        <BarChart2 size={36} className="mx-auto mb-2 opacity-50 text-[#D97706]" />
+                        <p className="font-semibold text-gray-600 dark:text-gray-300">Chưa có số liệu chi phí cho kỳ và bộ lọc đã chọn.</p>
+                        <p className="text-xs text-gray-400 mt-1">Hãy thử chọn kỳ khác hoặc kiểm tra lại các phiếu ĐNTT đã lưu.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    reportData.rows.map((r, idx) => (
+                      <tr key={r.key} className="hover:bg-amber-50/30 dark:hover:bg-slate-700/40 transition-colors">
+                        <td className="p-3 text-center text-gray-400 font-mono text-xs">{idx + 1}</td>
+                        <td className="p-3 font-semibold text-gray-900 dark:text-gray-100">{r.label}</td>
+                        <td className="p-3 text-right font-mono font-bold text-[#D97706]">
+                          {r.currentAmount.toLocaleString('vi-VN')}
+                        </td>
+                        <td className="p-3 text-right font-mono text-gray-600 dark:text-gray-400">
+                          {r.prevAmount.toLocaleString('vi-VN')}
+                        </td>
+                        <td className={`p-3 text-right font-mono font-bold ${
+                          r.diff > 0 ? 'text-amber-600' : (r.diff < 0 ? 'text-emerald-600' : 'text-gray-400')
+                        }`}>
+                          {r.diff > 0 ? `+${r.diff.toLocaleString('vi-VN')}` : r.diff.toLocaleString('vi-VN')}
+                        </td>
+                        <td className="p-3 text-right font-mono">
+                          {r.percent !== null ? (
+                            <span className={`inline-flex px-1.5 py-0.5 rounded-md text-xs font-semibold ${
+                              r.diff > 0
+                                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
+                                : r.diff < 0
+                                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}>
+                              {r.percent > 0 ? `+${r.percent.toFixed(1)}%` : `${r.percent.toFixed(1)}%`}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 font-semibold">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {/* Dòng TỔNG CỘNG */}
+                {reportData.rows.length > 0 && (
+                  <tfoot className="sticky bottom-0 z-10 bg-amber-50/90 dark:bg-slate-700 text-gray-900 dark:text-gray-100 font-bold border-t-2 border-amber-300 dark:border-amber-600">
+                    <tr>
+                      <td className="p-3 text-center text-xs">TỔNG</td>
+                      <td className="p-3 uppercase text-xs tracking-wide text-[#D97706]">
+                        TỔNG CỘNG ({reportData.rows.length} chỉ tiêu)
+                      </td>
+                      <td className="p-3 text-right font-mono text-base text-[#D97706]">
+                        {reportData.totalCurrent.toLocaleString('vi-VN')}
+                      </td>
+                      <td className="p-3 text-right font-mono text-sm text-gray-700 dark:text-gray-300">
+                        {reportData.totalPrev.toLocaleString('vi-VN')}
+                      </td>
+                      <td className={`p-3 text-right font-mono text-sm ${
+                        reportData.totalDiff > 0 ? 'text-amber-700' : (reportData.totalDiff < 0 ? 'text-emerald-700' : 'text-gray-700')
+                      }`}>
+                        {reportData.totalDiff > 0 ? `+${reportData.totalDiff.toLocaleString('vi-VN')}` : reportData.totalDiff.toLocaleString('vi-VN')}
+                      </td>
+                      <td className="p-3 text-right font-mono text-sm">
+                        {reportData.totalPercent !== null ? (
+                          <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-bold ${
+                            reportData.totalDiff > 0
+                              ? 'bg-amber-200/70 text-amber-900'
+                              : reportData.totalDiff < 0
+                              ? 'bg-emerald-200/70 text-emerald-900'
+                              : 'bg-gray-200 text-gray-700'
+                          }`}>
+                            {reportData.totalPercent > 0 ? `+${reportData.totalPercent.toFixed(1)}%` : `${reportData.totalPercent.toFixed(1)}%`}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 font-semibold">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* 4. MODAL QUẢN LÝ CHỐT KỲ */}
       {chotKyModalOpen && (

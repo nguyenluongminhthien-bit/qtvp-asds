@@ -17,6 +17,7 @@ interface Props {
   boPhanList?: DmBoPhan[];
   cap1List: BoPhanCap1[];
   cap2List: BoPhanCap2[];
+  unitId?: string | null;
 }
 
 export default function DnttAllocationModal({
@@ -28,16 +29,32 @@ export default function DnttAllocationModal({
   kmpList,
   boPhanList,
   cap1List,
-  cap2List
+  cap2List,
+  unitId
 }: Props) {
   const [rows, setRows] = useState<DnttPhanBo[]>([]);
   const parentAmount = parentItem ? Number(parentItem.so_tien) || 0 : 0;
 
+  // Lọc danh mục bộ phận theo đơn vị của phiếu ĐNTT hiện tại (fallback mẫu chung)
+  const effectiveBoPhanList = useMemo(() => {
+    if (!boPhanList || boPhanList.length === 0) return [];
+    if (unitId) {
+      const specific = boPhanList.filter(b => {
+        if (b.active === false || !b.id_don_vi) return false;
+        const ids = String(b.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+        return ids.includes(String(unitId));
+      });
+      if (specific.length > 0) return specific;
+    }
+    const common = boPhanList.filter(b => !b.id_don_vi && b.active !== false);
+    return common.length > 0 ? common : boPhanList.filter(b => b.active !== false);
+  }, [boPhanList, unitId]);
+
   // Danh sách Khối / Nghiệp vụ (Cấp 1)
   const uniqueKhoiList = useMemo(() => {
-    if (boPhanList && boPhanList.length > 0) {
+    if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
       const map = new Map<string, string>();
-      boPhanList.filter(b => b.active !== false).forEach(b => {
+      effectiveBoPhanList.filter(b => b.active !== false).forEach(b => {
         if (!map.has(b.ma_cap1)) {
           map.set(b.ma_cap1, b.ten_cap1);
         }
@@ -45,7 +62,7 @@ export default function DnttAllocationModal({
       return Array.from(map.entries()).map(([ma, ten]) => ({ ma, ten }));
     }
     return cap1List.filter(c => c.active !== false).map(c => ({ ma: c.id || c.ma, ten: c.ten }));
-  }, [boPhanList, cap1List]);
+  }, [effectiveBoPhanList, cap1List]);
 
   // Phân nhóm Khoản mục phí theo Nhóm chi phí
   const groupedKmp = useMemo(() => {
@@ -70,8 +87,8 @@ export default function DnttAllocationModal({
         let defaultCap2: string | undefined = undefined;
         let defaultIdBoPhan: string | undefined = undefined;
 
-        if (boPhanList && boPhanList.length > 0) {
-          const activeBp = boPhanList.find(b => b.active !== false);
+        if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
+          const activeBp = effectiveBoPhanList.find(b => b.active !== false);
           if (activeBp) {
             defaultCap1 = activeBp.ma_cap1;
             defaultCap2 = activeBp.ma_cap2;
@@ -102,7 +119,7 @@ export default function DnttAllocationModal({
         ]);
       }
     }
-  }, [isOpen, parentItem, allocations, kmpList, cap1List, boPhanList, parentAmount]);
+  }, [isOpen, parentItem, allocations, kmpList, cap1List, effectiveBoPhanList, parentAmount]);
 
   // Tổng tiền đã phân bổ
   const totalAllocated = useMemo(() => {
@@ -118,15 +135,41 @@ export default function DnttAllocationModal({
 
   if (!isOpen || !parentItem) return null;
 
-  // Thêm dòng phân bổ mới
+  // Thêm dòng phân bổ mới (sao chép toàn bộ giá trị dòng trên nếu có)
   const handleAddRow = () => {
+    const remainingAmount = difference > 0 ? difference : 0;
+    const remainingPercent = parentAmount > 0 ? Number(((remainingAmount / parentAmount) * 100).toFixed(2)) : 0;
+    const now = new Date();
+
+    if (rows.length > 0) {
+      const prevRow = rows[rows.length - 1];
+      const newRow: DnttPhanBo = {
+        id: `PB_${Date.now()}_${rows.length + 1}`,
+        dntt_id: parentItem.dntt_id,
+        dntt_chi_tiet_id: parentItem.id,
+        kieu_nhap: prevRow.kieu_nhap,
+        phan_tram: remainingPercent,
+        so_tien: remainingAmount,
+        id_kmp: prevRow.id_kmp,
+        thang: prevRow.thang,
+        nam: prevRow.nam,
+        id_bo_phan: prevRow.id_bo_phan,
+        id_bo_phan_cap1: prevRow.id_bo_phan_cap1,
+        id_bo_phan_cap2: prevRow.id_bo_phan_cap2,
+        thu_tu: rows.length + 1,
+        ghi_chu: prevRow.ghi_chu || ''
+      };
+      setRows(p => [...p, newRow]);
+      return;
+    }
+
     const defaultKmp = kmpList.find(k => k.active !== false)?.id || '';
     let defaultCap1 = '';
     let defaultCap2: string | undefined = undefined;
     let defaultIdBoPhan: string | undefined = undefined;
 
-    if (boPhanList && boPhanList.length > 0) {
-      const activeBp = boPhanList.find(b => b.active !== false);
+    if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
+      const activeBp = effectiveBoPhanList.find(b => b.active !== false);
       if (activeBp) {
         defaultCap1 = activeBp.ma_cap1;
         defaultCap2 = activeBp.ma_cap2;
@@ -136,14 +179,8 @@ export default function DnttAllocationModal({
       defaultCap1 = cap1List.find(c => c.active !== false)?.id || '';
     }
 
-    const now = new Date();
-
-    // Nếu còn chênh lệch dương, tự gợi ý số tiền còn lại
-    const remainingAmount = difference > 0 ? difference : 0;
-    const remainingPercent = parentAmount > 0 ? Number(((remainingAmount / parentAmount) * 100).toFixed(2)) : 0;
-
     const newRow: DnttPhanBo = {
-      id: `PB_${Date.now()}_${rows.length + 1}`,
+      id: `PB_${Date.now()}_1`,
       dntt_id: parentItem.dntt_id,
       dntt_chi_tiet_id: parentItem.id,
       kieu_nhap: 'SO_TIEN',
@@ -155,11 +192,11 @@ export default function DnttAllocationModal({
       id_bo_phan: defaultIdBoPhan,
       id_bo_phan_cap1: defaultCap1,
       id_bo_phan_cap2: defaultCap2,
-      thu_tu: rows.length + 1,
+      thu_tu: 1,
       ghi_chu: ''
     };
 
-    setRows(p => [...p, newRow]);
+    setRows([newRow]);
   };
 
   const handleRemoveRow = (index: number) => {
@@ -193,8 +230,8 @@ export default function DnttAllocationModal({
         }
       } else if (field === 'id_bo_phan_cap1') {
         row.id_bo_phan_cap1 = value;
-        if (boPhanList && boPhanList.length > 0) {
-          const childOptions = boPhanList.filter(b => b.active !== false && b.ma_cap1 === value);
+        if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
+          const childOptions = effectiveBoPhanList.filter(b => b.active !== false && b.ma_cap1 === value);
           if (childOptions.length === 1) {
             row.id_bo_phan = childOptions[0].id;
             row.id_bo_phan_cap2 = childOptions[0].ma_cap2;
@@ -209,8 +246,8 @@ export default function DnttAllocationModal({
           }
         }
       } else if (field === 'id_bo_phan_cap2') {
-        if (boPhanList && boPhanList.length > 0) {
-          const found = boPhanList.find(b => b.id === value || (b.ma_cap1 === row.id_bo_phan_cap1 && b.ma_cap2 === value));
+        if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
+          const found = effectiveBoPhanList.find(b => b.id === value || (b.ma_cap1 === row.id_bo_phan_cap1 && b.ma_cap2 === value));
           if (found) {
             row.id_bo_phan = found.id;
             row.id_bo_phan_cap2 = found.ma_cap2;
@@ -260,8 +297,8 @@ export default function DnttAllocationModal({
         toast.warning(`Dòng ${i + 1}: Vui lòng chọn Khối / Nghiệp vụ (Cấp 1)!`);
         return;
       }
-      if (boPhanList && boPhanList.length > 0) {
-        const availableCap2 = boPhanList.filter(b => b.active !== false && b.ma_cap1 === r.id_bo_phan_cap1);
+      if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
+        const availableCap2 = effectiveBoPhanList.filter(b => b.active !== false && b.ma_cap1 === r.id_bo_phan_cap1);
         if (availableCap2.length > 0 && !r.id_bo_phan && !r.id_bo_phan_cap2) {
           toast.warning(`Dòng ${i + 1}: Vui lòng chọn Thương hiệu / Phòng / Bộ phận (Cấp 2)!`);
           return;
@@ -481,9 +518,9 @@ export default function DnttAllocationModal({
 
                     {/* Thương hiệu / Phòng / Bộ phận (Cấp 2 phụ thuộc Cấp 1) */}
                     <td className="p-2">
-                      {boPhanList && boPhanList.length > 0 ? (
+                      {effectiveBoPhanList && effectiveBoPhanList.length > 0 ? (
                         (() => {
-                          const cap2Options = boPhanList.filter(b => b.active !== false && b.ma_cap1 === row.id_bo_phan_cap1);
+                          const cap2Options = effectiveBoPhanList.filter(b => b.active !== false && b.ma_cap1 === row.id_bo_phan_cap1);
                           return (
                             <select
                               required

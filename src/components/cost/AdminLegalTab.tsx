@@ -2,18 +2,26 @@ import React, { useState, useMemo } from 'react';
 import {
   Building2, Layers, Tag, Plus, Edit, Trash2, CheckCircle2,
   XCircle, AlertCircle, RefreshCw, Search, ShieldCheck,
-  ChevronRight, ArrowRight, Star, Filter
+  ChevronRight, ArrowRight, Star, Filter, CheckSquare, Square, X, Check
 } from 'lucide-react';
 import { DmBoPhan, BoPhanCap1, BoPhanCap2, DonVi, PhapNhan } from '../../types';
 import { apiService } from '../../services/api';
 import { toast } from '../../utils/toast';
-import { getAllSubordinateIds } from '../../utils/hierarchy';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  getAllSubordinateIds,
+  buildHierarchicalOptions,
+  getUnitEmoji,
+  getUserPermittedUnitIds,
+  isUserAdminOrAllAccess
+} from '../../utils/hierarchy';
 
 interface Props {
   boPhanList?: DmBoPhan[];
   cap1List: BoPhanCap1[];
   cap2List: BoPhanCap2[];
   donViList: DonVi[];
+  allDonViList?: DonVi[];
   phapNhanList: PhapNhan[];
   selectedUnitFilter?: string;
   onRefresh: () => Promise<void>;
@@ -46,6 +54,7 @@ export default function AdminLegalTab({
   cap1List,
   cap2List,
   donViList,
+  allDonViList,
   phapNhanList,
   selectedUnitFilter,
   onRefresh,
@@ -53,11 +62,63 @@ export default function AdminLegalTab({
   activeSubTab: externalActiveSubTab,
   setActiveSubTab: externalSetActiveSubTab
 }: Props) {
+  const { user } = useAuth();
+  const isGlobalAdmin = isUserAdminOrAllAccess(user);
+
   const [internalActiveSubTab, setInternalActiveSubTab] = useState<'bophan' | 'phapnhan'>('bophan');
   const activeSubTab = externalActiveSubTab !== undefined ? externalActiveSubTab : internalActiveSubTab;
   const setActiveSubTab = externalSetActiveSubTab !== undefined ? externalSetActiveSubTab : setInternalActiveSubTab;
   const [searchTerm, setSearchTerm] = useState('');
   const [filterKhoi, setFilterKhoi] = useState<string>('ALL');
+  const [filterDonVi, setFilterDonVi] = useState<string>(selectedUnitFilter || 'ALL');
+
+  // Cập nhật filterDonVi khi selectedUnitFilter từ ngoài thay đổi
+  React.useEffect(() => {
+    if (selectedUnitFilter) {
+      setFilterDonVi(selectedUnitFilter);
+    }
+  }, [selectedUnitFilter]);
+
+  const fullDonViList = useMemo(() => (allDonViList && allDonViList.length > 0 ? allDonViList : donViList), [allDonViList, donViList]);
+  const donViMap = useMemo(() => new Map<string, DonVi>(fullDonViList.map(d => [String(d.id), d])), [fullDonViList]);
+
+  // Kiểm tra đơn vị có phải là Đại lý hay không (loại trừ đại lý khỏi danh mục bộ phận)
+  const isDonViDaiLy = (u: DonVi): boolean => {
+    const trangThai = String(u.trang_thai || '').toLowerCase().trim();
+    const loaiHinh = String(u.loai_hinh || '').toLowerCase().trim();
+    const ten = String(u.ten_don_vi || '').toLowerCase().trim();
+    return (
+      trangThai === 'đại lý' ||
+      loaiHinh === 'đại lý' ||
+      ten.startsWith('đại lý') ||
+      ten.startsWith('đl ') ||
+      ten.includes('đại lý')
+    );
+  };
+
+  // Tập hợp ID đơn vị được phân quyền cho tài khoản
+  const userPermittedUnitIds = useMemo(() => {
+    return getUserPermittedUnitIds(user, fullDonViList);
+  }, [user, fullDonViList]);
+
+  // Danh sách các đơn vị được phép gán bộ phận theo phân quyền (loại bỏ đại lý)
+  const allowedUnitsForDept = useMemo(() => {
+    const list = fullDonViList.filter(u => !isDonViDaiLy(u));
+    if (!userPermittedUnitIds) return list;
+    return list.filter(u => userPermittedUnitIds.has(String(u.id)));
+  }, [fullDonViList, userPermittedUnitIds]);
+
+  // Cây phân cấp đơn vị theo phân quyền
+  const hierarchicalUnitOptions = useMemo(() => {
+    return buildHierarchicalOptions(allowedUnitsForDept);
+  }, [allowedUnitsForDept]);
+
+  // Kiểm tra xem bộ phận có áp dụng cho đơn vị target hay không (hỗ trợ nhiều đơn vị phân tách bằng dấu phẩy)
+  const isUnitInBoPhan = (itemDonViId: string | null | undefined, targetUnitId: string): boolean => {
+    if (!itemDonViId) return false;
+    const ids = String(itemDonViId).split(',').map(s => s.trim()).filter(Boolean);
+    return ids.includes(String(targetUnitId));
+  };
 
   // Danh sách bộ phận thực tế (nếu boPhanList rỗng, dùng default)
   const effectiveBoPhanList = useMemo(() => {
@@ -65,10 +126,18 @@ export default function AdminLegalTab({
     return DEFAULT_BO_PHAN;
   }, [boPhanList]);
 
+  // Kiểm tra đơn vị đang chọn đã có bộ phận riêng chưa
+  const isSpecificUnitSelected = filterDonVi !== 'ALL' && filterDonVi !== 'GLOBAL';
+  const hasUnitCustomDepartments = useMemo(() => {
+    if (!isSpecificUnitSelected) return true;
+    return effectiveBoPhanList.some(b => isUnitInBoPhan(b.id_don_vi, filterDonVi));
+  }, [isSpecificUnitSelected, effectiveBoPhanList, filterDonVi]);
+
   // Modals for Bộ phận
   const [isBoPhanModalOpen, setIsBoPhanModalOpen] = useState(false);
   const [boPhanMode, setBoPhanMode] = useState<'create' | 'update'>('create');
   const [boPhanForm, setBoPhanForm] = useState<Partial<DmBoPhan>>({
+    id_don_vi: null,
     ma_cap1: 'KD_XE',
     ten_cap1: 'Kinh doanh xe',
     ma_cap2: '',
@@ -76,8 +145,65 @@ export default function AdminLegalTab({
     thu_tu: 1,
     active: true
   });
+  const [unitSearchQuery, setUnitSearchQuery] = useState('');
   const [deleteBoPhanTarget, setDeleteBoPhanTarget] = useState<DmBoPhan | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Danh sách các ID đơn vị được chọn trong form
+  const selectedUnitIds = useMemo(() => {
+    if (!boPhanForm.id_don_vi) return [];
+    return String(boPhanForm.id_don_vi)
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+  }, [boPhanForm.id_don_vi]);
+
+  const handleToggleUnit = (unitId: string) => {
+    setBoPhanForm(prev => {
+      const current = String(prev.id_don_vi || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      let next: string[];
+      if (current.includes(unitId)) {
+        next = current.filter(id => id !== unitId);
+      } else {
+        next = [...current, unitId];
+      }
+      return {
+        ...prev,
+        id_don_vi: next.length > 0 ? next.join(',') : null
+      };
+    });
+  };
+
+  const handleSelectAllUnits = () => {
+    const allIds = allowedUnitsForDept.map(u => String(u.id));
+    setBoPhanForm(prev => ({
+      ...prev,
+      id_don_vi: allIds.join(',')
+    }));
+  };
+
+  const handleClearAllUnits = () => {
+    setBoPhanForm(prev => ({
+      ...prev,
+      id_don_vi: null
+    }));
+  };
+
+  // Cây đơn vị lọc theo từ khóa tìm kiếm trong modal
+  const displayedTreeUnits = useMemo(() => {
+    if (!unitSearchQuery.trim()) {
+      return hierarchicalUnitOptions;
+    }
+    const q = unitSearchQuery.toLowerCase().trim();
+    return hierarchicalUnitOptions.filter(({ unit }) =>
+      String(unit.ten_don_vi || '').toLowerCase().includes(q) ||
+      String(unit.id || '').toLowerCase().includes(q) ||
+      String(unit.loai_hinh || '').toLowerCase().includes(q)
+    );
+  }, [hierarchicalUnitOptions, unitSearchQuery]);
 
   // Danh sách các Khối / Nghiệp vụ (Cấp 1) duy nhất
   const uniqueKhoiList = useMemo(() => {
@@ -101,9 +227,30 @@ export default function AdminLegalTab({
         String(item.ten_cap2 || '').toLowerCase().includes(q);
 
       const matchKhoi = filterKhoi === 'ALL' || item.ma_cap1 === filterKhoi;
-      return matchSearch && matchKhoi;
+
+      // Lọc theo Đơn vị áp dụng
+      let matchDonVi = true;
+      if (filterDonVi === 'GLOBAL') {
+        matchDonVi = !item.id_don_vi;
+      } else if (filterDonVi !== 'ALL') {
+        if (hasUnitCustomDepartments) {
+          matchDonVi = isUnitInBoPhan(item.id_don_vi, filterDonVi);
+        } else {
+          matchDonVi = !item.id_don_vi;
+        }
+      } else if (userPermittedUnitIds) {
+        // Tài khoản cấp đơn vị khi chọn ALL: chỉ xem mẫu chung hoặc bộ phận của các đơn vị thuộc quyền
+        if (item.id_don_vi) {
+          const ids = String(item.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+          matchDonVi = ids.some(id => userPermittedUnitIds.has(id));
+        } else {
+          matchDonVi = true;
+        }
+      }
+
+      return matchSearch && matchKhoi && matchDonVi;
     }).sort((a, b) => (Number(a.thu_tu) || 0) - (Number(b.thu_tu) || 0));
-  }, [effectiveBoPhanList, searchTerm, filterKhoi]);
+  }, [effectiveBoPhanList, searchTerm, filterKhoi, filterDonVi, hasUnitCustomDepartments, userPermittedUnitIds]);
 
   // =========================================================================
   // HANDLERS CHO BỘ PHẬN
@@ -111,7 +258,20 @@ export default function AdminLegalTab({
   const handleOpenAddBoPhan = () => {
     setBoPhanMode('create');
     const firstKhoi = uniqueKhoiList[0] || { ma: 'KD_XE', ten: 'Kinh doanh xe' };
+    
+    let defaultIdDonVi: string | null = null;
+    if (isSpecificUnitSelected) {
+      defaultIdDonVi = filterDonVi;
+    } else if (!isGlobalAdmin && userPermittedUnitIds && userPermittedUnitIds.size > 0) {
+      const uId = user?.id_don_vi ? String(user.id_don_vi) : '';
+      const permittedArr = Array.from(userPermittedUnitIds) as string[];
+      defaultIdDonVi = uId && userPermittedUnitIds.has(uId)
+        ? uId
+        : (permittedArr[0] || null);
+    }
+
     setBoPhanForm({
+      id_don_vi: defaultIdDonVi,
       ma_cap1: firstKhoi.ma,
       ten_cap1: firstKhoi.ten,
       ma_cap2: '',
@@ -119,13 +279,52 @@ export default function AdminLegalTab({
       thu_tu: (effectiveBoPhanList.length || 0) + 1,
       active: true
     });
+    setUnitSearchQuery('');
     setIsBoPhanModalOpen(true);
   };
 
   const handleOpenEditBoPhan = (item: DmBoPhan) => {
     setBoPhanMode('update');
     setBoPhanForm({ ...item });
+    setUnitSearchQuery('');
     setIsBoPhanModalOpen(true);
+  };
+
+  // Sao chép mẫu chuẩn toàn quốc sang đơn vị đang chọn
+  const handleCopyTemplateForUnit = async (targetUnitId: string) => {
+    if (!targetUnitId || targetUnitId === 'ALL' || targetUnitId === 'GLOBAL') return;
+    const targetUnit = donViMap.get(String(targetUnitId));
+    const confirmCopy = window.confirm(`Bạn có chắc muốn sao chép toàn bộ danh mục Khối & Thương hiệu mẫu chuẩn sang "${targetUnit?.ten_don_vi || targetUnitId}" để tùy biến riêng?`);
+    if (!confirmCopy) return;
+
+    setSubmitting(true);
+    try {
+      const templateItems = effectiveBoPhanList.filter(b => !b.id_don_vi);
+      const itemsToCopy = templateItems.length > 0 ? templateItems : DEFAULT_BO_PHAN;
+
+      let count = 0;
+      for (const item of itemsToCopy) {
+        const newPayload = {
+          ma_cap1: item.ma_cap1,
+          ten_cap1: item.ten_cap1,
+          ma_cap2: item.ma_cap2,
+          ten_cap2: item.ten_cap2,
+          thu_tu: item.thu_tu || 0,
+          id_don_vi: targetUnitId,
+          active: true
+        };
+        await apiService.save(newPayload, 'create', 'dm_bo_phan');
+        count++;
+      }
+
+      toast.success(`Đã sao chép thành công ${count} bộ phận sang ${targetUnit?.ten_don_vi || targetUnitId}!`);
+      await onRefresh();
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Lỗi khi sao chép mẫu chuẩn: ' + (err?.message || ''));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveBoPhan = async (e: React.FormEvent) => {
@@ -139,10 +338,15 @@ export default function AdminLegalTab({
       return;
     }
 
+    // Nếu không phải Admin, bắt buộc phải chọn ít nhất 1 đơn vị áp dụng trong phạm vi phân quyền
+    if (!isGlobalAdmin && selectedUnitIds.length === 0) {
+      toast.warning('Vui lòng chọn ít nhất 1 đơn vị áp dụng trong phạm vi phân quyền!');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const payload: any = {
-        ...boPhanForm,
+      const basePayload = {
         ma_cap1: boPhanForm.ma_cap1.trim().toUpperCase(),
         ten_cap1: boPhanForm.ten_cap1.trim(),
         ma_cap2: boPhanForm.ma_cap2.trim().toUpperCase(),
@@ -151,8 +355,54 @@ export default function AdminLegalTab({
         active: boPhanForm.active !== false
       };
 
-      await apiService.save(payload, boPhanMode, 'dm_bo_phan');
-      toast.success(boPhanMode === 'create' ? 'Đã thêm Bộ phận mới!' : 'Đã cập nhật Bộ phận!');
+      if (boPhanMode === 'create') {
+        const targetUnitIds = selectedUnitIds.length > 0 ? selectedUnitIds : [null];
+        for (let i = 0; i < targetUnitIds.length; i++) {
+          const uid = targetUnitIds[i];
+          const newPayload: any = {
+            ...basePayload,
+            id: targetUnitIds.length > 1 ? `BP_${Date.now()}_${i + 1}` : (boPhanForm.id || `BP_${Date.now()}`),
+            id_don_vi: uid
+          };
+          await apiService.save(newPayload, 'create', 'dm_bo_phan');
+        }
+        toast.success(
+          targetUnitIds.length > 1
+            ? `Đã tạo Bộ phận mới cho ${targetUnitIds.length} đơn vị trực thuộc!`
+            : 'Đã thêm Bộ phận mới!'
+        );
+      } else {
+        // Mode update
+        const primaryUnitId = selectedUnitIds[0] || null;
+        const updatePayload: any = {
+          ...basePayload,
+          id: boPhanForm.id,
+          id_don_vi: primaryUnitId
+        };
+        await apiService.save(updatePayload, 'update', 'dm_bo_phan');
+
+        // Nếu người dùng chọn thêm các đơn vị khác trong lúc sửa:
+        if (selectedUnitIds.length > 1) {
+          for (let i = 1; i < selectedUnitIds.length; i++) {
+            const uid = selectedUnitIds[i];
+            const alreadyExists = effectiveBoPhanList.some(
+              b => String(b.id_don_vi) === String(uid) &&
+                   b.ma_cap1 === basePayload.ma_cap1 &&
+                   b.ma_cap2 === basePayload.ma_cap2
+            );
+            if (!alreadyExists) {
+              const newPayload: any = {
+                ...basePayload,
+                id: `BP_${Date.now()}_${i + 1}`,
+                id_don_vi: uid
+              };
+              await apiService.save(newPayload, 'create', 'dm_bo_phan');
+            }
+          }
+        }
+        toast.success('Đã cập nhật Bộ phận thành công!');
+      }
+
       setIsBoPhanModalOpen(false);
       await onRefresh();
     } catch (err: any) {
@@ -301,10 +551,30 @@ export default function AdminLegalTab({
                     onChange={(e) => setFilterKhoi(e.target.value)}
                     className="py-1.5 px-2.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
                   >
-                    <option value="ALL">Tất cả Khối / Nghiệp vụ ({effectiveBoPhanList.length})</option>
+                    <option value="ALL">Tất cả Khối ({effectiveBoPhanList.length})</option>
                     {uniqueKhoiList.map(k => (
                       <option key={k.ma} value={k.ma}>{k.ten} ({effectiveBoPhanList.filter(b => b.ma_cap1 === k.ma).length})</option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Filter Đơn vị áp dụng */}
+                <div className="flex items-center gap-1.5">
+                  <Building2 size={14} className="text-gray-400" />
+                  <select
+                    value={filterDonVi}
+                    onChange={(e) => setFilterDonVi(e.target.value)}
+                    className="py-1.5 px-2.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+                  >
+                    <option value="ALL">Tất cả Đơn vị ({allowedUnitsForDept.length})</option>
+                    <option value="GLOBAL">🌐 Mẫu dùng chung toàn quốc</option>
+                    <optgroup label="🏢 Đơn vị phân quyền">
+                      {hierarchicalUnitOptions.map(({ unit, prefix }) => (
+                        <option key={unit.id} value={unit.id}>
+                          {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
               </div>
@@ -324,23 +594,44 @@ export default function AdminLegalTab({
               </div>
             </div>
 
+            {/* Banner Gợi ý Khởi tạo / Sao chép từ Mẫu chuẩn khi đơn vị chưa có bộ phận riêng */}
+            {isSpecificUnitSelected && !hasUnitCustomDepartments && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-medium">
+                  <AlertCircle size={16} className="shrink-0 text-amber-600" />
+                  <span>
+                    Đơn vị <strong>{donViMap.get(filterDonVi)?.ten_don_vi || filterDonVi}</strong> hiện chưa thiết lập danh mục Khối &amp; Thương hiệu riêng (đang dùng tạm mẫu chuẩn toàn quốc).
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyTemplateForUnit(filterDonVi)}
+                  disabled={submitting}
+                  className="px-3 py-1.5 bg-[#D97706] hover:bg-[#b45309] text-white font-bold rounded-lg shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <span>⚡ Khởi tạo riêng từ Mẫu chuẩn</span>
+                </button>
+              </div>
+            )}
+
             {/* Table */}
             <div className="flex-1 overflow-auto custom-scrollbar">
               <table className="w-full text-left border-collapse text-xs sm:text-sm">
                 <thead className="sticky top-0 bg-gray-50 dark:bg-slate-700/80 text-gray-600 dark:text-gray-200 font-semibold border-b border-gray-200 dark:border-slate-600 z-10">
                   <tr>
-                    <th className="p-3 w-18 text-center">Thứ tự</th>
-                    <th className="p-3 w-55">Khối / Nghiệp vụ</th>
-                    <th className="p-3 w-55">Mã TH / Phòng / Bộ phận</th>
-                    <th className="p-3 min-w-[220px]">Thương hiệu / Phòng / Bộ phận</th>
-                    <th className="p-3 w-35 text-center">Trạng thái</th>
-                    <th className="p-3 w-35 text-center">Thao tác</th>
+                    <th className="p-3 w-16 text-center">Thứ tự</th>
+                    <th className="p-3 w-48">Khối / Nghiệp vụ</th>
+                    <th className="p-3 w-44">Mã TH / Phòng / Bộ phận</th>
+                    <th className="p-3 min-w-[200px]">Thương hiệu / Phòng / Bộ phận</th>
+                    <th className="p-3 w-48">Đơn vị áp dụng</th>
+                    <th className="p-3 w-32 text-center">Trạng thái</th>
+                    <th className="p-3 w-32 text-center">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-gray-700 dark:text-gray-300">
                   {filteredBoPhanList.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-400">
+                      <td colSpan={7} className="p-8 text-center text-gray-400">
                         <Layers size={36} className="mx-auto mb-2 opacity-50 text-[#D97706]" />
                         <p className="font-semibold text-gray-600 dark:text-gray-300">Không tìm thấy Bộ phận phù hợp.</p>
                       </td>
@@ -364,6 +655,40 @@ export default function AdminLegalTab({
                           </td>
                           <td className="p-3 font-mono font-bold text-[#D97706]">{item.ma_cap2}</td>
                           <td className="p-3 font-semibold text-gray-900 dark:text-gray-100">{item.ten_cap2}</td>
+                          <td className="p-3">
+                            {item.id_don_vi ? (
+                              (() => {
+                                const ids = String(item.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+                                if (ids.length === 1) {
+                                  const u = donViMap.get(ids[0]);
+                                  const name = u?.ten_don_vi || ids[0];
+                                  return (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 truncate max-w-[200px]"
+                                      title={name}
+                                    >
+                                      <span>{getUnitEmoji(u?.loai_hinh)}</span>
+                                      <span className="truncate">{name}</span>
+                                    </span>
+                                  );
+                                }
+                                const names = ids.map(id => donViMap.get(id)?.ten_don_vi || id).join(', ');
+                                return (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-[#D97706] dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 cursor-help"
+                                    title={names}
+                                  >
+                                    <Building2 size={12} />
+                                    <span>{ids.length} đơn vị</span>
+                                  </span>
+                                );
+                              })()
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600">
+                                Mẫu chung toàn quốc
+                              </span>
+                            )}
+                          </td>
                           <td className="p-3 text-center">
                             {item.active !== false ? (
                               <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
@@ -494,8 +819,8 @@ export default function AdminLegalTab({
       {/* ========================================================================= */}
       {isBoPhanModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
                 <Layers size={18} className="text-[#D97706]" />
                 <span>{boPhanMode === 'create' ? 'Thêm Bộ phận Mới' : 'Cập nhật Bộ phận'}</span>
@@ -508,7 +833,7 @@ export default function AdminLegalTab({
               </button>
             </div>
 
-            <form onSubmit={handleSaveBoPhan} className="p-5 space-y-4">
+            <form onSubmit={handleSaveBoPhan} className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               {/* Chọn Khối / Nghiệp vụ có sẵn hoặc tự nhập */}
               <div className="p-3 bg-amber-50/40 dark:bg-slate-700/30 rounded-xl border border-amber-100 dark:border-slate-600 space-y-3">
                 <div className="text-xs font-bold text-[#D97706] uppercase tracking-wider">
@@ -597,6 +922,135 @@ export default function AdminLegalTab({
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Đơn vị áp dụng (Chọn nhiều theo phân quyền và thể hiện dạng cây) */}
+              <div className="p-3 bg-blue-50/30 dark:bg-slate-700/20 rounded-xl border border-blue-100 dark:border-slate-600 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Building2 size={14} className="text-[#D97706]" />
+                    <span>Đơn vị áp dụng ({selectedUnitIds.length} đã chọn) {!isGlobalAdmin && '*'}</span>
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllUnits}
+                      className="text-[11px] font-semibold text-[#D97706] hover:underline cursor-pointer"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <span className="text-gray-300">|</span>
+                    <button
+                      type="button"
+                      onClick={handleClearAllUnits}
+                      className="text-[11px] font-semibold text-gray-500 hover:text-red-500 cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tùy chọn Mẫu chung (chỉ dành cho Admin / Toàn quyền) */}
+                {isGlobalAdmin && (
+                  <label className="flex items-center gap-2 p-2 bg-amber-50/60 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800/60 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedUnitIds.length === 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setBoPhanForm(p => ({ ...p, id_don_vi: null }));
+                        }
+                      }}
+                      className="rounded text-[#D97706] focus:ring-[#D97706] w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                      🌐 Áp dụng chung toàn hệ thống (Mẫu chuẩn)
+                    </span>
+                  </label>
+                )}
+
+                {/* Ô tìm kiếm đơn vị */}
+                {allowedUnitsForDept.length > 5 && (
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
+                    <input
+                      type="text"
+                      placeholder="Tìm showroom / đơn vị trực thuộc..."
+                      value={unitSearchQuery}
+                      onChange={(e) => setUnitSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg outline-none focus:ring-1 focus:ring-[#D97706]"
+                    />
+                  </div>
+                )}
+
+                {/* Cây đơn vị phân quyền với checkbox */}
+                <div className="max-h-52 overflow-y-auto p-2 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 custom-scrollbar space-y-1">
+                  {displayedTreeUnits.length === 0 ? (
+                    <div className="text-center py-4 text-xs text-gray-400">
+                      Không tìm thấy đơn vị phù hợp.
+                    </div>
+                  ) : (
+                    displayedTreeUnits.map(({ unit, prefix }) => {
+                      const isChecked = selectedUnitIds.includes(String(unit.id));
+                      return (
+                        <label
+                          key={unit.id}
+                          className={`flex items-center gap-2 p-1.5 rounded text-xs transition-colors cursor-pointer ${
+                            isChecked
+                              ? 'bg-amber-50/80 dark:bg-amber-950/40 text-amber-950 dark:text-amber-200 font-semibold'
+                              : 'hover:bg-gray-50 dark:hover:bg-slate-700/60 text-gray-700 dark:text-gray-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleUnit(String(unit.id))}
+                            className="rounded text-[#D97706] focus:ring-[#D97706] w-3.5 h-3.5 cursor-pointer shrink-0"
+                          />
+                          <span className="font-mono text-gray-400 shrink-0 select-none text-[11px] whitespace-pre">
+                            {prefix}
+                          </span>
+                          <span className="shrink-0">{getUnitEmoji(unit.loai_hinh)}</span>
+                          <span className="truncate flex-1">{unit.ten_don_vi}</span>
+                          <span className="text-[10px] text-gray-400 dark:text-gray-500 shrink-0 font-normal px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 rounded">
+                            {unit.loai_hinh}
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Danh sách badge các đơn vị đã chọn */}
+                {selectedUnitIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1 max-h-20 overflow-y-auto custom-scrollbar">
+                    {selectedUnitIds.map(uid => {
+                      const u = donViMap.get(uid);
+                      const name = u?.ten_don_vi || uid;
+                      return (
+                        <span
+                          key={uid}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 shrink-0"
+                        >
+                          <span>{getUnitEmoji(u?.loai_hinh)} {name}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleUnit(uid)}
+                            className="text-amber-700 dark:text-amber-400 hover:text-red-600 rounded-full p-0.5 cursor-pointer"
+                            title={`Bỏ chọn ${name}`}
+                          >
+                            <X size={11} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <p className="text-[11px] text-gray-400 italic">
+                  * Chọn một hoặc nhiều đơn vị trực thuộc theo phân quyền để áp dụng Bộ phận này.
+                </p>
               </div>
 
               {/* Thứ tự & Trạng thái */}
