@@ -89,12 +89,19 @@ export default function CostManagementPage() {
   const permittedDnttList = useMemo(() => {
     if (!userPermittedUnitIds) return dnttList;
     return dnttList.filter(d => {
-      if (d.id_don_vi && userPermittedUnitIds.has(String(d.id_don_vi))) return true;
+      // 1. Khóa chặt theo id_don_vi: Nếu phiếu đã có id_don_vi thì chỉ kiểm tra id_don_vi
+      if (d.id_don_vi) {
+        return userPermittedUnitIds.has(String(d.id_don_vi));
+      }
+      // 2. Chỉ khi id_don_vi bị null/rỗng mới fallback theo don_vi_hien_thi (Khớp chính xác tên đơn vị)
       if (d.don_vi_hien_thi) {
-        const lower = d.don_vi_hien_thi.toLowerCase();
-        for (const uid of userPermittedUnitIds) {
-          const u = donViList.find(x => String(x.id) === uid);
-          if (u?.ten_don_vi && lower.includes(u.ten_don_vi.toLowerCase())) return true;
+        const lower = d.don_vi_hien_thi.toLowerCase().trim();
+        const matchedUnit = donViList.find(u => {
+          const uName = (u.ten_don_vi || '').toLowerCase().trim();
+          return uName && (lower === uName || lower === `thaco auto - ${uName}` || lower === `thaco auto ${uName}`);
+        });
+        if (matchedUnit) {
+          return userPermittedUnitIds.has(String(matchedUnit.id));
         }
       }
       return false;
@@ -206,10 +213,16 @@ export default function CostManagementPage() {
     }
     const allowed = new Set([selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViList)]);
     return permittedDnttList.filter(d => {
-      if (d.id_don_vi && allowed.has(String(d.id_don_vi))) return true;
+      if (d.id_don_vi) {
+        return allowed.has(String(d.id_don_vi));
+      }
       if (d.don_vi_hien_thi) {
+        const lower = d.don_vi_hien_thi.toLowerCase().trim();
         const target = donViList.find(u => String(u.id) === String(selectedUnitFilter));
-        if (target?.ten_don_vi && d.don_vi_hien_thi.toLowerCase().includes(target.ten_don_vi.toLowerCase())) return true;
+        if (target?.ten_don_vi) {
+          const tName = target.ten_don_vi.toLowerCase().trim();
+          return lower === tName || lower === `thaco auto - ${tName}` || lower === `thaco auto ${tName}`;
+        }
       }
       return false;
     }).length;
