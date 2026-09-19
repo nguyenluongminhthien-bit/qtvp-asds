@@ -5,11 +5,13 @@ export const getUnitEmoji = (loai_hinh?: string) => {
   // Dùng .trim() để xóa khoảng trắng thừa từ Google Sheets
   const lower = String(loai_hinh || '').toLowerCase().trim();
   if (lower.includes('tổng công ty')) return '🏢';
-  if (lower.includes('công ty tỉnh')) return '🏪';
+  if (lower.includes('công ty tỉnh')) return '🏬';
   if (lower.includes('quản trị')) return '🏪';
-  if (lower.includes('showroom')) return '🏬';
+  if (lower.includes('showroom')) return '🏣';
   if (lower.includes('điểm kinh doanh')) return '📍';
-  if (lower.includes('kho')) return '🏭';
+  if (lower.includes('kho')) return '🔩';
+  if (lower.includes('xưởng dịch vụ')) return '🛠️';
+  if (lower.includes('nhà máy')) return '🏭';
   return '🏢';
 };
 
@@ -36,7 +38,7 @@ export const groupParentUnits = (parentUnits: any[]) => {
 export const buildHierarchicalOptions = (units: DonVi[]) => {
   const result: { unit: DonVi; prefix: string }[] = [];
   const unitIds = new Set(units.map(u => u.id));
-  
+
   // Tìm các đơn vị Cấp 0 (Root)
   const rawRoots = units.filter(u => !u.cap_quan_ly || u.cap_quan_ly === 'HO' || !unitIds.has(u.cap_quan_ly));
 
@@ -59,7 +61,7 @@ export const buildHierarchicalOptions = (units: DonVi[]) => {
       const isLast = index === nodes.length - 1;
       const nodePrefix = prefixStr ? prefixStr + (isLast ? LAST_BRANCH : BRANCH) : '';
       result.push({ unit: node, prefix: nodePrefix });
-      
+
       // Sắp xếp các đơn vị con theo đúng trình tự cột thu_tu và loại bỏ node đã thăm
       const children = sortDonViByThuTu(units.filter(u => u.cap_quan_ly === node.id && !visited.has(u.id)));
       if (children.length > 0) {
@@ -127,13 +129,13 @@ export const getDefaultUnitId = (user: any, donViList: DonVi[]): string | null =
   while (current && !visited.has(current.id)) {
     path.push(current);
     visited.add(current.id);
-    
+
     const parentId = String(current.cap_quan_ly || '').trim();
     // Nếu cha là THACO AUTO hoặc không có cha, dừng lại
     if (!parentId || parentId === 'HO' || (thacoAutoUnit && parentId === thacoAutoUnit.id)) {
       break;
     }
-    
+
     const parent = donViList.find(d => String(d.id) === parentId);
     current = parent;
   }
@@ -173,7 +175,7 @@ export const resolveCostManagementUnit = (
   const donViMap = new Map<string, DonVi>(donViList.map(d => [String(d.id), d]));
   let current = donViMap.get(String(unitId));
   if (!current) return null;
-  
+
   const visited = new Set<string>();
   while (current && !visited.has(String(current.id))) {
     if (isCostManagementUnit(current)) {
@@ -252,4 +254,4 @@ export const getUserPermittedUnitIds = (user: any, donViList: DonVi[]): Set<stri
   }
 
   return resultSet;
-};
+};

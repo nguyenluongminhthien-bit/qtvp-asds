@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save,
-  Car, Building2, MapPin, ChevronDown, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen,
+  Car, Building2, Store, MapPin, ChevronDown, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen,
   Receipt, Calendar, Info, Eye, BarChart3, Briefcase, AlertTriangle, ShieldCheck, FileSpreadsheet, Sparkles,
   SlidersHorizontal, Archive, History, CheckCircle2, Filter, RotateCcw,
   FileText, Link as LinkIcon, ExternalLink
@@ -25,6 +25,8 @@ import VehicleScheduleTab from '../components/vehicle/VehicleScheduleTab';
 import SegmentTabs from '../components/ui/SegmentTabs';
 import { motion, AnimatePresence } from 'motion/react';
 import PasteImportModal, { ColumnMapItem } from '../components/ui/PasteImportModal';
+import { VehicleLocationPicker } from '../components/vehicle/VehicleLocationPicker';
+import { isVehicleInLocation, formatVehicleLocationDisplay } from '../utils/vehicleLocationHelper';
 
 // --- HÀM TỰ ĐỘNG DÒ TÌM ID TỪ SUPABASE ---
 const getCostId = (cp: any) => cp.id || cp.id_chi_phi_xe || '';
@@ -392,6 +394,10 @@ export default function VehiclePage() {
   const [filterModel, setFilterModel] = useState('');
   const [filterPurpose, setFilterPurpose] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // 🟢 STATE BỘ LỌC ĐỊA ĐIỂM SỬ DỤNG (3 CẤP PHỤ THUỘC KẾ THỪA)
+  const [filterLocCap1, setFilterLocCap1] = useState('');
+  const [filterLocCap2, setFilterLocCap2] = useState('');
+  const [filterLocCap3, setFilterLocCap3] = useState('');
 
   // 🟢 STATE CHO MODAL CẬP NHẬT TRẠNG THÁI XE (TAB HIỆN HỮU)
   const [statusModalCar, setStatusModalCar] = useState<TS_Xe | null>(null);
@@ -595,6 +601,23 @@ export default function VehiclePage() {
     return [...new Set(xeData.map((x: any) => x.loai_xe).filter(Boolean))].sort() as string[];
   }, [filterBrand, xeData]);
 
+  // 🟢 OPTIONS BỘ LỌC ĐỊA ĐIỂM SỬ DỤNG (3 CẤP KẾ THỪA)
+  const filterLocCap1Options = useMemo(() => {
+    const rawRoots = donViList.filter(u => !u.cap_quan_ly || u.cap_quan_ly === 'HO' || u.cap_quan_ly === 'DV_HO');
+    const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = groupParentUnits(rawRoots);
+    return [...vpdhUnits, ...ctttNamUnits, ...ctttBacUnits, ...otherUnits];
+  }, [donViList]);
+
+  const filterLocCap2Options = useMemo(() => {
+    if (!filterLocCap1) return [];
+    return sortDonViByThuTu(donViList.filter(u => u.cap_quan_ly === filterLocCap1));
+  }, [donViList, filterLocCap1]);
+
+  const filterLocCap3Options = useMemo(() => {
+    if (!filterLocCap2) return [];
+    return sortDonViByThuTu(donViList.filter(u => u.cap_quan_ly === filterLocCap2));
+  }, [donViList, filterLocCap2]);
+
   const unitCars = useMemo(() => {
     let result = permittedCars.filter((x: any) => allowedDonViIds.includes(x.id_don_vi));
     if (selectedUnitFilter) {
@@ -605,7 +628,7 @@ export default function VehiclePage() {
     return result;
   }, [permittedCars, selectedUnitFilter, allowedDonViIds, donViList]);
 
-  // Bộ lọc chung (search, hãng, model, mục đích)
+  // Bộ lọc chung (search, hãng, model, mục đích, địa điểm sử dụng 3 cấp)
   const baseFilteredCars = useMemo(() => {
     let result = unitCars;
     if (carSearchTerm) {
@@ -619,14 +642,20 @@ export default function VehiclePage() {
         stripAccents(item.hieu_xe || '').toLowerCase().includes(cleanSearch) ||
         stripAccents(item.loai_xe || '').toLowerCase().includes(cleanSearch) ||
         stripAccents(item.so_khung || '').toLowerCase().includes(cleanSearch) ||
-        stripAccents(item.so_may || '').toLowerCase().includes(cleanSearch)
+        stripAccents(item.so_may || '').toLowerCase().includes(cleanSearch) ||
+        stripAccents(formatVehicleLocationDisplay(item.dia_diem_su_dung, donViMap).full).toLowerCase().includes(cleanSearch)
       );
     }
     if (filterBrand) result = result.filter((i: any) => i.hieu_xe === filterBrand);
     if (filterModel) result = result.filter((i: any) => i.loai_xe === filterModel);
     if (filterPurpose) result = result.filter((i: any) => i.muc_dich_su_dung === filterPurpose);
+    if (filterLocCap1 || filterLocCap2 || filterLocCap3) {
+      result = result.filter(item =>
+        isVehicleInLocation(item.dia_diem_su_dung, filterLocCap1, filterLocCap2, filterLocCap3, donViList)
+      );
+    }
     return result;
-  }, [unitCars, carSearchTerm, filterBrand, filterModel, filterPurpose]);
+  }, [unitCars, carSearchTerm, filterBrand, filterModel, filterPurpose, filterLocCap1, filterLocCap2, filterLocCap3, donViList, donViMap]);
 
   const activeCarsCount = useMemo(() => {
     return baseFilteredCars.filter(item => !isLiquidatedCar(item)).length;
@@ -747,9 +776,12 @@ export default function VehiclePage() {
   const saveCarFinal = async (carData: any, mode: 'create' | 'update', oldLiquidatedCar?: TS_Xe | null) => {
     let finalData = { ...carData };
 
-    // Tự động in hoa Địa điểm sử dụng
-    if (finalData.dia_diem_su_dung) {
-      finalData.dia_diem_su_dung = String(finalData.dia_diem_su_dung).toUpperCase();
+    // Xử lý Địa điểm sử dụng (bảo toàn cấu trúc JSON, chỉ in hoa nếu là text thường)
+    if (finalData.dia_diem_su_dung && typeof finalData.dia_diem_su_dung === 'string') {
+      const trimmedLoc = finalData.dia_diem_su_dung.trim();
+      if (!trimmedLoc.startsWith('{')) {
+        finalData.dia_diem_su_dung = trimmedLoc.toUpperCase();
+      }
     }
 
     if (finalData.ho_so_xe) {
@@ -1897,20 +1929,23 @@ export default function VehiclePage() {
                     <Filter size={16} className="shrink-0" />
                   </div>
                   <span className="text-xs font-black uppercase tracking-wider text-[#05469B] dark:text-blue-400">Bộ lọc nâng cao</span>
-                  {(filterBrand || filterModel || filterPurpose || filterStatus) && (
+                  {(filterBrand || filterModel || filterPurpose || filterStatus || filterLocCap1 || filterLocCap2 || filterLocCap3) && (
                     <span className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full animate-in fade-in duration-200">
-                      Đang lọc ({[filterBrand, filterModel, filterPurpose, filterStatus].filter(Boolean).length} tiêu chí)
+                      Đang lọc ({[filterBrand, filterModel, filterPurpose, filterStatus, filterLocCap1, filterLocCap2, filterLocCap3].filter(Boolean).length} tiêu chí)
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {(filterBrand || filterModel || filterPurpose || filterStatus) && (
+                  {(filterBrand || filterModel || filterPurpose || filterStatus || filterLocCap1 || filterLocCap2 || filterLocCap3) && (
                     <button
                       onClick={() => {
                         setFilterBrand('');
                         setFilterModel('');
                         setFilterPurpose('');
                         setFilterStatus('');
+                        setFilterLocCap1('');
+                        setFilterLocCap2('');
+                        setFilterLocCap3('');
                       }}
                       className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-1 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                     >
@@ -1927,8 +1962,8 @@ export default function VehiclePage() {
                 </div>
               </div>
 
-              {/* Lưới 4 slicer */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Lưới 4 slicer thông số xe */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 {/* 1. Hãng xe */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 dark:text-gray-300 mb-1 flex items-center gap-1.5">
@@ -2016,6 +2051,113 @@ export default function VehiclePage() {
                   )}
                 </div>
               </div>
+
+              {/* 🟢 KHỐI BỘ LỌC ĐỊA ĐIỂM SỬ DỤNG 3 CẤP (KẾ THỪA PHÂN CẤP MẸ - CON - CHÁU) */}
+              <div className="pt-3 border-t border-gray-100 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[11px] font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
+                    <MapPin size={13} className="text-blue-600" />
+                    <span>Địa điểm sử dụng (Lọc phân cấp 3 cấp)</span>
+                  </label>
+                  {(filterLocCap1 || filterLocCap2 || filterLocCap3) && (
+                    <button
+                      type="button"
+                      onClick={() => { setFilterLocCap1(''); setFilterLocCap2(''); setFilterLocCap3(''); }}
+                      className="text-[10px] font-bold text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <RotateCcw size={11} /> Đặt lại địa điểm
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Cấp 1 */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                      <Building2 size={11} className="text-gray-400" /> CTy Tỉnh thành
+                    </label>
+                    <select
+                      value={filterLocCap1}
+                      onChange={e => {
+                        setFilterLocCap1(e.target.value);
+                        setFilterLocCap2('');
+                        setFilterLocCap3('');
+                      }}
+                      className={`w-full text-xs font-semibold rounded-xl px-3 py-2 border outline-none transition-all cursor-pointer ${filterLocCap1
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold ring-2 ring-blue-500/20'
+                        : 'border-gray-200 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-800 text-gray-700 dark:text-gray-200 hover:bg-white focus:bg-white focus:ring-2 focus:ring-[#05469B]/20'
+                        }`}
+                    >
+                      <option value="">Tất cả Đơn vị Mẹ (Cấp 1)</option>
+                      {filterLocCap1Options.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {getUnitEmoji(u.loai_hinh)} {u.ten_don_vi}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Cấp 2 */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                      <Store size={11} className="text-gray-400" /> Showrrom
+                    </label>
+                    <select
+                      value={filterLocCap2}
+                      onChange={e => {
+                        setFilterLocCap2(e.target.value);
+                        setFilterLocCap3('');
+                      }}
+                      disabled={!filterLocCap1 || filterLocCap2Options.length === 0}
+                      className={`w-full text-xs font-semibold rounded-xl px-3 py-2 border outline-none transition-all cursor-pointer ${filterLocCap2
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold ring-2 ring-indigo-500/20'
+                        : 'border-gray-200 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-800 text-gray-700 dark:text-gray-200 hover:bg-white focus:bg-white focus:ring-2 focus:ring-[#05469B]/20'
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      <option value="">
+                        {!filterLocCap1
+                          ? 'Tất cả Đơn vị Con'
+                          : filterLocCap2Options.length === 0
+                            ? 'Không có cấp con'
+                            : 'Tất cả Đơn vị Con (Cấp 2)'}
+                      </option>
+                      {filterLocCap2Options.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {getUnitEmoji(u.loai_hinh)} {u.ten_don_vi}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Cấp 3 */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                      <MapPin size={11} className="text-gray-400" /> Showrrom/ĐBH
+                    </label>
+                    <select
+                      value={filterLocCap3}
+                      onChange={e => setFilterLocCap3(e.target.value)}
+                      disabled={!filterLocCap2 || filterLocCap3Options.length === 0}
+                      className={`w-full text-xs font-semibold rounded-xl px-3 py-2 border outline-none transition-all cursor-pointer ${filterLocCap3
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold ring-2 ring-emerald-500/20'
+                        : 'border-gray-200 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-800 text-gray-700 dark:text-gray-200 hover:bg-white focus:bg-white focus:ring-2 focus:ring-[#05469B]/20'
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      <option value="">
+                        {!filterLocCap2
+                          ? 'Tất cả Đơn vị Cháu'
+                          : filterLocCap3Options.length === 0
+                            ? 'Không có cấp cháu'
+                            : 'Tất cả Đơn vị Cháu (Cấp 3)'}
+                      </option>
+                      {filterLocCap3Options.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {getUnitEmoji(u.loai_hinh)} {u.ten_don_vi}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2077,9 +2219,8 @@ export default function VehiclePage() {
                           key={st.id}
                           type="button"
                           onClick={() => setVehicleSubTab(st.id as any)}
-                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                            isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
-                          }`}
+                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
+                            }`}
                         >
                           {isSubActive && (
                             <motion.div
@@ -2236,7 +2377,27 @@ export default function VehiclePage() {
                               {item.muc_dich_su_dung || '---'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 text-gray-700 font-medium align-middle truncate" title={item.dia_diem_su_dung || ''}>{item.dia_diem_su_dung || '---'}</td>
+                          <td className="py-3 px-3 text-gray-700 font-medium align-middle">
+                            {(() => {
+                              const locInfo = formatVehicleLocationDisplay(item.dia_diem_su_dung, donViMap);
+                              if (!locInfo.full && locInfo.main === '---') {
+                                return <span className="text-gray-400 font-medium">---</span>;
+                              }
+                              return (
+                                <div className="flex flex-col max-w-[200px]" title={locInfo.full}>
+                                  <span className="font-bold text-gray-800 truncate flex items-center gap-1">
+                                    <MapPin size={11} className="text-blue-600 shrink-0" />
+                                    <span className="truncate">{locInfo.main}</span>
+                                  </span>
+                                  {locInfo.sub && (
+                                    <span className="text-[10px] text-gray-400 truncate mt-0.5" title={locInfo.sub}>
+                                      {locInfo.sub}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
                           <td className="py-3 px-3 align-middle">
                             {(() => {
                               const unit = donViList.find(u => u.id === item.id_don_vi);
@@ -2400,7 +2561,18 @@ export default function VehiclePage() {
                           </div>
                           <div className="col-span-2">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Địa điểm SD</p>
-                            <p className="font-bold text-gray-700 mt-0.5">{item.dia_diem_su_dung || '---'}</p>
+                            {(() => {
+                              const locInfo = formatVehicleLocationDisplay(item.dia_diem_su_dung, donViMap);
+                              return (
+                                <div className="mt-0.5" title={locInfo.full}>
+                                  <p className="font-bold text-gray-800 flex items-center gap-1">
+                                    <MapPin size={11} className="text-blue-600 shrink-0" />
+                                    <span>{locInfo.main}</span>
+                                  </p>
+                                  {locInfo.sub && <p className="text-[10px] text-gray-400 mt-0.5">{locInfo.sub}</p>}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="col-span-2">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Đơn vị quản lý</p>
@@ -2493,7 +2665,7 @@ export default function VehiclePage() {
                 <div className="bg-blue-50/40 p-5 rounded-xl border border-blue-100">
                   <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-[#05469B] rounded-full"></div> Hồ sơ Đăng ký & Sở hữu</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {/* ── Dòng 1: Biển số | Mục đích sử dụng | Địa điểm sử dụng ── */}
+                    {/* ── Dòng 1: Biển số | Mục đích sử dụng | Đơn vị quản lý ── */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Biển Số *</label>
                       <input type="text" required name="bien_so" value={carFormData.bien_so || ''} onChange={handleInputCarChange} placeholder="VD: 51H12345" className={`w-full p-2.5 border rounded-lg outline-none font-bold focus:ring-2 focus:ring-[#05469B] ${plateError ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 bg-[#FFFFF0] text-[#05469B]'}`} />
@@ -2511,12 +2683,6 @@ export default function VehiclePage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm sử dụng</label>
-                      <input type="text" name="dia_diem_su_dung" value={carFormData.dia_diem_su_dung || ''} onChange={handleInputCarChange} placeholder="VD: TP. Hồ Chí Minh..." className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
-                    </div>
-
-                    {/* ── Dòng 2: Đơn vị quản lý | Hình thức sở hữu | Đơn vị đứng tên Cà vẹt ── */}
-                    <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị quản lý *</label>
                       <select required name="id_don_vi" value={carFormData.id_don_vi || ''} onChange={handleInputCarChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" style={{ fontFamily: 'monospace, sans-serif' }}>
                         <option value="">-- Chọn đơn vị --</option>
@@ -2527,6 +2693,17 @@ export default function VehiclePage() {
                         ))}
                       </select>
                     </div>
+
+                    {/* ── Dòng 2: Địa điểm sử dụng (Phân cấp 3 cấp) ── */}
+                    <div className="col-span-1 md:col-span-3 bg-white p-3.5 rounded-xl border border-blue-200/80 shadow-2xs">
+                      <VehicleLocationPicker
+                        value={carFormData.dia_diem_su_dung}
+                        onChange={(newVal) => setCarFormData((prev: any) => ({ ...prev, dia_diem_su_dung: newVal }))}
+                        donViList={donViList}
+                      />
+                    </div>
+
+                    {/* ── Dòng 3: Hình thức sở hữu | Đơn vị đứng tên Cà vẹt ── */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1">Hình thức Sở hữu</label>
                       <select name="hinh_thuc_so_huu" value={carFormData.hinh_thuc_so_huu || 'Sở hữu'} onChange={handleInputCarChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]">
@@ -2535,7 +2712,7 @@ export default function VehiclePage() {
                         <option value="Thuê">Thuê</option>
                       </select>
                     </div>
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 mb-1">Đơn vị Đứng tên Cà vẹt (Chủ sở hữu)</label>
                       <input type="text" name="don_vi_chu_so_huu" value={carFormData.don_vi_chu_so_huu || ''} onChange={handleInputCarChange} placeholder="Tên công ty/cá nhân trên Giấy đăng ký xe" className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" />
                     </div>
@@ -2907,6 +3084,18 @@ export default function VehiclePage() {
               {/* Data Grid: Các thông số cơ bản */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-5 rounded-xl border border-gray-200 shrink-0">
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Chủ sở hữu</p><p className="font-semibold text-gray-800">{viewData.don_vi_chu_so_huu || '-'}</p></div>
+                <div>
+                  <p className="text-xs text-gray-500 font-bold mb-1">Địa điểm sử dụng</p>
+                  {(() => {
+                    const loc = formatVehicleLocationDisplay(viewData.dia_diem_su_dung, donViMap);
+                    return (
+                      <p className="font-bold text-gray-800 text-xs flex items-center gap-1" title={loc.full}>
+                        <MapPin size={12} className="text-blue-600 shrink-0" />
+                        <span className="truncate">{loc.full || loc.main || '-'}</span>
+                      </p>
+                    );
+                  })()}
+                </div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Số Khung</p><p className="font-semibold text-gray-800">{viewData.so_khung || '-'}</p></div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Số Máy</p><p className="font-semibold text-gray-800">{viewData.so_may || '-'}</p></div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Định vị GPS</p><p className="font-semibold text-gray-800">{viewData.gps || '-'}</p></div>

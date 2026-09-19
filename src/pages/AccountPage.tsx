@@ -42,7 +42,10 @@ const ADVANCED_PERMISSIONS = {
   ThietBi: [
     { id: 'TB_HIDE_PRICE', label: 'Ẩn cột Nguyên giá' },
   ],
-  Xe: []
+  Xe: [],
+  ChiPhi: [
+    { id: 'CP_PIVOT_CLONE', label: 'Quyền Báo cáo tuỳ chỉnh (Pivot)' },
+  ]
 };
 
 export default function AccountPage() {
@@ -929,6 +932,7 @@ export default function AccountPage() {
                                : moduleName === 'QuyDinh' ? '📖 Module Quy định - Quy trình' 
                                : moduleName === 'NhanSu' ? '👥 Module Nhân sự' 
                                : moduleName === 'ThietBi' ? '💻 Module Thiết bị'
+                               : moduleName === 'ChiPhi' ? '💰 Module Chi phí'
                                : '🚗 Module Xe'}
                             </h5>
                             <div className="flex flex-col flex-grow justify-between gap-4">
@@ -976,7 +980,7 @@ export default function AccountPage() {
                                     <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 font-black">Giới hạn xe xem được (Bỏ trống = Xem hết)</label>
                                     <input 
                                       type="text" 
-                                      placeholder="Tìm biển số..." 
+                                      placeholder="Tìm biển số hoặc hiệu xe..." 
                                       value={carFilterTerm}
                                       onChange={e => setCarFilterTerm(e.target.value)}
                                       className="w-full p-2 text-xs border border-gray-200 rounded-lg mb-2 focus:ring-1 focus:ring-orange-500 outline-none"
@@ -985,8 +989,7 @@ export default function AccountPage() {
                                       {carsOfSelectedUnit.filter(car => 
                                         !carFilterTerm || 
                                         String(car.bien_so || '').toLowerCase().includes(carFilterTerm.toLowerCase()) ||
-                                        String(car.hieu_xe || '').toLowerCase().includes(carFilterTerm.toLowerCase()) ||
-                                        String(car.loai_xe || '').toLowerCase().includes(carFilterTerm.toLowerCase())
+                                        String(car.hieu_xe || '').toLowerCase().includes(carFilterTerm.toLowerCase())
                                       ).map(car => {
                                         const activePlates = getPlatesFromRule(formData.quyen_chi_tiet, 'XE_LIMIT:');
                                         const isPlateChecked = activePlates.includes(car.bien_so);
@@ -1002,7 +1005,7 @@ export default function AccountPage() {
                                               <span className="font-bold">{car.bien_so}</span>
                                             </div>
                                             <span className="text-[10px] text-gray-400 font-normal">
-                                              {car.hieu_xe} {car.loai_xe}
+                                              {car.hieu_xe}
                                             </span>
                                           </label>
                                         );

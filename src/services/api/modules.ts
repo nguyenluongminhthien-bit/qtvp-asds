@@ -1,4 +1,4 @@
-import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmNhomChiPhi, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe } from '../../types';
+import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmNhomChiPhi, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe, ChiPhiPivotConfig } from '../../types';
 import { fetchWithCache, resolveTable, invalidateCache } from './cache';
 import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { writeLog } from './logs';
@@ -92,6 +92,43 @@ export const getDnttChiTiet = (forceRefresh = false) => getWithFallback<DnttChiT
 export const getDnttPhanBo = (forceRefresh = false) => getWithFallback<DnttPhanBo>('dntt_phan_bo', forceRefresh);
 export const getChiPhiChotKy = (forceRefresh = false) => getWithFallback<ChiPhiChotKy>('chi_phi_chot_ky', forceRefresh);
 export const getChiPhiThongKe = (forceRefresh = false) => getWithFallback<ChiPhiThongKe>('chi_phi_thong_ke', forceRefresh);
+
+const DEFAULT_PIVOT_CONFIG: ChiPhiPivotConfig = {
+  id: 'PVC_DEFAULT_CPHC',
+  ten_cau_hinh: 'Báo cáo Quản trị CPHC',
+  mo_ta: 'Mẫu báo cáo ma trận chi phí hành chính mặc định (La Mã > KMP > Đơn vị / Showroom)',
+  cau_hinh: {
+    rows: ['nhom_chi_phi', 'kmp', 'don_vi'],
+    cols: ['thang'],
+    vals: [{ field: 'so_tien', agg: 'sum' }],
+    filters: {}
+  },
+  khoa: true,
+  la_mac_dinh: true,
+  loai_renderer: 'matrix_thaco',
+  tao_boi: 'Hệ thống',
+  id_don_vi: null
+};
+
+export const getChiPhiPivotConfig = async (forceRefresh = false): Promise<ChiPhiPivotConfig[]> => {
+  try {
+    const rawConfigs = await getWithFallback<ChiPhiPivotConfig>('chi_phi_pivot_config', forceRefresh);
+    const configs = (rawConfigs || []).map(c => ({
+      ...c,
+      ten_cau_hinh: c.id === 'PVC_DEFAULT_CPHC' ? 'Báo cáo Quản trị CPHC' : (c.ten_cau_hinh || '').replace(/\s*\(Mặc định\)/gi, '').trim()
+    }));
+
+    if (configs.length === 0) {
+      return [DEFAULT_PIVOT_CONFIG];
+    }
+    if (!configs.some(c => c.id === 'PVC_DEFAULT_CPHC' || c.la_mac_dinh)) {
+      return [DEFAULT_PIVOT_CONFIG, ...configs];
+    }
+    return configs;
+  } catch {
+    return [DEFAULT_PIVOT_CONFIG];
+  }
+};
 
 // Helper làm sạch payload trước khi gửi lên Supabase (loại bỏ trường UI-only, rỗng "" -> null)
 function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false, tableName?: string): Record<string, any> {

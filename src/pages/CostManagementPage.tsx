@@ -30,9 +30,9 @@ export default function CostManagementPage() {
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
 
   // Sub-tabs State (Mặc định: 'dntt')
-  const [activeTab, setActiveTab] = useState<'dntt' | 'thong_ke' | 'dashboard' | 'kmp' | 'admin'>('dntt');
+  const [activeTab, setActiveTab] = useState<'dntt' | 'thong_ke' | 'kmp' | 'admin'>('dntt');
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'bophan' | 'phapnhan'>('bophan');
-  const [activeThongKeSubTab, setActiveThongKeSubTab] = useState<'phan_tich' | 'quan_tri'>('phan_tich');
+  const [activeThongKeSubTab, setActiveThongKeSubTab] = useState<'bao_cao' | 'dashboard'>('bao_cao');
   const [costSearchTerm, setCostSearchTerm] = useState('');
   const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
   const [dnttCreateTrigger, setDnttCreateTrigger] = useState<number>(0);
@@ -228,7 +228,7 @@ export default function CostManagementPage() {
     }).length;
   }, [permittedDnttList, selectedUnitFilter, donViList]);
 
-  // Thiết lập danh sách Tab
+  // Thiết lập danh sách Tab (4 tab cấp cao nhất)
   const tabs = useMemo(() => [
     {
       id: 'dntt',
@@ -240,11 +240,6 @@ export default function CostManagementPage() {
       id: 'thong_ke',
       label: 'Thống kê',
       icon: <BarChart2 size={16} />
-    },
-    {
-      id: 'dashboard',
-      label: 'Dashboard chi phí',
-      icon: <BarChart3 size={16} />
     },
     {
       id: 'kmp',
@@ -390,7 +385,8 @@ export default function CostManagementPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setActiveTab('dashboard');
+                          setActiveTab('thong_ke');
+                          setActiveThongKeSubTab('dashboard');
                           setIsFeaturesDropdownOpen(false);
                         }}
                         className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-blue-600 cursor-pointer"
@@ -495,8 +491,8 @@ export default function CostManagementPage() {
                   {activeTab === 'thong_ke' && (
                     <div className="w-full flex flex-wrap gap-3 px-4 py-1.5 items-center transition-all duration-300">
                       {[
-                        { id: 'phan_tich', label: 'Phân tích & Đối sánh', icon: <BarChart2 className="w-4 h-4" /> },
-                        { id: 'quan_tri', label: 'Quản trị Chi phí', icon: <FileSpreadsheet className="w-4 h-4" /> }
+                        { id: 'bao_cao', label: 'Báo cáo thống kê', icon: <BarChart2 className="w-4 h-4" /> },
+                        { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> }
                       ].map(st => {
                         const isSubActive = activeThongKeSubTab === st.id;
                         return (
@@ -621,23 +617,6 @@ export default function CostManagementPage() {
                     loading={loading}
                     activeSubTab={activeThongKeSubTab}
                     onSubTabChange={setActiveThongKeSubTab}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'dashboard' && (
-                <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
-                  <CostDashboardTab
-                    dnttList={permittedDnttList}
-                    phanBoList={permittedPhanBoList}
-                    kmpList={kmpList}
-                    boPhanList={boPhanList}
-                    cap1List={cap1List}
-                    cap2List={cap2List}
-                    donViList={costDonViList}
-                    selectedUnitFilter={selectedUnitFilter}
-                    onRefresh={() => loadAllData(true)}
-                    loading={loading}
                   />
                 </div>
               )}

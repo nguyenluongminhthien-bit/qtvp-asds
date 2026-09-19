@@ -188,6 +188,7 @@ export interface TS_Xe {
   tai_trong?: string | null;
   kich_thuoc_xe?: { dai?: number | string; rong?: number | string; cao?: number | string } | string | null;
   kich_thuoc_thung?: { dai?: number | string; rong?: number | string; cao?: number | string } | string | null;
+  dia_diem_su_dung?: string | VehicleLocationData | null;
   hinh_thuc_so_huu: string;
   gps: string;
   hien_trang: string;
@@ -197,6 +198,16 @@ export interface TS_Xe {
   link_ho_so_xe?: string | null;
   ghi_chu: string;
   [key: string]: any;
+}
+
+export interface VehicleLocationData {
+  cap1_id?: string;
+  cap1_ten?: string;
+  cap2_id?: string;
+  cap2_ten?: string;
+  cap3_id?: string;
+  cap3_ten?: string;
+  dia_chi_day_du?: string;
 }
 
 export interface CP_HoatDongXe {
@@ -830,5 +841,40 @@ export interface ChiPhiThongKe {
   tong_tien: number;
   so_dong_phan_bo: number;
   created_at?: string;
+  [key: string]: any;
+}
+
+export interface PivotValueConfig {
+  field: 'so_tien' | 'so_dong' | 'percent_total' | 'variance_pct';
+  agg: 'sum' | 'count' | 'percent_total' | 'variance_pct';
+  customLabel?: string;
+  label?: string;
+  [key: string]: any;
+}
+
+export interface PivotLayoutConfig {
+  rows: string[];
+  cols: string[];
+  vals: PivotValueConfig[];
+  filters: Record<string, string[]>;
+  includeTemporary?: boolean;
+  onlyAdministrative?: boolean;
+  year?: number;
+}
+
+export interface ChiPhiPivotConfig {
+  id: string;
+  ten_cau_hinh: string;
+  mo_ta?: string;
+  cau_hinh?: PivotLayoutConfig;
+  layout?: PivotLayoutConfig;
+  khoa: boolean;
+  la_mac_dinh: boolean;
+  loai_renderer: 'pivot_generic' | 'matrix_thaco';
+  tao_boi?: string;
+  id_don_vi?: string | null;
+  ten_don_vi?: string;
+  created_at?: string;
+  updated_at?: string;
   [key: string]: any;
 }
