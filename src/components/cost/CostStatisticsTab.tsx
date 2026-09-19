@@ -14,6 +14,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toast } from '../../utils/toast';
 import { getAllSubordinateIds, getUserPermittedUnitIds } from '../../utils/hierarchy';
 import CostMatrixView from './CostMatrixView';
+import CostPivotView from './pivot/CostPivotView';
+import CostDashboardTab from './CostDashboardTab';
 
 interface Props {
   thongKeList: ChiPhiThongKe[];
@@ -31,8 +33,8 @@ interface Props {
   selectedUnitFilter: string | null;
   onRefresh: () => Promise<void>;
   loading: boolean;
-  activeSubTab?: 'phan_tich' | 'quan_tri';
-  onSubTabChange?: (sub: 'phan_tich' | 'quan_tri') => void;
+  activeSubTab?: 'bao_cao' | 'dashboard';
+  onSubTabChange?: (sub: 'bao_cao' | 'dashboard') => void;
 }
 
 type DimensionType =
@@ -78,7 +80,7 @@ export default function CostStatisticsTab({
   const { user } = useAuth();
 
   // 1. STATE SUB-TABS & BỘ LỌC
-  const [internalSubTab, setInternalSubTab] = useState<'phan_tich' | 'quan_tri'>('phan_tich');
+  const [internalSubTab, setInternalSubTab] = useState<'bao_cao' | 'dashboard'>('bao_cao');
   const currentSubTab = activeSubTab || internalSubTab;
   const setCurrentSubTab = onSubTabChange || setInternalSubTab;
 
@@ -1252,475 +1254,44 @@ export default function CostStatisticsTab({
 
   return (
     <div className="flex flex-col h-full space-y-4">
-      {currentSubTab === 'quan_tri' ? (
-        <CostMatrixView
-          year={selectedYear}
-          onYearChange={setSelectedYear}
-          thongKeList={thongKeList}
-          chotKyList={chotKyList}
-          dnttList={dnttList}
-          phanBoList={phanBoList}
-          kmpList={kmpList}
-          nhomChiPhiList={nhomChiPhiList}
-          donViList={donViList}
-          fullDonViList={fullDonViList}
-          boPhanList={boPhanList}
-          selectedUnitFilter={selectedUnitFilter}
-          userPermittedUnitIds={userPermittedUnitIds}
-          includeTemporary={includeTemporary}
-          onToggleIncludeTemporary={setIncludeTemporary}
-          onlyAdministrative={onlyAdministrative}
-          onToggleOnlyAdministrative={setOnlyAdministrative}
-          onOpenChotKyModal={() => setChotKyModalOpen(true)}
-        />
+      {currentSubTab === 'dashboard' ? (
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <CostDashboardTab
+            dnttList={dnttList}
+            phanBoList={phanBoList}
+            kmpList={kmpList}
+            boPhanList={boPhanList}
+            cap1List={cap1List}
+            cap2List={cap2List}
+            donViList={donViList}
+            selectedUnitFilter={selectedUnitFilter}
+            onRefresh={onRefresh}
+            loading={loading}
+          />
+        </div>
       ) : (
-        <>
-          {/* 1. TOP STATS BAR */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Card 1: Kỳ này */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-              <div>
-                <div className="text-xs text-gray-500 font-medium">Chi phí {periodLabel}</div>
-                <div className="text-lg font-bold font-mono text-[#D97706] mt-1">
-                  {reportData.totalCurrent.toLocaleString('vi-VN')} <span className="text-xs font-sans text-gray-400">VNĐ</span>
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-[#D97706] flex items-center justify-center">
-                <BarChart2 size={20} />
-              </div>
-            </div>
-
-            {/* Card 2: Cùng kỳ */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-              <div>
-                <div className="text-xs text-gray-500 font-medium">Cùng kỳ ({prevPeriodLabel})</div>
-                <div className="text-lg font-bold font-mono text-gray-700 dark:text-gray-200 mt-1">
-                  {reportData.totalPrev.toLocaleString('vi-VN')} <span className="text-xs font-sans text-gray-400">VNĐ</span>
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 flex items-center justify-center">
-                <Calendar size={20} />
-              </div>
-            </div>
-
-            {/* Card 3: Chênh lệch */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-              <div>
-                <div className="text-xs text-gray-500 font-medium">Chênh lệch cùng kỳ</div>
-                <div className={`text-lg font-bold font-mono mt-1 flex items-center gap-1.5 ${
-                  reportData.totalDiff > 0 ? 'text-amber-600' : (reportData.totalDiff < 0 ? 'text-emerald-600' : 'text-gray-600')
-                }`}>
-                  <span>{reportData.totalDiff > 0 ? `+${reportData.totalDiff.toLocaleString('vi-VN')}` : reportData.totalDiff.toLocaleString('vi-VN')}</span>
-                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-slate-700">
-                    {reportData.totalPercent !== null 
-                      ? (reportData.totalPercent > 0 ? `+${reportData.totalPercent.toFixed(1)}%` : `${reportData.totalPercent.toFixed(1)}%`)
-                      : '—'}
-                  </span>
-                </div>
-              </div>
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                reportData.totalDiff > 0
-                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600'
-                  : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600'
-              }`}>
-                {reportData.totalDiff >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
-              </div>
-            </div>
-
-            {/* Card 4: Tình trạng ghi nhận số liệu */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs flex items-center justify-between">
-              <div>
-                <div className="text-xs text-gray-500 font-medium">Cơ chế ghi nhận</div>
-                <div className="text-sm font-bold mt-1 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 size={16} />
-                  <span>Dữ liệu Live (Thời gian thực)</span>
-                </div>
-                <div className="text-[11px] text-gray-400 mt-0.5">
-                  Tự động cập nhật ngay khi Lưu phiếu DNTT
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
-                <Sparkles size={20} />
-              </div>
-            </div>
-          </div>
-
-          {/* 2. THANH CÔNG CỤ BỘ LỌC ĐA CHIỀU */}
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-200/80 dark:border-slate-700/80 shadow-xs space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {/* Lọc chiều phân tích (7 mục lựa chọn dạng Dropdown Đa chọn) */}
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="text-xs font-bold text-gray-600 dark:text-gray-300 flex items-center gap-1.5 shrink-0">
-                  <Layers size={15} className="text-[#D97706]" />
-                  <span>Chiều phân tích:</span>
-                </span>
-
-                <div className="flex flex-wrap items-center gap-1.5" ref={dimFilterDropdownRef}>
-                  {DIMENSION_CONFIG.map(dim => {
-                    const isActive = dimension === dim.id;
-                    const isOpen = openDropdownDim === dim.id;
-                    const opts = getDimensionOptions(dim.id);
-                    const selectedKeys = getDimensionSelectedKeys(dim.id);
-                    const isFiltered = selectedKeys.size < opts.length;
-
-                    const filteredOpts = filterSearchTerm.trim()
-                      ? opts.filter(o =>
-                          o.label.toLowerCase().includes(filterSearchTerm.toLowerCase().trim()) ||
-                          (o.subLabel && o.subLabel.toLowerCase().includes(filterSearchTerm.toLowerCase().trim()))
-                        )
-                      : opts;
-
-                    return (
-                      <div key={dim.id} className="relative">
-                        <button
-                          type="button"
-                          onClick={() => handleDimensionButtonClick(dim.id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer shadow-2xs ${
-                            isActive
-                              ? 'bg-[#D97706] text-white font-bold ring-2 ring-amber-400/40 shadow-sm'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-                          }`}
-                          title={`Xem và lọc chi phí theo ${dim.label}`}
-                        >
-                          <span>{dim.icon}</span>
-                          <span>{dim.label}</span>
-                          {isFiltered && (
-                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                              isActive
-                                ? 'bg-white/30 text-white'
-                                : 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200'
-                            }`}>
-                              {selectedKeys.size}/{opts.length}
-                            </span>
-                          )}
-                          <ChevronDown size={13} className={`transition-transform duration-150 ${isOpen ? 'rotate-180 opacity-100' : 'opacity-70'}`} />
-                        </button>
-
-                        {/* Multi-select Dropdown Popover */}
-                        {isOpen && (
-                          <div className={`absolute top-full mt-1.5 w-72 sm:w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 z-50 p-2.5 space-y-2 animate-in fade-in zoom-in-95 duration-100 ${
-                            dim.id === 'thuong_hieu_bo_phan' || dim.id === 'phap_nhan' || dim.id === 'khoi_nghiep_vu' || dim.id === 'showroom' ? 'right-0' : 'left-0'
-                          }`}>
-                            {/* Header: Đã chọn & Nút thao tác nhanh */}
-                            <div className="flex items-center justify-between pb-1.5 border-b border-gray-100 dark:border-slate-700">
-                              <span className="text-[11px] font-bold text-gray-500 uppercase">
-                                {dim.label}: <strong className="text-[#D97706]">{selectedKeys.size}/{opts.length}</strong>
-                              </span>
-                              <div className="flex items-center gap-2 text-[11px]">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSelectAllDim(dim.id)}
-                                  className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
-                                >
-                                  Chọn tất cả
-                                </button>
-                                <span className="text-gray-300">|</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleClearAllDim(dim.id)}
-                                  className="text-gray-500 hover:text-red-600 font-semibold cursor-pointer"
-                                >
-                                  Bỏ chọn
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Ô tìm kiếm nhanh nếu có hơn 4 options */}
-                            {opts.length > 4 && (
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  placeholder={`Tìm kiếm ${dim.label.toLowerCase()}...`}
-                                  value={filterSearchTerm}
-                                  onChange={(e) => setFilterSearchTerm(e.target.value)}
-                                  className="w-full px-2.5 py-1 text-xs bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-                                  autoFocus
-                                />
-                              </div>
-                            )}
-
-                            {/* Danh sách Checkbox các đối tượng */}
-                            <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1">
-                              {filteredOpts.length === 0 ? (
-                                <div className="text-center py-4 text-xs text-gray-400">Không tìm thấy đối tượng phù hợp</div>
-                              ) : (
-                                filteredOpts.map(opt => {
-                                  const isChecked = selectedKeys.has(opt.key);
-                                  return (
-                                    <label
-                                      key={opt.key}
-                                      className="flex items-center gap-2 p-1.5 hover:bg-amber-50/60 dark:hover:bg-slate-700/60 rounded-lg cursor-pointer transition-colors text-xs"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={() => handleToggleDimFilter(dim.id, opt.key)}
-                                        className="rounded text-[#D97706] focus:ring-[#D97706] h-3.5 w-3.5 cursor-pointer"
-                                      />
-                                      <div className="flex-1 min-w-0">
-                                        <span className={`block truncate ${isChecked ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400'}`}>
-                                          {opt.label}
-                                        </span>
-                                        {opt.subLabel && (
-                                          <span className="text-[10px] text-gray-400 block truncate">
-                                            {opt.subLabel}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </label>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Nút Xuất Excel & Refresh */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer active:scale-95"
-                >
-                  <FileSpreadsheet size={15} />
-                  <span>Xuất Excel</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onRefresh}
-                  disabled={loading}
-                  className="p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-                  title="Làm mới dữ liệu"
-                >
-                  <RefreshCw size={16} className={loading ? 'animate-spin text-[#D97706]' : ''} />
-                </button>
-              </div>
-            </div>
-
-            {/* Hàng bộ lọc thời gian & KMP & Tùy chọn số liệu */}
-            <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100 dark:border-slate-700 text-xs">
-              {/* Kiểu kỳ: Tháng / Quý / 6 Tháng / Năm */}
-              <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 p-0.5 rounded-lg">
-                {(['thang', 'quy', '6thang', 'nam'] as PeriodType[]).map(p => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPeriodType(p)}
-                    className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                      periodType === p
-                        ? 'bg-white dark:bg-slate-800 text-[#D97706] font-bold shadow-xs'
-                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-                    }`}
-                  >
-                    {p === 'thang' ? 'Tháng' : p === 'quy' ? 'Quý' : p === '6thang' ? '6 Tháng' : 'Cả Năm'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Chọn tháng cụ thể */}
-              {periodType === 'thang' && (
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-                >
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                    <option key={m} value={m}>Tháng {m}</option>
-                  ))}
-                </select>
-              )}
-
-              {/* Chọn quý cụ thể */}
-              {periodType === 'quy' && (
-                <select
-                  value={selectedQuarter}
-                  onChange={(e) => setSelectedQuarter(Number(e.target.value))}
-                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-                >
-                  <option value={1}>Quý 1 (Tháng 1 - 3)</option>
-                  <option value={2}>Quý 2 (Tháng 4 - 6)</option>
-                  <option value={3}>Quý 3 (Tháng 7 - 9)</option>
-                  <option value={4}>Quý 4 (Tháng 10 - 12)</option>
-                </select>
-              )}
-
-              {/* Chọn 6 tháng cụ thể */}
-              {periodType === '6thang' && (
-                <select
-                  value={selectedHalf}
-                  onChange={(e) => setSelectedHalf(Number(e.target.value) as 1 | 2)}
-                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-                >
-                  <option value={1}>6 tháng đầu năm (T1 - T6)</option>
-                  <option value={2}>6 tháng cuối năm (T7 - T12)</option>
-                </select>
-              )}
-
-              {/* Chọn Năm */}
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-              >
-                {[now.getFullYear() + 1, now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3].map(y => (
-                  <option key={y} value={y}>Năm {y}</option>
-                ))}
-              </select>
-
-
-              {/* Checkbox: Chỉ hiển thị Chi phí hành chính */}
-              <label className="flex items-center gap-1.5 cursor-pointer bg-gray-50 dark:bg-slate-700/50 px-2.5 py-1 rounded-lg border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 select-none hover:bg-gray-100 dark:hover:bg-slate-600/50 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={onlyAdministrative}
-                  onChange={(e) => setOnlyAdministrative(e.target.checked)}
-                  className="w-3.5 h-3.5 text-[#D97706] rounded border-gray-300 focus:ring-[#D97706]"
-                />
-                <span className="font-semibold">
-                  Chỉ CP Hành chính
-                </span>
-              </label>
-
-              {/* Chọn Khoản mục phí (KMP) */}
-              <div className="flex items-center gap-1.5 ml-auto">
-                <span className="text-gray-500 font-medium">Khoản mục phí:</span>
-                <select
-                  value={selectedKmpId}
-                  onChange={(e) => setSelectedKmpId(e.target.value)}
-                  className="bg-gray-50 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1 text-gray-800 dark:text-gray-100 max-w-[280px] focus:outline-none focus:ring-1 focus:ring-[#D97706] text-xs font-medium"
-                >
-                  <option value="ALL">-- Tất cả Khoản mục phí ({kmpList.length}) --</option>
-                  {groupedKmp.map(([group, items]) => (
-                    <optgroup key={group} label={`📁 ${group}`}>
-                      {items.map(k => {
-                        const code = k.ma_b7 || k.ma_b10;
-                        const name = k.dien_giai || k.nhom_chi_phi || 'Khoản mục';
-                        const star = k.trong_yeu ? ' ⭐' : '';
-                        return (
-                          <option key={k.id} value={k.id}>
-                            {code ? `${code} - ${name}${star}` : `${name}${star}`}
-                          </option>
-                        );
-                      })}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. BẢNG PIVOT ĐỐI SÁNH CÙNG KỲ */}
-          <div className="flex-1 bg-white dark:bg-slate-800 rounded-xl shadow-xs border border-gray-200/80 dark:border-slate-700/80 overflow-hidden flex flex-col min-h-0">
-            <div className="flex-1 overflow-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse text-xs sm:text-sm">
-                <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700/80 text-gray-600 dark:text-gray-200 font-semibold border-b border-gray-200 dark:border-slate-600">
-                  <tr>
-                    <th className="p-3 w-12 text-center">TT</th>
-                    <th className="p-3 min-w-[240px]">
-                      {dimension === 'phia' && 'Phía'}
-                      {dimension === 'don_vi' && 'Đơn vị'}
-                      {dimension === 'loai_hinh' && 'Loại hình'}
-                      {dimension === 'showroom' && 'Showroom'}
-                      {dimension === 'khoi_nghiep_vu' && 'Khối/Nghiệp vụ'}
-                      {dimension === 'thuong_hieu_bo_phan' && 'Thương hiệu / Phòng / Bộ phận'}
-                      {dimension === 'phap_nhan' && 'Pháp nhân'}
-                    </th>
-                    <th className="p-3 w-44 text-right">Kỳ này ({periodLabel})</th>
-                    <th className="p-3 w-44 text-right">Cùng kỳ ({prevPeriodLabel})</th>
-                    <th className="p-3 w-40 text-right">Chênh lệch (VNĐ)</th>
-                    <th className="p-3 w-28 text-right">% Tăng/Giảm</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-700 text-gray-700 dark:text-gray-300">
-                  {reportData.rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-400">
-                        <BarChart2 size={36} className="mx-auto mb-2 opacity-50 text-[#D97706]" />
-                        <p className="font-semibold text-gray-600 dark:text-gray-300">Chưa có số liệu chi phí cho kỳ và bộ lọc đã chọn.</p>
-                        <p className="text-xs text-gray-400 mt-1">Hãy thử chọn kỳ khác hoặc kiểm tra lại các phiếu ĐNTT đã lưu.</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    reportData.rows.map((r, idx) => (
-                      <tr key={r.key} className="hover:bg-amber-50/30 dark:hover:bg-slate-700/40 transition-colors">
-                        <td className="p-3 text-center text-gray-400 font-mono text-xs">{idx + 1}</td>
-                        <td className="p-3 font-semibold text-gray-900 dark:text-gray-100">{r.label}</td>
-                        <td className="p-3 text-right font-mono font-bold text-[#D97706]">
-                          {r.currentAmount.toLocaleString('vi-VN')}
-                        </td>
-                        <td className="p-3 text-right font-mono text-gray-600 dark:text-gray-400">
-                          {r.prevAmount.toLocaleString('vi-VN')}
-                        </td>
-                        <td className={`p-3 text-right font-mono font-bold ${
-                          r.diff > 0 ? 'text-amber-600' : (r.diff < 0 ? 'text-emerald-600' : 'text-gray-400')
-                        }`}>
-                          {r.diff > 0 ? `+${r.diff.toLocaleString('vi-VN')}` : r.diff.toLocaleString('vi-VN')}
-                        </td>
-                        <td className="p-3 text-right font-mono">
-                          {r.percent !== null ? (
-                            <span className={`inline-flex px-1.5 py-0.5 rounded-md text-xs font-semibold ${
-                              r.diff > 0
-                                ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300'
-                                : r.diff < 0
-                                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
-                                : 'bg-gray-100 text-gray-500'
-                            }`}>
-                              {r.percent > 0 ? `+${r.percent.toFixed(1)}%` : `${r.percent.toFixed(1)}%`}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 font-semibold">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                {/* Dòng TỔNG CỘNG */}
-                {reportData.rows.length > 0 && (
-                  <tfoot className="sticky bottom-0 z-10 bg-amber-50/90 dark:bg-slate-700 text-gray-900 dark:text-gray-100 font-bold border-t-2 border-amber-300 dark:border-amber-600">
-                    <tr>
-                      <td className="p-3 text-center text-xs">TỔNG</td>
-                      <td className="p-3 uppercase text-xs tracking-wide text-[#D97706]">
-                        TỔNG CỘNG ({reportData.rows.length} chỉ tiêu)
-                      </td>
-                      <td className="p-3 text-right font-mono text-base text-[#D97706]">
-                        {reportData.totalCurrent.toLocaleString('vi-VN')}
-                      </td>
-                      <td className="p-3 text-right font-mono text-sm text-gray-700 dark:text-gray-300">
-                        {reportData.totalPrev.toLocaleString('vi-VN')}
-                      </td>
-                      <td className={`p-3 text-right font-mono text-sm ${
-                        reportData.totalDiff > 0 ? 'text-amber-700' : (reportData.totalDiff < 0 ? 'text-emerald-700' : 'text-gray-700')
-                      }`}>
-                        {reportData.totalDiff > 0 ? `+${reportData.totalDiff.toLocaleString('vi-VN')}` : reportData.totalDiff.toLocaleString('vi-VN')}
-                      </td>
-                      <td className="p-3 text-right font-mono text-sm">
-                        {reportData.totalPercent !== null ? (
-                          <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-bold ${
-                            reportData.totalDiff > 0
-                              ? 'bg-amber-200/70 text-amber-900'
-                              : reportData.totalDiff < 0
-                              ? 'bg-emerald-200/70 text-emerald-900'
-                              : 'bg-gray-200 text-gray-700'
-                          }`}>
-                            {reportData.totalPercent > 0 ? `+${reportData.totalPercent.toFixed(1)}%` : `${reportData.totalPercent.toFixed(1)}%`}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 font-semibold">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </div>
-        </>
+        <div className="flex-1 min-h-0">
+          <CostPivotView
+            year={selectedYear}
+            onYearChange={setSelectedYear}
+            thongKeList={thongKeList}
+            chotKyList={chotKyList}
+            dnttList={dnttList}
+            phanBoList={phanBoList}
+            kmpList={kmpList}
+            nhomChiPhiList={nhomChiPhiList}
+            donViList={donViList}
+            fullDonViList={fullDonViList}
+            boPhanList={boPhanList}
+            selectedUnitFilter={selectedUnitFilter}
+            userPermittedUnitIds={userPermittedUnitIds}
+            includeTemporary={includeTemporary}
+            onToggleIncludeTemporary={setIncludeTemporary}
+            onlyAdministrative={onlyAdministrative}
+            onToggleOnlyAdministrative={setOnlyAdministrative}
+            onOpenChotKyModal={() => setChotKyModalOpen(true)}
+          />
+        </div>
       )}
 
       {/* 4. MODAL QUẢN LÝ CHỐT KỲ */}

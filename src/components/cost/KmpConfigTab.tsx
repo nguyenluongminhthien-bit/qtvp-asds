@@ -153,7 +153,7 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
     const newVal = item.thuoc_bao_cao_hanh_chinh === false ? true : false;
     try {
       await apiService.save({ ...item, thuoc_bao_cao_hanh_chinh: newVal }, 'update', 'dm_kmp');
-      toast.success(`Đã ${newVal ? 'bật' : 'tắt'} thuộc Báo cáo CPHC cho "${item.ma_b7}"!`);
+      toast.success(`Đã ${newVal ? 'bật' : 'tắt'} thuộc Báo cáo Chi phí cho "${item.ma_b7}"!`);
       await onRefresh();
     } catch (err: any) {
       toast.error('Lỗi khi cập nhật phạm vi CPHC của KMP!');
@@ -256,9 +256,9 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
               onChange={(e) => setFilterHanhChinh(e.target.value as any)}
               className="text-xs sm:text-sm border border-gray-200 dark:border-slate-600 rounded-lg p-2 bg-white dark:bg-slate-700 font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#D97706]"
             >
-              <option value="ALL">Tất cả Phạm vi CPHC</option>
-              <option value="YES">Thuộc Báo cáo CPHC</option>
-              <option value="NO">Ngoài Báo cáo CPHC</option>
+              <option value="ALL">Tất cả Phạm vi Chi phí</option>
+              <option value="YES">Thuộc Báo cáo</option>
+              <option value="NO">Ngoài Báo cáo</option>
             </select>
           </div>
         </div>
@@ -287,11 +287,10 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
           <button
             type="button"
             onClick={() => setFilterOnlyDuplicates(prev => !prev)}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer shadow-xs ${
-              filterOnlyDuplicates
-                ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-slate-700'
-            }`}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer shadow-xs ${filterOnlyDuplicates
+              ? 'bg-amber-600 hover:bg-amber-700 text-white'
+              : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-slate-700'
+              }`}
           >
             {filterOnlyDuplicates ? '✕ Xem lại toàn bộ' : `🔍 Chỉ xem ${duplicateAnalysis.totalDuplicates} mục trùng`}
           </button>
@@ -310,7 +309,7 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
                 <th className="p-3 w-70">Nhóm chi phí</th>
                 <th className="p-3 min-w-[170px]">Diễn giải nội dung chi phí</th>
                 <th className="p-3 w-30 text-center">Trọng yếu</th>
-                <th className="p-3 w-36 text-center">Báo cáo CPHC</th>
+                <th className="p-3 w-36 text-center">Báo cáo Chi phí</th>
                 <th className="p-3 w-28 text-center">Trạng thái</th>
                 <th className="p-3 w-24 text-center">Thao tác</th>
               </tr>
@@ -334,11 +333,10 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
                   return (
                     <tr
                       key={item.id}
-                      className={`transition-colors ${
-                        isRowDup
-                          ? 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-900/30'
-                          : 'hover:bg-amber-50/30 dark:hover:bg-slate-700/40'
-                      }`}
+                      className={`transition-colors ${isRowDup
+                        ? 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-900/30'
+                        : 'hover:bg-amber-50/30 dark:hover:bg-slate-700/40'
+                        }`}
                     >
                       <td className="p-3 text-center text-gray-400 font-mono text-xs">{index + 1}</td>
                       <td className="p-3 font-mono">
@@ -387,17 +385,16 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
                         <button
                           type="button"
                           onClick={() => handleToggleHanhChinh(item)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
-                            item.thuoc_bao_cao_hanh_chinh !== false
-                              ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-400 border-gray-200 dark:border-slate-600 hover:text-gray-600'
-                          }`}
-                          title="Bấm để bật/tắt phạm vi Báo cáo CPHC (được đóng băng khi chốt kỳ)"
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${item.thuoc_bao_cao_hanh_chinh !== false
+                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                            : 'bg-gray-100 dark:bg-slate-700 text-gray-400 border-gray-200 dark:border-slate-600 hover:text-gray-600'
+                            }`}
+                          title="Bấm để bật/tắt phạm vi Báo cáo Chi phí (được đóng băng khi chốt kỳ)"
                         >
                           {item.thuoc_bao_cao_hanh_chinh !== false ? (
                             <>
                               <CheckCircle2 size={12} className="text-emerald-600" />
-                              <span>Thuộc CPHC</span>
+                              <span>Thuộc BCCP</span>
                             </>
                           ) : (
                             <span>Ngoài CPHC</span>
@@ -561,9 +558,9 @@ export default function KmpConfigTab({ kmpList, onRefresh, loading }: Props) {
                 <div>
                   <div className="text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
                     <CheckCircle2 size={15} className="text-emerald-500" />
-                    Thuộc Báo cáo Chi phí Hành chính (CPHC)
+                    Thuộc Báo cáo Chi phí (BCCP)
                   </div>
-                  <p className="text-xs text-gray-500">Đóng băng vào snapshot khi Chốt kỳ để hiển thị trên Báo cáo Quản trị CPHC</p>
+                  <p className="text-xs text-gray-500">Đóng băng vào snapshot khi Chốt kỳ để hiển thị trên Báo cáo Chi phí</p>
                 </div>
                 <input
                   type="checkbox"

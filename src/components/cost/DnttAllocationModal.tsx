@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Plus, Trash2, CheckCircle2, AlertTriangle, 
-  HelpCircle, Layers, Calendar, Percent, DollarSign, Calculator, Star
+  Layers, Calendar, Calculator, Star
 } from 'lucide-react';
 import { DnttChiTiet, DnttPhanBo, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2 } from '../../types';
 import { toast } from '../../utils/toast';
@@ -104,6 +104,9 @@ export default function DnttAllocationModal({
   unitId
 }: Props) {
   const [rows, setRows] = useState<DnttPhanBo[]>([]);
+  const [selectedKmpId, setSelectedKmpId] = useState<string>('');
+  const [selectedThang, setSelectedThang] = useState<number>(new Date().getMonth() + 1);
+  const [selectedNam, setSelectedNam] = useState<number>(new Date().getFullYear());
   const parentAmount = parentItem ? Number(parentItem.so_tien) || 0 : 0;
 
   // Lọc danh mục bộ phận theo đơn vị của phiếu ĐNTT hiện tại (fallback mẫu chung)
@@ -121,7 +124,7 @@ export default function DnttAllocationModal({
     return common.length > 0 ? common : boPhanList.filter(b => b.active !== false);
   }, [boPhanList, unitId]);
 
-  // Danh sách Khối / Nghiệp vụ (Cấp 1)
+  // Danh sách Khối / Nghiệp vụ
   const uniqueKhoiList = useMemo(() => {
     if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
       const map = new Map<string, string>();
@@ -147,13 +150,39 @@ export default function DnttAllocationModal({
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'vi'));
   }, [kmpList]);
 
+  // Khởi tạo và đồng bộ dữ liệu khi mở modal
   useEffect(() => {
     if (isOpen && parentItem) {
       if (allocations && allocations.length > 0) {
-        setRows(balanceAllocationRows([...allocations], parentAmount));
+        // Lấy KMP và Kỳ từ dòng phân bổ đầu tiên
+        const firstWithKmp = allocations.find(a => a.id_kmp) || allocations[0];
+        const kmpId = firstWithKmp?.id_kmp || kmpList.find(k => k.active !== false)?.id || '';
+        const thangVal = firstWithKmp?.thang || (new Date().getMonth() + 1);
+        const namVal = firstWithKmp?.nam || new Date().getFullYear();
+
+        setSelectedKmpId(kmpId);
+        setSelectedThang(thangVal);
+        setSelectedNam(namVal);
+
+        // Đảm bảo tất cả các dòng đều đồng bộ theo KMP và Kỳ đã chọn
+        const synced = allocations.map(a => ({
+          ...a,
+          id_kmp: kmpId,
+          thang: thangVal,
+          nam: namVal
+        }));
+        setRows(balanceAllocationRows(synced, parentAmount));
       } else {
         // Mặc định tạo 1 dòng đầu tiên với 100% số tiền
         const defaultKmp = kmpList.find(k => k.active !== false)?.id || '';
+        const now = new Date();
+        const thangVal = now.getMonth() + 1;
+        const namVal = now.getFullYear();
+
+        setSelectedKmpId(defaultKmp);
+        setSelectedThang(thangVal);
+        setSelectedNam(namVal);
+
         let defaultCap1 = '';
         let defaultCap2: string | undefined = undefined;
         let defaultIdBoPhan: string | undefined = undefined;
@@ -169,7 +198,6 @@ export default function DnttAllocationModal({
           defaultCap1 = cap1List.find(c => c.active !== false)?.id || '';
         }
 
-        const now = new Date();
         setRows([
           {
             id: `PB_${Date.now()}_1`,
@@ -179,8 +207,8 @@ export default function DnttAllocationModal({
             phan_tram: 100,
             so_tien: parentAmount,
             id_kmp: defaultKmp,
-            thang: now.getMonth() + 1,
-            nam: now.getFullYear(),
+            thang: thangVal,
+            nam: namVal,
             id_bo_phan: defaultIdBoPhan,
             id_bo_phan_cap1: defaultCap1,
             id_bo_phan_cap2: defaultCap2,
@@ -191,6 +219,24 @@ export default function DnttAllocationModal({
       }
     }
   }, [isOpen, parentItem, allocations, kmpList, cap1List, effectiveBoPhanList, parentAmount]);
+
+  // Đồng bộ KMP cho toàn bộ các dòng phân bổ con
+  const handleKmpChange = (newKmpId: string) => {
+    setSelectedKmpId(newKmpId);
+    setRows(prev => prev.map(r => ({ ...r, id_kmp: newKmpId })));
+  };
+
+  // Đồng bộ Tháng cho toàn bộ các dòng phân bổ con
+  const handleThangChange = (newThang: number) => {
+    setSelectedThang(newThang);
+    setRows(prev => prev.map(r => ({ ...r, thang: newThang })));
+  };
+
+  // Đồng bộ Năm cho toàn bộ các dòng phân bổ con
+  const handleNamChange = (newNam: number) => {
+    setSelectedNam(newNam);
+    setRows(prev => prev.map(r => ({ ...r, nam: newNam })));
+  };
 
   // Tổng tiền đã phân bổ
   const totalAllocated = useMemo(() => {
@@ -206,11 +252,10 @@ export default function DnttAllocationModal({
 
   if (!isOpen || !parentItem) return null;
 
-  // Thêm dòng phân bổ mới (sao chép toàn bộ giá trị dòng trên nếu có)
+  // Thêm dòng phân bổ mới (kế thừa KMP & Kỳ từ lựa chọn chung ở đầu bảng)
   const handleAddRow = () => {
     const remainingAmount = difference > 0 ? difference : 0;
     const remainingPercent = parentAmount > 0 ? Number(((remainingAmount / parentAmount) * 100).toFixed(2)) : 0;
-    const now = new Date();
 
     if (rows.length > 0) {
       const prevRow = rows[rows.length - 1];
@@ -221,9 +266,9 @@ export default function DnttAllocationModal({
         kieu_nhap: prevRow.kieu_nhap,
         phan_tram: remainingPercent,
         so_tien: remainingAmount,
-        id_kmp: prevRow.id_kmp,
-        thang: prevRow.thang,
-        nam: prevRow.nam,
+        id_kmp: selectedKmpId,
+        thang: selectedThang,
+        nam: selectedNam,
         id_bo_phan: prevRow.id_bo_phan,
         id_bo_phan_cap1: prevRow.id_bo_phan_cap1,
         id_bo_phan_cap2: prevRow.id_bo_phan_cap2,
@@ -234,7 +279,6 @@ export default function DnttAllocationModal({
       return;
     }
 
-    const defaultKmp = kmpList.find(k => k.active !== false)?.id || '';
     let defaultCap1 = '';
     let defaultCap2: string | undefined = undefined;
     let defaultIdBoPhan: string | undefined = undefined;
@@ -257,9 +301,9 @@ export default function DnttAllocationModal({
       kieu_nhap: 'SO_TIEN',
       phan_tram: remainingPercent,
       so_tien: remainingAmount,
-      id_kmp: defaultKmp,
-      thang: now.getMonth() + 1,
-      nam: now.getFullYear(),
+      id_kmp: selectedKmpId,
+      thang: selectedThang,
+      nam: selectedNam,
       id_bo_phan: defaultIdBoPhan,
       id_bo_phan_cap1: defaultCap1,
       id_bo_phan_cap2: defaultCap2,
@@ -357,30 +401,31 @@ export default function DnttAllocationModal({
   };
 
   const handleSave = () => {
+    if (!selectedKmpId) {
+      toast.warning('Vui lòng chọn Khoản mục phí (KMP) cho nội dung thanh toán!');
+      return;
+    }
+
     // Cân đối làm tròn để đảm bảo độ chính xác tuyệt đối trước khi lưu
     const balancedRows = balanceAllocationRows(rows, parentAmount);
 
     // Kiểm tra hợp lệ từng dòng
     for (let i = 0; i < balancedRows.length; i++) {
       const r = balancedRows[i];
-      if (!r.id_kmp) {
-        toast.warning(`Dòng ${i + 1}: Vui lòng chọn Khoản mục phí!`);
-        return;
-      }
       if (!r.id_bo_phan_cap1) {
-        toast.warning(`Dòng ${i + 1}: Vui lòng chọn Khối / Nghiệp vụ (Cấp 1)!`);
+        toast.warning(`Dòng ${i + 1}: Vui lòng chọn Khối / Nghiệp vụ!`);
         return;
       }
       if (effectiveBoPhanList && effectiveBoPhanList.length > 0) {
         const availableCap2 = effectiveBoPhanList.filter(b => b.active !== false && b.ma_cap1 === r.id_bo_phan_cap1);
         if (availableCap2.length > 0 && !r.id_bo_phan && !r.id_bo_phan_cap2) {
-          toast.warning(`Dòng ${i + 1}: Vui lòng chọn Thương hiệu / Phòng / Bộ phận (Cấp 2)!`);
+          toast.warning(`Dòng ${i + 1}: Vui lòng chọn Thương hiệu / Phòng / Bộ phận!`);
           return;
         }
       } else {
         const cap1 = cap1List.find(c => c.id === r.id_bo_phan_cap1);
         if (cap1?.yeu_cau_cap2 && !r.id_bo_phan_cap2) {
-          toast.warning(`Dòng ${i + 1}: Bộ phận "${cap1.ten}" bắt buộc chọn Cấp 2 (Thương hiệu)!`);
+          toast.warning(`Dòng ${i + 1}: Bộ phận "${cap1.ten}" bắt buộc chọn Thương hiệu / Phòng / Bộ phận!`);
           return;
         }
       }
@@ -398,8 +443,14 @@ export default function DnttAllocationModal({
       return;
     }
 
-    // Đánh lại số thứ tự
-    const finalized = balancedRows.map((r, i) => ({ ...r, thu_tu: i + 1 }));
+    // Đánh lại số thứ tự và đảm bảo id_kmp, thang, nam đồng bộ
+    const finalized = balancedRows.map((r, i) => ({
+      ...r,
+      id_kmp: selectedKmpId,
+      thang: selectedThang,
+      nam: selectedNam,
+      thu_tu: i + 1
+    }));
     onSaveAllocations(parentItem.id, finalized);
     toast.success('Đã lưu phân bổ chi phí cho dòng nội dung này!');
     onClose();
@@ -463,6 +514,103 @@ export default function DnttAllocationModal({
           </div>
         </div>
 
+        {/* Lựa chọn KMP & Kỳ (T/N) dùng chung cho toàn bộ dòng nội dung */}
+        <div className="p-3 sm:p-4 bg-amber-50/40 dark:bg-slate-700/30 border-b border-amber-200/60 dark:border-slate-700 grid grid-cols-1 md:grid-cols-12 gap-3 shrink-0 items-start">
+          {/* Cột trái: Khoản mục phí (KMP) */}
+          <div className="md:col-span-8 p-3 bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-slate-600 shadow-2xs">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <label className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                <Layers size={14} className="text-[#D97706]" />
+                Khoản mục phí (KMP) áp dụng chung <span className="text-red-500">*</span>
+              </label>
+              <span className="text-[11px] text-gray-500 italic hidden sm:inline">
+                Chỉ chọn 1 lần cho tất cả các dòng con
+              </span>
+            </div>
+
+            <select
+              required
+              value={selectedKmpId}
+              onChange={(e) => handleKmpChange(e.target.value)}
+              className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-xs text-gray-900 dark:text-gray-100 font-semibold focus:ring-2 focus:ring-[#D97706] focus:border-[#D97706]"
+            >
+              <option value="">-- Chọn Khoản mục phí --</option>
+              {groupedKmp.map(([groupName, items]) => (
+                <optgroup key={groupName} label={`📂 ${groupName.toUpperCase()}`}>
+                  {items.map(k => (
+                    <option key={k.id} value={k.id}>
+                      {k.ma_b7 ? `${k.ma_b7} - ` : ''}{k.dien_giai || k.nhom_chi_phi} {k.trong_yeu ? '⭐' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+
+            {/* Nhãn chi tiết nhóm chi phí & trọng yếu */}
+            {(() => {
+              const currentKmp = kmpList.find(k => k.id === selectedKmpId);
+              if (!currentKmp) return null;
+              const style = getCostGroupStyle(currentKmp.nhom_chi_phi);
+              return (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${style.badge}`}>
+                    {currentKmp.nhom_chi_phi}
+                  </span>
+                  {currentKmp.trong_yeu && (
+                    <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <Star size={12} className="fill-amber-500 text-amber-500" /> KMP Trọng yếu
+                    </span>
+                  )}
+                  {currentKmp.ma_b7 && (
+                    <span className="text-[11px] font-mono text-gray-500">
+                      Mã B7: <strong>{currentKmp.ma_b7}</strong>
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Cột phải: Kỳ chi phí (Tháng / Năm) */}
+          <div className="md:col-span-4 p-3 bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-slate-600 shadow-2xs">
+            <label className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5 mb-1.5">
+              <Calendar size={14} className="text-[#D97706]" />
+              Kỳ chi phí (Tháng / Năm) <span className="text-red-500">*</span>
+            </label>
+
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1">
+                <select
+                  value={selectedThang}
+                  onChange={(e) => handleThangChange(Number(e.target.value))}
+                  className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-xs font-bold font-mono text-center text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-[#D97706]"
+                >
+                  {Array.from({ length: 12 }, (_, m) => (
+                    <option key={m + 1} value={m + 1}>Tháng {m + 1}</option>
+                  ))}
+                </select>
+              </div>
+
+              <span className="text-gray-400 font-bold">/</span>
+
+              <div className="w-24">
+                <input
+                  type="number"
+                  min="2000"
+                  max="2100"
+                  value={selectedNam}
+                  onChange={(e) => handleNamChange(Number(e.target.value))}
+                  className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-xs font-bold font-mono text-center text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-[#D97706]"
+                />
+              </div>
+            </div>
+
+            <div className="text-[11px] text-gray-400 italic mt-2">
+              Kỳ hạch toán cho các dòng phân bổ con
+            </div>
+          </div>
+        </div>
+
         {/* Toolbar: Add row, Divide equally, Note */}
         <div className="p-3 px-4 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
@@ -479,7 +627,7 @@ export default function DnttAllocationModal({
               <button
                 type="button"
                 onClick={handleDivideEqually}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg shadow-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
               >
                 <Calculator size={14} />
                 <span>Chia đều ({rows.length} phần)</span>
@@ -495,17 +643,15 @@ export default function DnttAllocationModal({
         {/* Table of Sub-allocations */}
         <div className="flex-1 overflow-auto custom-scrollbar p-3 sm:p-4">
           <table className="w-full text-left border-collapse text-xs">
-            <thead className="sticky top-0 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-bold border-b border-gray-200 dark:border-slate-600 z-10">
+            <thead className="sticky top-0 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-bold border-b border-gray-200 dark:border-slate-600 z-10 text-[11px]">
               <tr>
-                <th className="p-2 w-10 text-center">#</th>
-                <th className="p-2 w-52">Khoản mục phí (KMP)</th>
-                <th className="p-2 w-28">Kỳ (T/N)</th>
-                <th className="p-2 w-48">Khối / Nghiệp vụ (Cấp 1)</th>
-                <th className="p-2 w-52">Thương hiệu / Phòng / Bộ phận (Cấp 2)</th>
-                <th className="p-2 w-28 text-center">Kiểu nhập</th>
-                <th className="p-2 w-24">Tỷ lệ %</th>
-                <th className="p-2 w-36">Số tiền (VNĐ)</th>
-                <th className="p-2 w-10 text-center"></th>
+                <th className="p-2.5 w-10 text-center font-bold">#</th>
+                <th className="p-2.5 w-64 min-w-[200px] font-bold">Khối / Nghiệp vụ</th>
+                <th className="p-2.5 min-w-[260px] font-bold">Thương hiệu / Phòng / Bộ phận</th>
+                <th className="p-2.5 w-28 text-center font-bold">Kiểu nhập</th>
+                <th className="p-2.5 w-24 text-right font-bold">Tỷ lệ %</th>
+                <th className="p-2.5 w-36 text-right font-bold">Số tiền (VNĐ)</th>
+                <th className="p-2.5 w-10 text-center font-bold"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
@@ -514,77 +660,15 @@ export default function DnttAllocationModal({
                 const requiresCap2 = !!currentCap1?.yeu_cau_cap2;
 
                 return (
-                  <tr key={row.id || idx} className="hover:bg-blue-50/30 dark:hover:bg-slate-700/30">
-                    <td className="p-2 text-center text-gray-400 font-mono font-bold">{idx + 1}</td>
+                  <tr key={row.id || idx} className="hover:bg-blue-50/30 dark:hover:bg-slate-700/30 transition-colors">
+                    <td className="p-2.5 text-center text-gray-400 font-mono font-bold">{idx + 1}</td>
 
-                    {/* Khoản mục phí (KMP) phân nhóm theo Nhóm chi phí */}
-                    <td className="p-2 w-52 max-w-[220px]">
-                      <select
-                        required
-                        value={row.id_kmp || ''}
-                        onChange={(e) => handleChangeRow(idx, 'id_kmp', e.target.value)}
-                        className="w-full p-1.5 border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-xs text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-[#D97706] font-medium truncate"
-                        title={kmpList.find(k => k.id === row.id_kmp)?.dien_giai}
-                      >
-                        <option value="">-- Chọn Khoản mục phí --</option>
-                        {groupedKmp.map(([groupName, items]) => (
-                          <optgroup key={groupName} label={`📂 ${groupName.toUpperCase()}`}>
-                            {items.map(k => (
-                              <option key={k.id} value={k.id}>
-                                {k.ma_b7 ? `${k.ma_b7} - ` : ''}{k.dien_giai || k.nhom_chi_phi} {k.trong_yeu ? '⭐' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      {/* Nhãn nhóm chi phí tương ứng hiển thị gọn gàng bên dưới */}
-                      {(() => {
-                        const selectedKmp = kmpList.find(k => k.id === row.id_kmp);
-                        if (!selectedKmp) return null;
-                        const style = getCostGroupStyle(selectedKmp.nhom_chi_phi);
-                        return (
-                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border truncate max-w-full ${style.badge}`}>
-                              {selectedKmp.nhom_chi_phi}
-                            </span>
-                            {selectedKmp.trong_yeu && (
-                              <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 shrink-0">
-                                <Star size={9} className="fill-amber-500 text-amber-500" /> Trọng yếu
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </td>
-
-                    {/* Tháng / Năm */}
-                    <td className="p-2">
-                      <div className="flex items-center gap-1">
-                        <select
-                          value={row.thang}
-                          onChange={(e) => handleChangeRow(idx, 'thang', Number(e.target.value))}
-                          className="p-1.5 border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-xs w-14 font-mono text-center focus:ring-1 focus:ring-[#D97706]"
-                        >
-                          {Array.from({ length: 12 }, (_, m) => (
-                            <option key={m + 1} value={m + 1}>T{m + 1}</option>
-                          ))}
-                        </select>
-                        <span className="text-gray-400">/</span>
-                        <input
-                          type="number"
-                          value={row.nam}
-                          onChange={(e) => handleChangeRow(idx, 'nam', Number(e.target.value))}
-                          className="p-1.5 border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-xs w-16 font-mono text-center focus:ring-1 focus:ring-[#D97706]"
-                        />
-                      </div>
-                    </td>
-
-                    {/* Khối / Nghiệp vụ (Cấp 1) */}
-                    <td className="p-2">
+                    {/* Khối / Nghiệp vụ */}
+                    <td className="p-2.5">
                       <select
                         value={row.id_bo_phan_cap1}
                         onChange={(e) => handleChangeRow(idx, 'id_bo_phan_cap1', e.target.value)}
-                        className="w-full p-1.5 border border-gray-200 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-xs font-semibold text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-[#D97706]"
+                        className="w-full p-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-xs font-semibold text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-[#D97706]"
                       >
                         <option value="">-- Chọn Khối / Nghiệp vụ --</option>
                         {uniqueKhoiList.map(k => (
@@ -593,8 +677,8 @@ export default function DnttAllocationModal({
                       </select>
                     </td>
 
-                    {/* Thương hiệu / Phòng / Bộ phận (Cấp 2 phụ thuộc Cấp 1) */}
-                    <td className="p-2">
+                    {/* Thương hiệu / Phòng / Bộ phận */}
+                    <td className="p-2.5">
                       {effectiveBoPhanList && effectiveBoPhanList.length > 0 ? (
                         (() => {
                           const cap2Options = effectiveBoPhanList.filter(b => b.active !== false && b.ma_cap1 === row.id_bo_phan_cap1);
@@ -604,7 +688,7 @@ export default function DnttAllocationModal({
                               value={row.id_bo_phan || row.id_bo_phan_cap2 || ''}
                               onChange={(e) => handleChangeRow(idx, 'id_bo_phan_cap2', e.target.value || undefined)}
                               disabled={cap2Options.length === 0}
-                              className={`w-full p-1.5 border rounded-md text-xs font-semibold focus:ring-1 focus:ring-[#D97706] ${
+                              className={`w-full p-2 border rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#D97706] ${
                                 !row.id_bo_phan && !row.id_bo_phan_cap2
                                   ? 'border-amber-300 bg-amber-50/50 dark:bg-slate-700 text-amber-900 dark:text-amber-200'
                                   : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-200'
@@ -625,7 +709,7 @@ export default function DnttAllocationModal({
                             required
                             value={row.id_bo_phan_cap2 || ''}
                             onChange={(e) => handleChangeRow(idx, 'id_bo_phan_cap2', e.target.value || undefined)}
-                            className="w-full p-1.5 border border-amber-300 dark:border-amber-600 rounded-md bg-amber-50/50 dark:bg-slate-700 text-xs font-semibold text-amber-900 dark:text-amber-200 focus:ring-1 focus:ring-[#D97706]"
+                            className="w-full p-2 border border-amber-300 dark:border-amber-600 rounded-lg bg-amber-50/50 dark:bg-slate-700 text-xs font-semibold text-amber-900 dark:text-amber-200 focus:ring-2 focus:ring-[#D97706]"
                           >
                             <option value="">-- Chọn Thương hiệu (Bắt buộc) --</option>
                             {cap2List.filter(c => c.active !== false).map(c => (
@@ -633,18 +717,18 @@ export default function DnttAllocationModal({
                             ))}
                           </select>
                         ) : (
-                          <span className="text-gray-400 italic px-2">Không yêu cầu Cấp 2</span>
+                          <span className="text-gray-400 italic px-2">Không yêu cầu Thương hiệu / Bộ phận</span>
                         )
                       )}
                     </td>
 
                     {/* Kiểu nhập */}
-                    <td className="p-2 text-center">
+                    <td className="p-2.5 text-center">
                       <div className="inline-flex rounded-md shadow-2xs p-0.5 bg-gray-100 dark:bg-slate-700">
                         <button
                           type="button"
                           onClick={() => handleChangeRow(idx, 'kieu_nhap', 'SO_TIEN')}
-                          className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
+                          className={`px-2 py-1 text-[11px] font-bold rounded cursor-pointer ${
                             row.kieu_nhap === 'SO_TIEN'
                               ? 'bg-white dark:bg-slate-800 text-[#D97706] shadow-2xs'
                               : 'text-gray-500'
@@ -655,7 +739,7 @@ export default function DnttAllocationModal({
                         <button
                           type="button"
                           onClick={() => handleChangeRow(idx, 'kieu_nhap', 'PHAN_TRAM')}
-                          className={`px-1.5 py-0.5 text-[10px] font-bold rounded ${
+                          className={`px-2 py-1 text-[11px] font-bold rounded cursor-pointer ${
                             row.kieu_nhap === 'PHAN_TRAM'
                               ? 'bg-white dark:bg-slate-800 text-[#D97706] shadow-2xs'
                               : 'text-gray-500'
@@ -667,7 +751,7 @@ export default function DnttAllocationModal({
                     </td>
 
                     {/* Tỷ lệ % */}
-                    <td className="p-2">
+                    <td className="p-2.5">
                       <div className="relative">
                         <input
                           type="number"
@@ -677,18 +761,18 @@ export default function DnttAllocationModal({
                           disabled={row.kieu_nhap === 'SO_TIEN'}
                           value={row.phan_tram || ''}
                           onChange={(e) => handleChangeRow(idx, 'phan_tram', e.target.value)}
-                          className={`w-full p-1.5 pr-5 border rounded-md text-xs font-mono text-right ${
+                          className={`w-full p-2 pr-6 border rounded-lg text-xs font-mono text-right ${
                             row.kieu_nhap === 'PHAN_TRAM'
                               ? 'border-amber-400 bg-amber-50/50 font-bold text-[#D97706]'
                               : 'border-gray-200 bg-gray-50 text-gray-500'
                           }`}
                         />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">%</span>
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] font-bold">%</span>
                       </div>
                     </td>
 
                     {/* Số tiền */}
-                    <td className="p-2">
+                    <td className="p-2.5">
                       <input
                         type="text"
                         disabled={row.kieu_nhap === 'PHAN_TRAM'}
@@ -698,23 +782,23 @@ export default function DnttAllocationModal({
                           const raw = e.target.value.replace(/[^\d]/g, '');
                           handleChangeRow(idx, 'so_tien', raw ? Number(raw) : 0);
                         }}
-                        className={`w-full p-1.5 border rounded-md text-xs font-mono text-right ${
+                        className={`w-full p-2 border rounded-lg text-xs font-mono text-right font-bold ${
                           row.kieu_nhap === 'SO_TIEN'
-                            ? 'border-amber-400 bg-amber-50/50 font-bold text-[#D97706]'
+                            ? 'border-amber-400 bg-amber-50/50 text-[#D97706]'
                             : 'border-gray-200 bg-gray-50 text-gray-700'
                         }`}
                       />
                     </td>
 
                     {/* Nút xóa */}
-                    <td className="p-2 text-center">
+                    <td className="p-2.5 text-center">
                       <button
                         type="button"
                         onClick={() => handleRemoveRow(idx)}
-                        className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 rounded transition-colors"
-                        title="Xóa dòng"
+                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                        title="Xóa dòng phân bổ này"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={15} />
                       </button>
                     </td>
                   </tr>
