@@ -44,7 +44,16 @@ import {
   checkDnttBelongsToLockedPeriod,
   chotKyChiPhi,
   huyChotKyChiPhi,
-  updateDnttStatusBulk
+  updateDnttStatusBulk,
+  restoreRecord,
+  moKhoaDonViChotKy,
+  khoaLaiDonViChotKy,
+  dongBoSnapshotChotKy,
+  toggleMoKhoaDntt,
+  moKhoaHangLoatDonViChotKy,
+  moKhoaToanBoDonViChotKy,
+  giaHanThoiGianChotKy,
+  khoaLaiToanBoChotKy
 } from './modules';
 
 export const apiService = {
@@ -97,6 +106,15 @@ export const apiService = {
   checkDnttBelongsToLockedPeriod,
   chotKyChiPhi,
   huyChotKyChiPhi,
-  updateDnttStatusBulk
+  updateDnttStatusBulk,
+  restoreRecord,
+  moKhoaDonViChotKy,
+  khoaLaiDonViChotKy,
+  dongBoSnapshotChotKy,
+  toggleMoKhoaDntt,
+  moKhoaHangLoatDonViChotKy,
+  moKhoaToanBoDonViChotKy,
+  giaHanThoiGianChotKy,
+  khoaLaiToanBoChotKy
 };
 

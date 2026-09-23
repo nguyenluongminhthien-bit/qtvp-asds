@@ -161,7 +161,7 @@ const initialFormState: Partial<DonVi> = {
 const KINH_DOANH_OPTIONS = ['Kia', 'Mazda', 'Peugeot', 'BMW', 'Du lịch', 'Tải, Bus'];
 
 export default function DepartmentPage() {
-  const { user } = useAuth();
+  const { user, canDelete, canDeleteUnit, canUpdate, canCreate } = useAuth();
 
   const [data, setData] = useState<DonVi[]>([]);
   const [personnelData, setPersonnelData] = useState<Personnel[]>([]);
@@ -825,12 +825,17 @@ export default function DepartmentPage() {
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+    if (itemToDelete.type === 'donvi' && !canDeleteUnit(itemToDelete.id)) {
+      toast.error('Bạn không có quyền XÓA Showroom / Đơn vị này! Vui lòng liên hệ Quản trị viên.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
     try {
       if (itemToDelete.type === 'donvi') {
-        await apiService.delete(itemToDelete.id, "dm_don_vi");
+        const snapshot = data.find(item => item.id === itemToDelete.id);
+        await apiService.delete(itemToDelete.id, "dm_don_vi", snapshot);
         setData(prev => prev.filter(item => item.id !== itemToDelete.id));
         if (selectedUnitId === itemToDelete.id) setSelectedUnitId(null);
 
@@ -838,13 +843,15 @@ export default function DepartmentPage() {
         toast.success("Xóa thông tin Đơn vị thành công!");
 
       } else if (itemToDelete.type === 'phapnhan') {
-        await apiService.delete(itemToDelete.id, "dm_phap_nhan");
+        const snapshot = phapNhanData.find(item => item.id === itemToDelete.id);
+        await apiService.delete(itemToDelete.id, "dm_phap_nhan", snapshot);
         setPhapNhanData(prev => prev.filter(item => item.id !== itemToDelete.id));
         // 🟢 Thông báo xóa Pháp nhân
         toast.success("Xóa thông tin Pháp nhân thành công!");
 
       } else if (itemToDelete.type === 'phonghop') {
-        await apiService.delete(itemToDelete.id, "dm_phong_hop");
+        const snapshot = phongHopData.find(item => item.id === itemToDelete.id);
+        await apiService.delete(itemToDelete.id, "dm_phong_hop", snapshot);
         setPhongHopData(prev => prev.filter(item => item.id !== itemToDelete.id));
         // 🟢 Thông báo xóa Phòng họp
         toast.success("Xóa thông tin Phòng họp thành công!");
@@ -853,14 +860,14 @@ export default function DepartmentPage() {
         const pcccToDelete = pcccData.find(item => getPcccIdSafe(item) === itemToDelete.id);
         const relatedDonViId = pcccToDelete ? getUnitIdSafe(pcccToDelete) : null;
 
-        await apiService.delete(itemToDelete.id, "hs_pccc");
+        await apiService.delete(itemToDelete.id, "hs_pccc", pcccToDelete);
         setPcccData(prev => prev.filter(item => getPcccIdSafe(item) !== itemToDelete.id));
 
         if (relatedDonViId) {
           const eqToDelete = tsPcccData.filter(eq => getUnitIdSafe(eq) === relatedDonViId);
           for (const eq of eqToDelete) {
             const eqId = getTsPcccIdSafe(eq);
-            if (eqId) await apiService.delete(eqId, "ts_pccc");
+            if (eqId) await apiService.delete(eqId, "ts_pccc", eq);
           }
           setTsPcccData(prev => prev.filter(eq => getUnitIdSafe(eq) !== relatedDonViId));
         }
@@ -869,7 +876,8 @@ export default function DepartmentPage() {
         toast.success("Xóa hồ sơ PCCC và thiết bị liên quan thành công!");
 
       } else if (itemToDelete.type === 'pctt') {
-        await apiService.delete(itemToDelete.id, "hs_pctt");
+        const snapshot = pcttData.find(item => safeGet(item, 'id') === itemToDelete.id);
+        await apiService.delete(itemToDelete.id, "hs_pctt", snapshot);
         setPcttData(prev => prev.filter(item => safeGet(item, 'id') !== itemToDelete.id));
         // 🟢 Thông báo xóa Hồ sơ PCTT
         toast.success("Xóa hồ sơ PCTT thành công!");
@@ -1051,9 +1059,11 @@ export default function DepartmentPage() {
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-gray-50 min-w-[319px]">
-          <button onClick={() => openModal('create')} className="w-full py-2.5 bg-white border border-dashed border-[#05469B] text-[#05469B] hover:bg-blue-50 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"><Plus size={18} /> THÊM ĐƠN VỊ</button>
-        </div>
+        {canCreate('CongTy') && (
+          <div className="p-4 border-t border-gray-100 bg-gray-50 min-w-[319px]">
+            <button onClick={() => openModal('create')} className="w-full py-2.5 bg-white border border-dashed border-[#05469B] text-[#05469B] hover:bg-blue-50 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"><Plus size={18} /> THÊM ĐƠN VỊ</button>
+          </div>
+        )}
       </div>
 
       {/* CỘT PHẢI CHI TIẾT */}
@@ -1109,8 +1119,12 @@ export default function DepartmentPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0 w-full md:w-auto justify-end">
-                  <button onClick={() => openModal('update', selectedUnit)} className="px-4 py-2.5 text-sm font-bold text-[#05469B] bg-white border border-[#05469B] hover:bg-blue-50 rounded-lg flex items-center gap-2 shadow-sm"><Edit size={16} /> Cập nhật</button>
-                  <button onClick={() => { setItemToDelete({ id: selectedUnit.id, type: 'donvi' }); setIsConfirmOpen(true); }} className="p-2.5 text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-lg shadow-sm"><Trash2 size={20} /></button>
+                  {canUpdate('CongTy', selectedUnit?.id) && (
+                    <button onClick={() => openModal('update', selectedUnit)} className="px-4 py-2.5 text-sm font-bold text-[#05469B] bg-white border border-[#05469B] hover:bg-blue-50 rounded-lg flex items-center gap-2 shadow-sm cursor-pointer"><Edit size={16} /> Cập nhật</button>
+                  )}
+                  {canDeleteUnit(selectedUnit?.id) && (
+                    <button onClick={() => { setItemToDelete({ id: selectedUnit.id, type: 'donvi' }); setIsConfirmOpen(true); }} className="p-2.5 text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-lg shadow-sm cursor-pointer" title="Xóa Đơn vị / Showroom"><Trash2 size={20} /></button>
+                  )}
                 </div>
               </div>
 

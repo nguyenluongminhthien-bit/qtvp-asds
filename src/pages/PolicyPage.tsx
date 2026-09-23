@@ -17,7 +17,7 @@ interface PolicyItem extends Partial<VB_TB> {
 }
 
 export default function PolicyPage() {
-  const { user } = useAuth();
+  const { user, canCreate, canUpdate, canDelete } = useAuth();
   const [qdData, setQdData] = useState<PolicyItem[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -216,6 +216,17 @@ export default function PolicyPage() {
   }, [permittedQdData, searchTerm, selectedNghiepvu, selectedBoPhans]);
 
   const openModal = (mode: 'create' | 'update', item?: PolicyItem) => {
+    if (mode === 'create') {
+      if (!canCreate('QuyDinh')) {
+        toast.warning("Bạn không có quyền ban hành quy định/quy trình!");
+        return;
+      }
+    } else if (mode === 'update') {
+      if (!canUpdate('QuyDinh')) {
+        toast.warning("Bạn không có quyền chỉnh sửa quy định này!");
+        return;
+      }
+    }
     setModalMode(mode);
     if (item) {
       setFormData({ ...item, ngay_ban_hanh: item.ngay_ban_hanh ? item.ngay_ban_hanh.split('T')[0] : '' });
@@ -270,6 +281,12 @@ export default function PolicyPage() {
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+    if (!canDelete('QuyDinh')) {
+      toast.error("Bạn không có quyền xóa quy định này!");
+      setIsConfirmOpen(false);
+      setItemToDelete(null);
+      return;
+    }
     setSubmitting(true);
     try {
       await apiService.delete(itemToDelete, "qd_qt");
@@ -452,14 +469,16 @@ export default function PolicyPage() {
               </div>
 
               {/* 4. 🟢 Nút ban hành (độ cao 27 px) */}
-              <button
-                type="button"
-                onClick={() => openModal('create')}
-                className="h-[27px] px-3 flex items-center justify-center gap-1.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"
-              >
-                <Plus size={14} />
-                <span>Ban hành</span>
-              </button>
+              {canCreate('QuyDinh') && (
+                <button
+                  type="button"
+                  onClick={() => openModal('create')}
+                  className="h-[27px] px-3 flex items-center justify-center gap-1.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"
+                >
+                  <Plus size={14} />
+                  <span>Ban hành</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -542,19 +561,23 @@ export default function PolicyPage() {
                             <Eye size={14} /> Xem
                           </button>
 
-                          <button
-                            onClick={() => item.isFromVB ? handleBlockedAction('Sửa') : openModal('update', item)}
-                            className={`w-full py-1.5 bg-white border border-blue-200 text-blue-600 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors ${item.isFromVB ? 'opacity-50 hover:bg-white cursor-not-allowed' : 'hover:bg-blue-50'}`}
-                          >
-                            <Edit size={14} /> Sửa
-                          </button>
+                          {(canUpdate('QuyDinh') || item.isFromVB) && (
+                            <button
+                              onClick={() => item.isFromVB ? handleBlockedAction('Sửa') : openModal('update', item)}
+                              className={`w-full py-1.5 bg-white border border-blue-200 text-blue-600 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors ${item.isFromVB ? 'opacity-50 hover:bg-white cursor-not-allowed' : 'hover:bg-blue-50'}`}
+                            >
+                              <Edit size={14} /> Sửa
+                            </button>
+                          )}
 
-                          <button
-                            onClick={() => item.isFromVB ? handleBlockedAction('Xóa') : (() => { setItemToDelete(item.id); setIsConfirmOpen(true); })()}
-                            className={`w-full py-1.5 bg-white border border-red-200 text-red-600 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors ${item.isFromVB ? 'opacity-50 hover:bg-white cursor-not-allowed' : 'hover:bg-red-50'}`}
-                          >
-                            <Trash2 size={14} /> Xóa
-                          </button>
+                          {(canDelete('QuyDinh') || item.isFromVB) && (
+                            <button
+                              onClick={() => item.isFromVB ? handleBlockedAction('Xóa') : (() => { setItemToDelete(item.id); setIsConfirmOpen(true); })()}
+                              className={`w-full py-1.5 bg-white border border-red-200 text-red-600 rounded text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors ${item.isFromVB ? 'opacity-50 hover:bg-white cursor-not-allowed' : 'hover:bg-red-50'}`}
+                            >
+                              <Trash2 size={14} /> Xóa
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

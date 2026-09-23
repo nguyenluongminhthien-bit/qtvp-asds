@@ -215,7 +215,7 @@ const renderServiceList = (dichVuText: string | null | undefined, isTooltip: boo
 };
 
 export default function SupplierPage() {
-  const { user } = useAuth();
+  const { user, canCreate, canUpdate, canDelete } = useAuth();
   const [nccData, setNccData] = useState<NhaCungCap[]>([]);
   const [donViList, setDonViList] = useState<DonVi[]>([]);
 
@@ -346,6 +346,17 @@ export default function SupplierPage() {
   }, [nccData, selectedUnitFilter, currentSubordinateIds, selectedNhomDichVu, selectedTrangThai, searchTerm]);
 
   const openModal = (mode: 'create' | 'update', item?: NhaCungCap) => {
+    if (mode === 'create') {
+      if (!canCreate('NhaCungCap', selectedUnitFilter)) {
+        toast.warning("Bạn không có quyền thêm mới nhà cung cấp!");
+        return;
+      }
+    } else if (mode === 'update' && item) {
+      if (!canUpdate('NhaCungCap', item.id_don_vi)) {
+        toast.warning("Bạn không có quyền chỉnh sửa nhà cung cấp này!");
+        return;
+      }
+    }
     setModalMode(mode);
     if (item) {
       setFormData({
@@ -489,6 +500,13 @@ export default function SupplierPage() {
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+    const target = nccData.find(n => n.id === itemToDelete);
+    if (!canDelete('NhaCungCap', target?.id_don_vi)) {
+      toast.error("Bạn không có quyền xóa nhà cung cấp này!");
+      setIsConfirmOpen(false);
+      setItemToDelete(null);
+      return;
+    }
     setSubmitting(true);
     try {
       await apiService.delete(itemToDelete, "dm_ncc");
@@ -626,21 +644,23 @@ export default function SupplierPage() {
                   <>
                     <div className="fixed inset-0 z-[90]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
                     <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 p-1.5 z-[100] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
-                      <button
-                        onClick={() => {
-                          setIsFeaturesDropdownOpen(false);
-                          openModal('create');
-                        }}
-                        className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 text-gray-700 hover:text-[#05469B] cursor-pointer"
-                      >
-                        <div className="p-1.5 rounded-md bg-blue-100 text-[#05469B]">
-                          <PlusCircle size={15} />
-                        </div>
-                        <div>
-                          <div className="text-gray-800 font-bold text-xs">Thêm Đối tác</div>
-                          <div className="text-[10px] text-gray-500 font-normal">Tạo hồ sơ nhà cung cấp mới</div>
-                        </div>
-                      </button>
+                      {canCreate('NhaCungCap', selectedUnitFilter) && (
+                        <button
+                          onClick={() => {
+                            setIsFeaturesDropdownOpen(false);
+                            openModal('create');
+                          }}
+                          className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 text-gray-700 hover:text-[#05469B] cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-md bg-blue-100 text-[#05469B]">
+                            <PlusCircle size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 font-bold text-xs">Thêm Đối tác</div>
+                            <div className="text-[10px] text-gray-500 font-normal">Tạo hồ sơ nhà cung cấp mới</div>
+                          </div>
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
@@ -790,19 +810,23 @@ export default function SupplierPage() {
                               <Eye size={13} /> Xem
                             </button>
 
-                            <button
-                              onClick={() => openModal('update', item)}
-                              className="w-full py-1 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded text-xs font-bold flex items-center justify-center gap-1 shadow-sm transition-colors"
-                            >
-                              <Edit size={13} /> Sửa
-                            </button>
+                            {canUpdate('NhaCungCap', item.id_don_vi) && (
+                              <button
+                                onClick={() => openModal('update', item)}
+                                className="w-full py-1 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded text-xs font-bold flex items-center justify-center gap-1 shadow-sm transition-colors"
+                              >
+                                <Edit size={13} /> Sửa
+                              </button>
+                            )}
 
-                            <button
-                              onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }}
-                              className="w-full py-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded text-xs font-bold flex items-center justify-center gap-1 shadow-sm transition-colors"
-                            >
-                              <Trash2 size={13} /> Xóa
-                            </button>
+                            {canDelete('NhaCungCap', item.id_don_vi) && (
+                              <button
+                                onClick={() => { setItemToDelete(item.id); setIsConfirmOpen(true); }}
+                                className="w-full py-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded text-xs font-bold flex items-center justify-center gap-1 shadow-sm transition-colors"
+                              >
+                                <Trash2 size={13} /> Xóa
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

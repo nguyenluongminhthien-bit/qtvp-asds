@@ -59,7 +59,7 @@ const EMERGENCY_CONTACTS = [...CONTACTS_BAN_NGANH, ...CONTACTS_DON_VI];
 
 
 export default function FireSafetyPage() {
-  const { user } = useAuth();
+  const { user, canCreate, canUpdate, canDelete } = useAuth();
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [pcccData, setPcccData] = useState<any[]>([]);
   const [tsPcccData, setTsPcccData] = useState<any[]>([]);
@@ -285,6 +285,19 @@ export default function FireSafetyPage() {
   }, [personnelData, formData.id_don_vi, donViList]);
 
   const openModal = (mode: 'create' | 'update' | 'view', item?: any) => {
+    if (mode === 'create') {
+      const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
+      const targetUnitId = selectedUnitFilter || (defaultDonViId !== 'ALL' ? defaultDonViId : '');
+      if (!canCreate('PCCC', targetUnitId)) {
+        toast.warning("Bạn không có quyền thêm mới hồ sơ PCCC!");
+        return;
+      }
+    } else if (mode === 'update' && item) {
+      if (!canUpdate('PCCC', item.id_don_vi)) {
+        toast.warning("Bạn không có quyền chỉnh sửa hồ sơ PCCC này!");
+        return;
+      }
+    }
     setModalMode(mode);
     const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
 
@@ -417,13 +430,18 @@ export default function FireSafetyPage() {
 
   const confirmDelete = async () => {
     if (!itemToDelete) return; 
+    const pcccToDelete = pcccData.find(item => getPcccIdSafe(item) === itemToDelete);
+    const relatedDonViId = pcccToDelete ? getUnitIdSafe(pcccToDelete) : null;
+    if (!canDelete('PCCC', relatedDonViId)) {
+      toast.error("Bạn không có quyền xóa hồ sơ PCCC tại đơn vị này!");
+      setIsConfirmOpen(false);
+      setItemToDelete(null);
+      return;
+    }
     setSubmitting(true); 
     setError(null);
     
     try {
-      const pcccToDelete = pcccData.find(item => getPcccIdSafe(item) === itemToDelete);
-      const relatedDonViId = pcccToDelete ? getUnitIdSafe(pcccToDelete) : null;
-      
       await apiService.delete(itemToDelete, "hs_pccc");
       setPcccData(prev => prev.filter(item => getPcccIdSafe(item) !== itemToDelete));
       

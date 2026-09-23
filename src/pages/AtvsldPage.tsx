@@ -46,7 +46,7 @@ const getRegionName = (unitId: string, allUnits: DonVi[]): string => {
 
 
 export default function AtvsldPage() {
-  const { user } = useAuth();
+  const { user, canCreate, canUpdate, canDelete } = useAuth();
 
   const [donViData, setDonViList] = useState<DonVi[]>([]);
   const [atvsldData, setAtvsldData] = useState<any[]>([]);
@@ -89,18 +89,18 @@ export default function AtvsldPage() {
   const [rowsPerSafetyPage, setRowsPerSafetyPage] = useState(50);
 
   // 🟢 KÉO CÙNG LÚC 8 BẢNG DỮ LIỆU (Đã bọc bẫy lỗi an toàn cho từng API)
-  const loadData = async () => {
+  const loadData = async (forceRefresh = false) => {
     setLoading(true);
     try {
       const [dvResult, atResult, nsResult, khResult, hvResult, ckResult, tbResult, kdResult] = await Promise.all([
-        apiService.getDonVi ? apiService.getDonVi().catch(() => []) : Promise.resolve([]),
-        apiService.getATVSLD ? apiService.getATVSLD().catch(() => []) : Promise.resolve([]),
-        apiService.getPersonnel ? apiService.getPersonnel().catch(() => []) : Promise.resolve([]),
-        apiService.getKhoaHuanLuyen ? apiService.getKhoaHuanLuyen().catch(() => []) : Promise.resolve([]),
-        apiService.getHocVienKhoaHuanLuyen ? apiService.getHocVienKhoaHuanLuyen().catch(() => []) : Promise.resolve([]),
-        apiService.getChuKyATVSLD ? apiService.getChuKyATVSLD().catch(() => []) : Promise.resolve([]),
-        apiService.getThietBiNghiemNgat ? apiService.getThietBiNghiemNgat().catch(() => []) : Promise.resolve([]),
-        apiService.getKiemDinhTBNN ? apiService.getKiemDinhTBNN().catch(() => []) : Promise.resolve([])
+        apiService.getDonVi ? apiService.getDonVi(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getATVSLD ? apiService.getATVSLD(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getPersonnel ? apiService.getPersonnel(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getKhoaHuanLuyen ? apiService.getKhoaHuanLuyen(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getHocVienKhoaHuanLuyen ? apiService.getHocVienKhoaHuanLuyen(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getChuKyATVSLD ? apiService.getChuKyATVSLD(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getThietBiNghiemNgat ? apiService.getThietBiNghiemNgat(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getKiemDinhTBNN ? apiService.getKiemDinhTBNN(forceRefresh).catch(() => []) : Promise.resolve([])
       ]);
       setDonViList(dvResult || []);
       setAtvsldData(atResult || []);
@@ -223,6 +223,17 @@ export default function AtvsldPage() {
   }, [filteredData, hocVienData, thietBiData, kiemDinhData]);
 
   const openModal = (unitId: string, data: any = null) => {
+    if (data) {
+      if (!canUpdate('ATVSLD', unitId)) {
+        toast.warning("Bạn không có quyền chỉnh sửa hồ sơ ATVSLĐ!");
+        return;
+      }
+    } else {
+      if (!canCreate('ATVSLD', unitId)) {
+        toast.warning("Bạn không có quyền tạo mới hồ sơ ATVSLĐ!");
+        return;
+      }
+    }
     setSelectedUnitId(unitId);
     setCurrentData(data);
     setIsModalOpen(true);
@@ -235,6 +246,13 @@ export default function AtvsldPage() {
 
   const confirmDelete = async () => {
     if (!deleteTargetId) return;
+    const target = atvsldData.find(item => item.id === deleteTargetId);
+    if (!canDelete('ATVSLD', target?.id_don_vi)) {
+      toast.error("Bạn không có quyền xóa hồ sơ ATVSLĐ tại đơn vị này!");
+      setIsConfirmOpen(false);
+      setDeleteTargetId(null);
+      return;
+    }
     try {
       await apiService.delete(deleteTargetId, 'hs_an_toan_lao_dong');
       setAtvsldData(prev => prev.filter(item => item.id !== deleteTargetId));
@@ -260,8 +278,10 @@ export default function AtvsldPage() {
 
     const activeFilterIds = selectedUnitFilter ? [selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViData)] : allowedDonViIds;
 
+    const INACTIVE_STATUSES = ['Đã nghỉ việc', 'Đã thôi việc', 'Đã điều chuyển', 'Nghỉ việc'];
+
     return personnelData
-      .filter(p => p.trang_thai !== 'Đã nghỉ việc' && activeFilterIds.includes(p.id_don_vi))
+      .filter(p => !INACTIVE_STATUSES.includes(p.trang_thai) && activeFilterIds.includes(p.id_don_vi))
       .map(p => {
         let status: 'CHUA_HOC' | 'QUA_HAN' | 'SAP_HET_HAN' | 'AN_TOAN' = 'CHUA_HOC';
         let remainingDays = 0;
@@ -531,7 +551,7 @@ export default function AtvsldPage() {
               <button
                 type="button"
                 onClick={() => {
-                  loadData();
+                  loadData(true);
                   toast.success('Đang đồng bộ dữ liệu ATVSLĐ mới nhất từ Supabase...');
                 }}
                 title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"

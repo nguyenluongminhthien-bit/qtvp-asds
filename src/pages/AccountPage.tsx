@@ -1,55 +1,27 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, UserCog, Shield, Key, Building2, Mail, CheckSquare, ListChecks, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { 
+  Search, Plus, Edit, Trash2, X, AlertCircle, Loader2, Save, UserCog, Shield, 
+  Key, Building2, Mail, CheckSquare, ListChecks, Eye, EyeOff, ChevronDown, 
+  Clock, ShieldCheck, RotateCcw, Zap, RefreshCw, Layers, Check, Calendar, 
+  Car as CarIcon, ChevronRight, Filter, FileText 
+} from 'lucide-react';
 import { apiService } from '../services/api';
 import { User, DonVi } from '../types';
 import { buildHierarchicalOptions, getUnitEmoji, getAllSubordinateIds } from '../utils/hierarchy';
 import { toast } from '../utils/toast';
 import { stripAccents } from '../utils/formatters';
 import { useAuth } from '../contexts/AuthContext';
-
-// 🟢 1. KHO DANH SÁCH MODULE (quyen_truy_cap)
-const MODULE_LIST = [
-  { id: 'TongQuan', label: 'Tổng quan Dashboard', icon: '📊' },
-  { id: 'CongTy', label: 'Thông tin Công ty', icon: '🏢' },
-  { id: 'NhanSu', label: 'Thông tin Nhân sự', icon: '👥' },
-  { id: 'PCCC', label: 'Phòng cháy chữa cháy', icon: '🔥' },
-  { id: 'ATVSLD', label: 'An toàn vệ sinh LĐ', icon: '⛑️' },
-  { id: 'Xe', label: 'Thông tin Xe', icon: '🚗' },
-  { id: 'ThietBi', label: 'Thông tin TTB VP', icon: '💻' },
-  { id: 'ChiPhi', label: 'Quản lý Chi phí', icon: '💰' },
-  { id: 'NhaCungCap', label: 'Quản lý Nhà cung cấp', icon: '🤝' },
-  { id: 'VanBan', label: 'Văn bản - Thông báo', icon: '📄' },
-  { id: 'QuyDinh', label: 'Quy định - Quy trình', icon: '📖' },
-  { id: 'BaoCao', label: 'Báo cáo Tổng hợp', icon: '📑' }
-];
-
-// 🟢 2. KHO MA TRẬN QUYỀN CHI TIẾT (quyen_chi_tiet)
-const ADVANCED_PERMISSIONS = {
-  VanBan: [
-    { id: 'VB_VIEW_QD', label: 'Quyền xem Quyết định' },
-    { id: 'VB_VIEW_TB', label: 'Quyền xem Thông báo' },
-    { id: 'VB_VIEW_TB_BDH', label: 'Quyền xem Thông báo BĐH' },
-    { id: 'VB_VIEW_TT', label: 'Quyền xem Tờ trình' },
-    { id: 'VB_VIEW_CV_DI', label: 'Quyền xem Công văn đi' },
-    { id: 'VB_VIEW_CV_DEN', label: 'Quyền xem Công văn đến' },
-    { id: 'VB_HIDE_BTN', label: 'Ẩn nút Ban hành' },
-  ],
-  QuyDinh: [],
-  NhanSu: [
-    { id: 'NS_HIDE_SENSITIVE', label: 'Ẩn SĐT, Lương, Ngạch' },
-    { id: 'NS_NO_DETAIL', label: 'Cấm xem Chi tiết Hồ sơ' },
-  ],
-  ThietBi: [
-    { id: 'TB_HIDE_PRICE', label: 'Ẩn cột Nguyên giá' },
-  ],
-  Xe: [],
-  ChiPhi: [
-    { id: 'CP_PIVOT_CLONE', label: 'Quyền Báo cáo tuỳ chỉnh (Pivot)' },
-  ]
-};
+import { RecycleBinModal } from '../components/ui';
+import { 
+  MODULE_MATRIX_CONFIG, 
+  ModuleCrudState, 
+  getAllModuleCrudMap, 
+  updateModuleCrudInRules, 
+  syncRulesToFormState 
+} from '../constants/permissions';
 
 export default function AccountPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, sessionDays, setSessionDays } = useAuth();
   const [data, setData] = useState<User[]>([]);
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [xeList, setXeList] = useState<any[]>([]);
@@ -58,6 +30,8 @@ export default function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [carFilterTerm, setCarFilterTerm] = useState('');
+  const [matrixSearch, setMatrixSearch] = useState('');
+  const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
 
   const yearOptions = useMemo(() => {
     const startYear = 2010;
@@ -74,27 +48,29 @@ export default function AccountPage() {
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [isRecycleBinOpen, setIsRecycleBinOpen] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const [users, donvis, xes] = await Promise.all([
+        apiService.getUsers(), 
+        apiService.getDonVi(),
+        apiService.getXe()
+      ]);
+      setData(users || []); 
+      setDonViList(donvis || []);
+      setXeList(xes || []);
+    } catch (err: any) { 
+      setError(err.message || 'Lỗi tải dữ liệu tài khoản.'); 
+    } finally { 
+      setLoading(false); 
+    }
+  }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true); setError(null);
-      try {
-        const [users, donvis, xes] = await Promise.all([
-          apiService.getUsers(), 
-          apiService.getDonVi(),
-          apiService.getXe()
-        ]);
-        setData(users || []); 
-        setDonViList(donvis || []);
-        setXeList(xes || []);
-      } catch (err: any) { 
-        setError(err.message || 'Lỗi tải dữ liệu tài khoản.'); 
-      } finally { 
-        setLoading(false); 
-      }
-    };
     loadData();
-  }, []);
+  }, [loadData]);
 
   const donViMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -320,31 +296,252 @@ export default function AccountPage() {
     setShowPassword(false);
     setIsUnitDropdownOpen(false);
     setUnitSearchQuery('');
+    setMatrixSearch('');
+    setExpandedModuleId(null);
     const defaultDv = isHOAdmin ? '' : (subordinateDonViIds[0] || (myDonViIds[0] || ''));
+    
+    // Đồng bộ cờ can_delete_unit và can_lock_period từ quyen_chi_tiet nếu có
+    const itemRules = item?.quyen_chi_tiet || '';
+    const hasDelUnit = Boolean(item?.can_delete_unit) || itemRules.includes('CAN_DELETE_UNIT');
+    const hasLockPeriod = Boolean(item?.can_lock_period) || itemRules.includes('CAN_LOCK_PERIOD');
+
     setFormData(item ? { 
       ...item,
-      password: mode === 'view' ? '••••••••' : (item.password || '')
+      password: mode === 'view' ? '••••••••' : (item.password || ''),
+      can_view: item.can_view !== undefined ? Boolean(item.can_view) : true,
+      can_create: item.can_create !== undefined ? Boolean(item.can_create) : true,
+      can_update: item.can_update !== undefined ? Boolean(item.can_update) : true,
+      can_delete: Boolean(item.can_delete),
+      can_delete_unit: hasDelUnit,
+      can_lock_period: hasLockPeriod,
+      quyen_truy_cap: item.quyen_truy_cap || '',
+      quyen_chi_tiet: itemRules
     } : { 
       id: '', user_name: '', password: '', ho_ten: '', id_don_vi: defaultDv, 
-      quyen: 'USER', quyen_truy_cap: '', quyen_chi_tiet: '' 
+      quyen: 'USER', quyen_truy_cap: 'ALL', quyen_chi_tiet: '',
+      can_view: true,
+      can_create: true,
+      can_update: true,
+      can_delete: false,
+      can_delete_unit: false,
+      can_lock_period: false
     });
     setIsModalOpen(true); setError(null);
   };
 
-  // 🟢 LOGIC XỬ LÝ CLICK CHỌN MODULE
-  const handleToggleModule = (moduleId: string) => {
-    setFormData((prev) => {
-      let currentModules = prev.quyen_truy_cap ? prev.quyen_truy_cap.split(',').map(m => m.trim()).filter(Boolean) : [];
-      if (currentModules.includes(moduleId)) {
-        currentModules = currentModules.filter(id => id !== moduleId); // Bỏ tick
-      } else {
-        currentModules.push(moduleId); // Tick
+  // 🟢 BẢN ĐỒ CRUD HIỆN TẠI CỦA CÁC MODULE TRONG FORM
+  const currentCrudMap = useMemo(() => {
+    return getAllModuleCrudMap(
+      formData.quyen_chi_tiet,
+      formData.quyen_truy_cap,
+      {
+        can_view: formData.can_view,
+        can_create: formData.can_create,
+        can_update: formData.can_update,
+        can_delete: formData.can_delete,
       }
-      return { ...prev, quyen_truy_cap: currentModules.join(',') };
+    );
+  }, [formData.quyen_chi_tiet, formData.quyen_truy_cap, formData.can_view, formData.can_create, formData.can_update, formData.can_delete]);
+
+  // 🟢 LOGIC XỬ LÝ CLICK Ô CRUD (XEM / THÊM / SỬA / XÓA) TỪNG PHÂN HỆ
+  const handleToggleModuleAction = (moduleId: string, action: 'v' | 'c' | 'u' | 'd') => {
+    const currentState = currentCrudMap[moduleId] || { v: false, c: false, u: false, d: false };
+    const nextState = { ...currentState };
+
+    if (action === 'v') {
+      const newV = !currentState.v;
+      nextState.v = newV;
+      // Nếu tắt Xem thì tự động tắt toàn bộ Thêm, Sửa, Xóa của phân hệ đó
+      if (!newV) {
+        nextState.c = false;
+        nextState.u = false;
+        nextState.d = false;
+      }
+    } else {
+      const newActionVal = !currentState[action];
+      nextState[action] = newActionVal;
+      // Nếu bật Thêm, Sửa hoặc Xóa thì bắt buộc phải bật Xem
+      if (newActionVal) {
+        nextState.v = true;
+      }
+    }
+
+    const nextCrudMap = { ...currentCrudMap, [moduleId]: nextState };
+    const nextRules = updateModuleCrudInRules(formData.quyen_chi_tiet, moduleId, nextState);
+    const syncState = syncRulesToFormState(nextCrudMap, nextRules);
+
+    setFormData(prev => ({
+      ...prev,
+      ...syncState,
+      quyen_chi_tiet: nextRules
+    }));
+  };
+
+  // 🟢 LOGIC BẬT/TẮT XEM TOÀN BỘ PHÂN HỆ (ALL)
+  const handleToggleAllView = (checked: boolean) => {
+    const nextCrudMap: Record<string, ModuleCrudState> = {};
+    let nextRules = formData.quyen_chi_tiet || '';
+
+    MODULE_MATRIX_CONFIG.forEach(mod => {
+      const prev = currentCrudMap[mod.id] || { v: false, c: false, u: false, d: false };
+      const nextState: ModuleCrudState = {
+        v: checked,
+        c: checked ? prev.c : false,
+        u: checked ? prev.u : false,
+        d: checked ? prev.d : false,
+      };
+      nextCrudMap[mod.id] = nextState;
+      nextRules = updateModuleCrudInRules(nextRules, mod.id, nextState);
+    });
+
+    const syncState = syncRulesToFormState(nextCrudMap, nextRules);
+    setFormData(prev => ({
+      ...prev,
+      ...syncState,
+      quyen_truy_cap: checked ? 'ALL' : '',
+      quyen_chi_tiet: nextRules
+    }));
+  };
+
+  // 🟢 THAO TÁC NHANH: CẤP TOÀN QUYỀN (FULL ACCESS)
+  const handleGrantFullPermissions = () => {
+    const nextCrudMap: Record<string, ModuleCrudState> = {};
+    let nextRules = formData.quyen_chi_tiet || '';
+
+    MODULE_MATRIX_CONFIG.forEach(mod => {
+      const state: ModuleCrudState = {
+        v: true,
+        c: mod.hasCreate,
+        u: mod.hasUpdate,
+        d: mod.hasDelete,
+      };
+      nextCrudMap[mod.id] = state;
+      nextRules = updateModuleCrudInRules(nextRules, mod.id, state);
+    });
+
+    const rulesList = nextRules.split(',').map(r => r.trim()).filter(Boolean);
+    if (!rulesList.includes('CAN_DELETE_UNIT')) rulesList.push('CAN_DELETE_UNIT');
+    if (!rulesList.includes('CAN_LOCK_PERIOD')) rulesList.push('CAN_LOCK_PERIOD');
+    if (!rulesList.includes('CP_PIVOT_CLONE')) rulesList.push('CP_PIVOT_CLONE');
+    const finalRules = rulesList.join(',');
+
+    setFormData(prev => ({
+      ...prev,
+      quyen_truy_cap: 'ALL',
+      quyen_chi_tiet: finalRules,
+      can_view: true,
+      can_create: true,
+      can_update: true,
+      can_delete: true,
+      can_delete_unit: true,
+      can_lock_period: true,
+    }));
+    toast.success('⚡ Đã cấp Toàn quyền thao tác cho tất cả phân hệ!');
+  };
+
+  // 🟢 THAO TÁC NHANH: CHỈ XEM TẤT CẢ (READ-ONLY)
+  const handleGrantReadOnly = () => {
+    const nextCrudMap: Record<string, ModuleCrudState> = {};
+    let nextRules = formData.quyen_chi_tiet || '';
+
+    MODULE_MATRIX_CONFIG.forEach(mod => {
+      const state: ModuleCrudState = { v: true, c: false, u: false, d: false };
+      nextCrudMap[mod.id] = state;
+      nextRules = updateModuleCrudInRules(nextRules, mod.id, state);
+    });
+
+    const rulesList = nextRules.split(',').map(r => r.trim()).filter(r => r !== 'CAN_DELETE_UNIT' && r !== 'CAN_LOCK_PERIOD');
+    const finalRules = rulesList.join(',');
+
+    setFormData(prev => ({
+      ...prev,
+      quyen_truy_cap: 'ALL',
+      quyen_chi_tiet: finalRules,
+      can_view: true,
+      can_create: false,
+      can_update: false,
+      can_delete: false,
+      can_delete_unit: false,
+      can_lock_period: false,
+    }));
+    toast.success('👁️ Đã chuyển sang chế độ Chỉ Xem cho tất cả phân hệ!');
+  };
+
+  // 🟢 THAO TÁC NHANH: ĐẶT LẠI MẶC ĐỊNH THEO VAI TRÒ
+  const handleResetDefaultByRole = () => {
+    const role = String(formData.quyen || 'USER').toUpperCase();
+    if (role === 'ADMIN') {
+      handleGrantFullPermissions();
+      return;
+    }
+    if (role === 'VIEWER_HANCHE' || role === 'VIEWER') {
+      handleGrantReadOnly();
+      return;
+    }
+
+    const nextCrudMap: Record<string, ModuleCrudState> = {};
+    let nextRules = '';
+
+    MODULE_MATRIX_CONFIG.forEach(mod => {
+      const state: ModuleCrudState = {
+        v: true,
+        c: mod.hasCreate,
+        u: mod.hasUpdate,
+        d: false,
+      };
+      nextCrudMap[mod.id] = state;
+      nextRules = updateModuleCrudInRules(nextRules, mod.id, state);
+    });
+
+    setFormData(prev => ({
+      ...prev,
+      quyen_truy_cap: 'ALL',
+      quyen_chi_tiet: nextRules,
+      can_view: true,
+      can_create: true,
+      can_update: true,
+      can_delete: false,
+      can_delete_unit: false,
+      can_lock_period: false,
+    }));
+    toast.success('🔄 Đã đặt lại cấu hình mặc định chuẩn cho người dùng (USER)!');
+  };
+
+  // 🟢 BẬT / TẮT ĐẶC QUYỀN XÓA SHOWROOM (CHỐT AN TOÀN)
+  const handleToggleSafetyUnitDelete = (checked: boolean) => {
+    setFormData(prev => {
+      let currentRules = prev.quyen_chi_tiet ? prev.quyen_chi_tiet.split(',').map(r => r.trim()).filter(Boolean) : [];
+      if (checked) {
+        if (!currentRules.includes('CAN_DELETE_UNIT')) currentRules.push('CAN_DELETE_UNIT');
+      } else {
+        currentRules = currentRules.filter(r => r !== 'CAN_DELETE_UNIT');
+      }
+      return {
+        ...prev,
+        can_delete_unit: checked,
+        quyen_chi_tiet: currentRules.join(',')
+      };
     });
   };
 
-  // 🟢 LOGIC XỬ LÝ CLICK CHỌN QUYỀN CHI TIẾT
+  // 🟢 BẬT / TẮT ĐẶC QUYỀN CHỐT KỲ CHI PHÍ
+  const handleToggleSafetyLockPeriod = (checked: boolean) => {
+    setFormData(prev => {
+      let currentRules = prev.quyen_chi_tiet ? prev.quyen_chi_tiet.split(',').map(r => r.trim()).filter(Boolean) : [];
+      if (checked) {
+        if (!currentRules.includes('CAN_LOCK_PERIOD')) currentRules.push('CAN_LOCK_PERIOD');
+      } else {
+        currentRules = currentRules.filter(r => r !== 'CAN_LOCK_PERIOD');
+      }
+      return {
+        ...prev,
+        can_lock_period: checked,
+        quyen_chi_tiet: currentRules.join(',')
+      };
+    });
+  };
+
+  // 🟢 LOGIC XỬ LÝ CLICK CHỌN ĐẶC QUYỀN RIÊNG LẺ
   const handleToggleAdvancedRule = (ruleId: string) => {
     setFormData((prev) => {
       let currentRules = prev.quyen_chi_tiet ? prev.quyen_chi_tiet.split(',').map(r => r.trim()).filter(Boolean) : [];
@@ -469,6 +666,14 @@ export default function AccountPage() {
         finalData.id_don_vi = null; 
       }
 
+      // Đồng bộ 2 chiều các cờ boolean với quyen_chi_tiet
+      finalData.can_delete_unit = Boolean(finalData.can_delete_unit) || String(finalData.quyen_chi_tiet || '').includes('CAN_DELETE_UNIT');
+      finalData.can_lock_period = Boolean(finalData.can_lock_period) || String(finalData.quyen_chi_tiet || '').includes('CAN_LOCK_PERIOD');
+      finalData.can_view = finalData.can_view !== false;
+      finalData.can_create = finalData.can_create !== false;
+      finalData.can_update = finalData.can_update !== false;
+      finalData.can_delete = Boolean(finalData.can_delete);
+
       const response = await apiService.save(finalData, modalMode, "config_users");
       if (modalMode === 'create') {
         finalData.id = response.id || response.newId || finalData.id; 
@@ -516,13 +721,48 @@ export default function AccountPage() {
           <h2 className="text-2xl font-black text-[#05469B] flex items-center gap-2"><UserCog size={28} /> Quản lý Tài khoản</h2>
           <p className="text-sm font-medium text-gray-500 mt-1">Cấp quyền truy cập và bảo mật hệ thống</p>
         </div>
-        <div className="flex gap-3">
-          <div className="relative w-72">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input type="text" placeholder="Tìm tài khoản, họ tên..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Tìm tài khoản, họ tên..." className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#05469B] outline-none shadow-sm text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
+
           {isAdmin && (
-            <button onClick={() => openModal('create')} className="flex items-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-5 py-2.5 rounded-lg font-bold shadow-sm transition-all"><Plus size={20} /> Cấp tài khoản</button>
+            <>
+              {/* Cài đặt thời hạn phiên đăng nhập */}
+              <div className="flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm text-xs font-semibold text-gray-700" title="Cấu hình số ngày tự động duy trì đăng nhập của phiên làm việc">
+                <Clock size={16} className="text-[#05469B]" />
+                <span className="hidden sm:inline">Hạn phiên:</span>
+                <input 
+                  type="number" 
+                  min={1} 
+                  max={365} 
+                  value={sessionDays} 
+                  onChange={(e) => {
+                    const val = Math.max(1, parseInt(e.target.value) || 1);
+                    setSessionDays(val);
+                    toast.success(`Đã đổi hạn phiên: ${val} ngày`);
+                  }}
+                  className="w-12 px-1 py-0.5 border border-gray-300 rounded text-center font-bold text-[#05469B] focus:ring-1 focus:ring-[#05469B] outline-none"
+                />
+                <span>ngày</span>
+              </div>
+
+              {/* Nút mở Thùng rác phục hồi dữ liệu */}
+              <button 
+                onClick={() => setIsRecycleBinOpen(true)}
+                className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-all"
+                title="Xem các dữ liệu bị xóa & Khôi phục lại an toàn"
+              >
+                <RotateCcw size={16} className="text-amber-700" />
+                <span className="hidden sm:inline">Thùng rác & Phục hồi</span>
+              </button>
+
+              {/* Nút Cấp tài khoản */}
+              <button onClick={() => openModal('create')} className="flex items-center gap-2 bg-[#05469B] hover:bg-[#04367a] text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-all">
+                <Plus size={18} /> Cấp tài khoản
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -581,12 +821,74 @@ export default function AccountPage() {
                     )}
                   </td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1.5 rounded-md text-[10px] font-black border tracking-wider uppercase
-                      ${String(user.quyen).toUpperCase() === 'ADMIN' ? 'bg-red-50 text-red-600 border-red-200' : 
-                        String(user.quyen).toLowerCase() === 'viewer_hanche' ? 'bg-orange-50 text-orange-600 border-orange-200' : 
-                        'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                      {String(user.quyen).toLowerCase() === 'viewer_hanche' ? 'VIEWER' : user.quyen}
-                    </span>
+                    <div className="flex flex-col gap-1.5 items-start">
+                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black border tracking-wider uppercase
+                        ${String(user.quyen).toUpperCase() === 'ADMIN' ? 'bg-red-50 text-red-600 border-red-200' : 
+                          String(user.quyen).toLowerCase() === 'viewer_hanche' ? 'bg-orange-50 text-orange-600 border-orange-200' : 
+                          'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                        {String(user.quyen).toLowerCase() === 'viewer_hanche' ? 'VIEWER' : user.quyen}
+                      </span>
+                      {String(user.quyen).toUpperCase() === 'ADMIN' ? (
+                        <span className="text-[10px] text-gray-500 font-medium italic">Toàn quyền hệ thống</span>
+                      ) : (() => {
+                        const crudMap = getAllModuleCrudMap(user.quyen_chi_tiet, user.quyen_truy_cap, {
+                          can_view: user.can_view,
+                          can_create: user.can_create,
+                          can_update: user.can_update,
+                          can_delete: user.can_delete,
+                        });
+                        const activeMods = MODULE_MATRIX_CONFIG.filter(m => crudMap[m.id]?.v);
+                        const rules = (user.quyen_chi_tiet || '').split(',').map(r => r.trim());
+                        const canDeleteUnit = rules.includes('CAN_DELETE_UNIT') || Boolean(user.can_delete_unit);
+                        const canLockPeriod = rules.includes('CAN_LOCK_PERIOD') || Boolean(user.can_lock_period);
+
+                        return (
+                          <div className="flex flex-col gap-1 mt-0.5 max-w-[280px]">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                user.quyen_truy_cap === 'ALL'
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                              }`}>
+                                {user.quyen_truy_cap === 'ALL' ? '🌐 12/12 Phân hệ' : `📂 ${activeMods.length}/12 Phân hệ`}
+                              </span>
+                              {canDeleteUnit && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black border bg-red-100 text-red-800 border-red-300" title="Chốt an toàn: Được quyền xóa Showroom / Đơn vị">
+                                  ⚠️ Xóa ĐV
+                                </span>
+                              )}
+                              {canLockPeriod && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black border bg-purple-100 text-purple-800 border-purple-300" title="Đặc quyền: Được chốt kỳ chi phí">
+                                  🔒 Chốt kỳ
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-1">
+                              {activeMods.slice(0, 4).map(m => {
+                                const c = crudMap[m.id];
+                                const actions = [c.v && 'V', c.c && 'C', c.u && 'U', c.d && 'D'].filter(Boolean).join('');
+                                return (
+                                  <span
+                                    key={m.id}
+                                    className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-gray-50 text-gray-700 border border-gray-200 font-medium"
+                                    title={`${m.label}: ${[c.v && 'Xem', c.c && 'Thêm', c.u && 'Sửa', c.d && 'Xóa'].filter(Boolean).join(' • ')}`}
+                                  >
+                                    <span>{m.icon}</span>
+                                    <span className="font-mono font-bold text-gray-600">{actions}</span>
+                                  </span>
+                                );
+                              })}
+                              {activeMods.length > 4 && (
+                                <span className="text-[9px] text-gray-400 font-medium self-center">
+                                  +{activeMods.length - 4} khác
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -621,8 +923,8 @@ export default function AccountPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          {/* 🟢 MỞ RỘNG MODAL THÀNH max-w-4xl ĐỂ CHỨA CHECKBOX */}
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl animate-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[95vh]">
+          {/* 🟢 MỞ RỘNG MODAL THÀNH max-w-5xl ĐỂ CHỨA MA TRẬN PHÂN QUYỀN HỢP NHẤT */}
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl animate-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[95vh]">
             <div className="flex justify-between items-center p-5 border-b bg-[#05469B] text-white shrink-0">
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <UserCog size={24}/> 
@@ -881,172 +1183,495 @@ export default function AccountPage() {
                   </div>
                 </div>
 
-                {/* HIỂN THỊ PHẦN 2 VÀ PHẦN 3 CHỈ KHI LÀ ADMIN VÀ KHÔNG PHẢI CHẾ ĐỘ VIEW */}
+                {/* HIỂN THỊ PHẦN 2 MA TRẬN PHÂN QUYỀN CHỈ KHI LÀ ADMIN VÀ KHÔNG PHẢI CHẾ ĐỘ VIEW */}
                 {isAdmin && modalMode !== 'view' && (
-                  <>
-                    {/* MODULE TRUY CẬP */}
-                    <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
-                      <h4 className="font-bold text-[#05469B] mb-4 flex items-center gap-2"><CheckSquare size={18}/> 2. Phân quyền Truy cập Module (Thanh Menu)</h4>
-                      
-                      <div className="mb-4 pb-4 border-b border-blue-200">
-                        <label className="flex items-center gap-2 cursor-pointer w-max hover:bg-blue-100 p-2 rounded transition-colors">
-                          <input 
-                            type="checkbox" 
-                            checked={formData.quyen_truy_cap === 'ALL'}
-                            onChange={(e) => setFormData(prev => ({ ...prev, quyen_truy_cap: e.target.checked ? 'ALL' : '' }))}
-                            className="w-5 h-5 text-red-600 border-red-300 focus:ring-red-500 rounded"
-                          />
-                          <span className="font-black text-red-600 text-sm">ALL (Cấp Đặc quyền Xem toàn bộ Hệ thống)</span>
-                        </label>
+                  <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                    {/* Header & Quick Action Buttons */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                      <div>
+                        <h4 className="font-extrabold text-[#05469B] text-base flex items-center gap-2">
+                          <ShieldCheck size={20} className="text-[#05469B]" /> 
+                          2. Ma trận Phân quyền Thao tác theo Phân hệ
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Tích hợp Xem, Thêm, Sửa, Xóa và Đặc quyền chuyên sâu trực tiếp vào từng Phân hệ
+                        </p>
                       </div>
 
-                      {formData.quyen_truy_cap !== 'ALL' && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {MODULE_LIST.map(module => {
-                            const isChecked = formData.quyen_truy_cap?.split(',').map(m => m.trim()).includes(module.id);
-                            return (
-                              <label key={module.id} className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${isChecked ? 'bg-white border-[#05469B] shadow-sm' : 'bg-white/50 border-gray-200 hover:bg-white'}`}>
-                                <input 
-                                  type="checkbox" 
-                                  checked={isChecked}
-                                  onChange={() => handleToggleModule(module.id)}
-                                  className="w-4 h-4 text-[#05469B] rounded focus:ring-[#05469B]"
-                                />
-                                <span className={`text-sm font-medium ${isChecked ? 'text-[#05469B]' : 'text-gray-600'}`}>{module.icon} {module.label}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
+                      {/* Các nút thao tác nhanh (Quick Actions) */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleGrantFullPermissions}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold shadow-2xs transition-all cursor-pointer"
+                          title="Cấp toàn quyền Xem, Thêm, Sửa, Xóa và đặc quyền cho mọi phân hệ"
+                        >
+                          <Zap size={13} className="text-emerald-600" />
+                          <span>⚡ Cấp Toàn quyền</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleGrantReadOnly}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-lg text-xs font-bold shadow-2xs transition-all cursor-pointer"
+                          title="Chỉ bật quyền Xem, tắt quyền Thêm, Sửa, Xóa"
+                        >
+                          <Eye size={13} className="text-blue-600" />
+                          <span>👁️ Chỉ Xem Tất cả</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleResetDefaultByRole}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded-lg text-xs font-bold shadow-2xs transition-all cursor-pointer"
+                          title="Đặt lại cấu hình mặc định chuẩn theo vai trò"
+                        >
+                          <RefreshCw size={13} className="text-gray-500" />
+                          <span>🔄 Mặc định</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* MA TRẬN QUYỀN CHI TIẾT */}
-                    <div className="bg-orange-50/30 p-5 rounded-xl border border-orange-100">
-                      <h4 className="font-bold text-orange-800 mb-4 flex items-center gap-2"><ListChecks size={18}/> 3. Cấu hình Đặc quyền Chi tiết (Ma trận Quyền)</h4>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
-                        {Object.entries(ADVANCED_PERMISSIONS).map(([moduleName, options]) => (
-                          <div key={moduleName} className="bg-white p-4 rounded-lg border border-orange-100 shadow-sm h-full flex flex-col">
-                            <h5 className="font-bold text-gray-700 mb-3 uppercase text-xs border-b pb-2">
-                              {moduleName === 'VanBan' ? '📑 Module Văn bản' 
-                               : moduleName === 'QuyDinh' ? '📖 Module Quy định - Quy trình' 
-                               : moduleName === 'NhanSu' ? '👥 Module Nhân sự' 
-                               : moduleName === 'ThietBi' ? '💻 Module Thiết bị'
-                               : moduleName === 'ChiPhi' ? '💰 Module Chi phí'
-                               : '🚗 Module Xe'}
-                            </h5>
-                            <div className="flex flex-col flex-grow justify-between gap-4">
-                              <div className="flex flex-col gap-2">
-                                {moduleName !== 'QuyDinh' && moduleName !== 'Xe' && options.map(opt => {
-                                  const isChecked = formData.quyen_chi_tiet ? formData.quyen_chi_tiet.split(',').map(r => r.trim()).includes(opt.id) : false;
-                                  return (
-                                    <label key={opt.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${isChecked ? 'bg-orange-50 text-[#c2410c] font-bold' : 'hover:bg-gray-50 text-gray-600'}`}>
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isChecked}
-                                        onChange={() => handleToggleAdvancedRule(opt.id)}
-                                        className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
-                                      />
-                                      <span className="text-xs">{opt.label}</span>
-                                    </label>
-                                  );
-                                })}
+                    {/* Thanh lọc phân hệ & Checkbox Toàn quyền Xem (ALL) */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-2.5 rounded-xl border border-gray-200">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={formData.quyen_truy_cap === 'ALL'}
+                          onChange={e => handleToggleAllView(e.target.checked)}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-indigo-900 flex items-center gap-1">
+                          <span>🌐</span> Cấp quyền Xem Toàn bộ Phân hệ (ALL Modules)
+                        </span>
+                      </label>
 
-                                {moduleName === 'QuyDinh' && (
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 font-black">Cho phép xem Phân loại</label>
-                                    <div className="h-48 overflow-y-auto p-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50/50 dark:bg-slate-900/50 custom-scrollbar flex flex-col gap-1">
-                                      {['Quy định', 'Quy trình', 'Hướng dẫn', 'Quy chế', 'Quyết định', 'Thông báo', 'Thông báo BĐH', 'Tờ trình', 'Công văn đi', 'Công văn đến'].map(type => {
-                                        const activeTypes = getTypesFromRule(formData.quyen_chi_tiet, 'QD_TYPES:');
-                                        const isTypeChecked = activeTypes.includes(type);
-                                        return (
-                                          <label key={type} className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-xs transition-colors ${isTypeChecked ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 font-bold' : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-gray-400'}`}>
-                                            <input
-                                              type="checkbox"
-                                              checked={isTypeChecked}
-                                              onChange={() => handleToggleTypeRule('QD_TYPES:', type)}
-                                              className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500 border-gray-300"
-                                            />
-                                            <span>{type}</span>
-                                          </label>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
+                      <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                        <input
+                          type="text"
+                          placeholder="Lọc phân hệ..."
+                          value={matrixSearch}
+                          onChange={e => setMatrixSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#05469B]"
+                        />
+                      </div>
+                    </div>
 
-                                {moduleName === 'Xe' && (
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 font-black">Giới hạn xe xem được (Bỏ trống = Xem hết)</label>
-                                    <input 
-                                      type="text" 
-                                      placeholder="Tìm biển số hoặc hiệu xe..." 
-                                      value={carFilterTerm}
-                                      onChange={e => setCarFilterTerm(e.target.value)}
-                                      className="w-full p-2 text-xs border border-gray-200 rounded-lg mb-2 focus:ring-1 focus:ring-orange-500 outline-none"
-                                    />
-                                    <div className="h-64 overflow-y-auto p-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50/50 dark:bg-slate-900/50 custom-scrollbar flex flex-col gap-1">
-                                      {carsOfSelectedUnit.filter(car => 
-                                        !carFilterTerm || 
-                                        String(car.bien_so || '').toLowerCase().includes(carFilterTerm.toLowerCase()) ||
-                                        String(car.hieu_xe || '').toLowerCase().includes(carFilterTerm.toLowerCase())
-                                      ).map(car => {
-                                        const activePlates = getPlatesFromRule(formData.quyen_chi_tiet, 'XE_LIMIT:');
-                                        const isPlateChecked = activePlates.includes(car.bien_so);
-                                        return (
-                                          <label key={car.id} className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${isPlateChecked ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 font-bold' : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-gray-400'}`}>
-                                            <div className="flex items-center gap-2">
-                                              <input
-                                                type="checkbox"
-                                                checked={isPlateChecked}
-                                                onChange={() => handleTogglePlateRule('XE_LIMIT:', car.bien_so)}
-                                                className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500 border-gray-300"
-                                              />
-                                              <span className="font-bold">{car.bien_so}</span>
-                                            </div>
-                                            <span className="text-[10px] text-gray-400 font-normal">
-                                              {car.hieu_xe}
-                                            </span>
-                                          </label>
-                                        );
-                                      })}
-                                      {carsOfSelectedUnit.length === 0 && (
-                                        <div className="text-center py-4 text-xs text-gray-400">Không có xe thuộc Đơn vị quản lý</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                    {/* Bảng Ma trận Phân quyền */}
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xs">
+                      <div className="max-h-[500px] overflow-auto custom-scrollbar relative">
+                        <table className="w-full text-left border-separate border-spacing-0">
+                        <thead className="sticky top-0 z-20 shadow-xs">
+                          <tr className="bg-[#f1f5f9] text-[11px] font-bold text-gray-700 uppercase tracking-wider">
+                            <th className="p-3 w-64 bg-[#f1f5f9] sticky top-0 z-20 border-b border-gray-200">Phân hệ Nghiệp vụ</th>
+                            <th className="p-3 text-center w-16 text-[#05469B] bg-[#f1f5f9] sticky top-0 z-20 border-b border-gray-200">Xem</th>
+                            <th className="p-3 text-center w-16 text-emerald-700 bg-[#f1f5f9] sticky top-0 z-20 border-b border-gray-200">Thêm</th>
+                            <th className="p-3 text-center w-16 text-amber-700 bg-[#f1f5f9] sticky top-0 z-20 border-b border-gray-200">Sửa</th>
+                            <th className="p-3 text-center w-16 text-rose-700 bg-[#f1f5f9] sticky top-0 z-20 border-b border-gray-200">Xóa</th>
+                            <th className="p-3 bg-[#f1f5f9] sticky top-0 z-20 border-b border-gray-200">Đặc quyền Nghiệp vụ Tích hợp</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 text-xs">
+                            {MODULE_MATRIX_CONFIG
+                              .filter(mod => {
+                                if (!matrixSearch.trim()) return true;
+                                const q = stripAccents(matrixSearch.toLowerCase().trim());
+                                return (
+                                  stripAccents(mod.label.toLowerCase()).includes(q) ||
+                                  stripAccents(mod.description.toLowerCase()).includes(q) ||
+                                  mod.id.toLowerCase().includes(q)
+                                );
+                              })
+                              .map(mod => {
+                                const crud = currentCrudMap[mod.id] || { v: false, c: false, u: false, d: false };
+                                const isAllView = formData.quyen_truy_cap === 'ALL';
+                                const isViewChecked = isAllView || crud.v;
 
-                              {(moduleName === 'VanBan' || moduleName === 'QuyDinh') && (
-                                <div className="pt-3 border-t border-gray-100">
-                                  <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1.5 font-black">Cho phép xem theo Năm</label>
-                                  <div className="h-36 overflow-y-auto p-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50/50 dark:bg-slate-900/50 custom-scrollbar flex flex-col gap-1">
-                                    {yearOptions.map(year => {
-                                      const prefix = moduleName === 'VanBan' ? 'VB_YEARS:' : 'QD_YEARS:';
-                                      const activeYears = getYearsFromRule(formData.quyen_chi_tiet, prefix);
-                                      const isYearChecked = activeYears.includes(year);
-                                      return (
-                                        <label key={year} className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-xs transition-colors ${isYearChecked ? 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400 font-bold' : 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-gray-400'}`}>
+                                return (
+                                  <tr 
+                                    key={mod.id} 
+                                    className={`transition-colors ${isViewChecked ? 'bg-white hover:bg-slate-50/60' : 'bg-gray-50/40 opacity-70 hover:opacity-100'}`}
+                                  >
+                                    {/* Cột 1: Tên phân hệ */}
+                                    <td className="p-3 border-b border-gray-100">
+                                      <div className="flex items-start gap-2.5">
+                                        <span className="text-xl shrink-0 select-none mt-0.5">{mod.icon}</span>
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="font-bold text-gray-800 text-xs sm:text-sm">{mod.label}</span>
+                                            {isViewChecked && (
+                                              <span className="px-1.5 py-0.2 rounded text-[9.5px] font-black bg-blue-50 text-[#05469B] border border-blue-200">
+                                                Mở
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">{mod.description}</p>
+                                        </div>
+                                      </div>
+                                    </td>
+
+                                    {/* Cột 2: Xem (View) */}
+                                    <td className="p-3 text-center border-b border-gray-100">
+                                      <label className="inline-flex items-center justify-center cursor-pointer p-1 rounded hover:bg-blue-50">
+                                        <input
+                                          type="checkbox"
+                                          checked={isViewChecked}
+                                          onChange={() => handleToggleModuleAction(mod.id, 'v')}
+                                          className="w-4 h-4 text-[#05469B] rounded focus:ring-[#05469B] cursor-pointer"
+                                        />
+                                      </label>
+                                    </td>
+
+                                    {/* Cột 3: Thêm (Create) */}
+                                    <td className="p-3 text-center border-b border-gray-100">
+                                      {mod.hasCreate ? (
+                                        <label className={`inline-flex items-center justify-center p-1 rounded ${!isViewChecked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:bg-emerald-50'}`}>
                                           <input
                                             type="checkbox"
-                                            checked={isYearChecked}
-                                            onChange={() => handleToggleYearRule(prefix, year)}
-                                            className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500 border-gray-300"
+                                            disabled={!isViewChecked}
+                                            checked={isViewChecked && crud.c}
+                                            onChange={() => handleToggleModuleAction(mod.id, 'c')}
+                                            className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer disabled:cursor-not-allowed"
                                           />
-                                          <span>Năm {year}</span>
                                         </label>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                                      ) : (
+                                        <span className="text-gray-300 font-bold select-none">-</span>
+                                      )}
+                                    </td>
+
+                                    {/* Cột 4: Sửa (Update) */}
+                                    <td className="p-3 text-center border-b border-gray-100">
+                                      {mod.hasUpdate ? (
+                                        <label className={`inline-flex items-center justify-center p-1 rounded ${!isViewChecked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:bg-amber-50'}`}>
+                                          <input
+                                            type="checkbox"
+                                            disabled={!isViewChecked}
+                                            checked={isViewChecked && crud.u}
+                                            onChange={() => handleToggleModuleAction(mod.id, 'u')}
+                                            className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 cursor-pointer disabled:cursor-not-allowed"
+                                          />
+                                        </label>
+                                      ) : (
+                                        <span className="text-gray-300 font-bold select-none">-</span>
+                                      )}
+                                    </td>
+
+                                    {/* Cột 5: Xóa (Delete) */}
+                                    <td className="p-3 text-center border-b border-gray-100">
+                                      {mod.hasDelete ? (
+                                        <label className={`inline-flex items-center justify-center p-1 rounded ${!isViewChecked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:bg-rose-50'}`}>
+                                          <input
+                                            type="checkbox"
+                                            disabled={!isViewChecked}
+                                            checked={isViewChecked && crud.d}
+                                            onChange={() => handleToggleModuleAction(mod.id, 'd')}
+                                            className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500 cursor-pointer disabled:cursor-not-allowed"
+                                          />
+                                        </label>
+                                      ) : (
+                                        <span className="text-gray-300 font-bold select-none">-</span>
+                                      )}
+                                    </td>
+
+                                    {/* Cột 6: Đặc quyền Nghiệp vụ Tích hợp */}
+                                    <td className="p-3 border-b border-gray-100">
+                                      {/* 1. THÔNG TIN CÔNG TY */}
+                                      {mod.id === 'CongTy' && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <label className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer ${formData.can_delete_unit ? 'bg-red-50 border-red-300 text-red-700 shadow-2xs' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={Boolean(formData.can_delete_unit)}
+                                              onChange={e => handleToggleSafetyUnitDelete(e.target.checked)}
+                                              className="w-3.5 h-3.5 text-red-600 rounded focus:ring-red-500"
+                                            />
+                                            <span>⚠️ Cho phép Xóa Showroom / Phòng ban</span>
+                                          </label>
+                                        </div>
+                                      )}
+
+                                      {/* 2. THÔNG TIN NHÂN SỰ */}
+                                      {mod.id === 'NhanSu' && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <label className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-all cursor-pointer ${String(formData.quyen_chi_tiet || '').includes('NS_HIDE_SENSITIVE') ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={String(formData.quyen_chi_tiet || '').includes('NS_HIDE_SENSITIVE')}
+                                              onChange={() => handleToggleAdvancedRule('NS_HIDE_SENSITIVE')}
+                                              className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500"
+                                            />
+                                            <span>Ẩn SĐT, Lương, Ngạch</span>
+                                          </label>
+                                          <label className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-all cursor-pointer ${String(formData.quyen_chi_tiet || '').includes('NS_NO_DETAIL') ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={String(formData.quyen_chi_tiet || '').includes('NS_NO_DETAIL')}
+                                              onChange={() => handleToggleAdvancedRule('NS_NO_DETAIL')}
+                                              className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500"
+                                            />
+                                            <span>Cấm xem Chi tiết Hồ sơ</span>
+                                          </label>
+                                        </div>
+                                      )}
+
+                                      {/* 3. THÔNG TIN XE */}
+                                      {mod.id === 'Xe' && (() => {
+                                        const activePlates = getPlatesFromRule(formData.quyen_chi_tiet, 'XE_LIMIT:');
+                                        const isExpanded = expandedModuleId === 'Xe';
+                                        return (
+                                          <div className="relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => setExpandedModuleId(isExpanded ? null : 'Xe')}
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${activePlates.length > 0 ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}
+                                            >
+                                              <CarIcon size={13} />
+                                              <span>{activePlates.length > 0 ? `Giới hạn: ${activePlates.length} xe xem được` : '🔍 Giới hạn Biển số xe (Tất cả xe)'}</span>
+                                              <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            
+                                            {isExpanded && (
+                                              <div className="absolute left-0 top-full mt-1.5 w-80 p-3 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 animate-in fade-in zoom-in-95 space-y-2">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
+                                                  <span className="text-[11px] font-bold text-gray-600 uppercase">Chọn xe được phép xem:</span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setExpandedModuleId(null)}
+                                                    className="text-gray-400 hover:text-gray-600 p-0.5 rounded cursor-pointer"
+                                                  >
+                                                    <X size={14} />
+                                                  </button>
+                                                </div>
+                                                <input
+                                                  type="text"
+                                                  placeholder="Tìm biển số hoặc hiệu xe..."
+                                                  value={carFilterTerm}
+                                                  onChange={e => setCarFilterTerm(e.target.value)}
+                                                  className="w-full px-2.5 py-1 text-xs border border-gray-200 rounded-lg mb-1 focus:ring-1 focus:ring-orange-500 outline-none"
+                                                  autoFocus
+                                                />
+                                                <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
+                                                  {carsOfSelectedUnit.filter(car => 
+                                                    !carFilterTerm || 
+                                                    String(car.bien_so || '').toLowerCase().includes(carFilterTerm.toLowerCase()) ||
+                                                    String(car.hieu_xe || '').toLowerCase().includes(carFilterTerm.toLowerCase())
+                                                  ).map(car => {
+                                                    const isPlateChecked = activePlates.includes(car.bien_so);
+                                                    return (
+                                                      <label key={car.id} className={`flex items-center justify-between px-2 py-1 rounded cursor-pointer text-xs transition-colors ${isPlateChecked ? 'bg-orange-50 text-orange-800 font-bold' : 'hover:bg-gray-50 text-gray-700'}`}>
+                                                        <div className="flex items-center gap-1.5">
+                                                          <input
+                                                            type="checkbox"
+                                                            checked={isPlateChecked}
+                                                            onChange={() => handleTogglePlateRule('XE_LIMIT:', car.bien_so)}
+                                                            className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500 cursor-pointer"
+                                                          />
+                                                          <span>{car.bien_so}</span>
+                                                        </div>
+                                                        <span className="text-[10px] text-gray-400">{car.hieu_xe}</span>
+                                                      </label>
+                                                    );
+                                                  })}
+                                                  {carsOfSelectedUnit.length === 0 && (
+                                                    <p className="text-center text-xs text-gray-400 py-3">Không có xe thuộc Đơn vị</p>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+
+                                      {/* 4. THIẾT BỊ VP */}
+                                      {mod.id === 'ThietBi' && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <label className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all cursor-pointer ${String(formData.quyen_chi_tiet || '').includes('TB_HIDE_PRICE') ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={String(formData.quyen_chi_tiet || '').includes('TB_HIDE_PRICE')}
+                                              onChange={() => handleToggleAdvancedRule('TB_HIDE_PRICE')}
+                                              className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500"
+                                            />
+                                            <span>Ẩn cột Nguyên giá tài sản</span>
+                                          </label>
+                                        </div>
+                                      )}
+
+                                      {/* 5. QUẢN LÝ CHI PHÍ */}
+                                      {mod.id === 'ChiPhi' && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <label className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer ${formData.can_lock_period ? 'bg-purple-50 border-purple-300 text-purple-800 shadow-2xs' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={Boolean(formData.can_lock_period)}
+                                              onChange={e => handleToggleSafetyLockPeriod(e.target.checked)}
+                                              className="w-3.5 h-3.5 text-purple-600 rounded focus:ring-purple-500"
+                                            />
+                                            <span>🔒 Cho phép Chốt kỳ Chi phí (DNTT)</span>
+                                          </label>
+                                          <label className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer ${String(formData.quyen_chi_tiet || '').includes('CP_PIVOT_CLONE') ? 'bg-teal-50 border-teal-300 text-teal-800 shadow-2xs' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={String(formData.quyen_chi_tiet || '').includes('CP_PIVOT_CLONE')}
+                                              onChange={() => handleToggleAdvancedRule('CP_PIVOT_CLONE')}
+                                              className="w-3.5 h-3.5 text-teal-600 rounded focus:ring-teal-500"
+                                            />
+                                            <span>📊 Báo cáo tuỳ chỉnh (Pivot)</span>
+                                          </label>
+                                        </div>
+                                      )}
+
+                                      {/* 6. VĂN BẢN - THÔNG BÁO */}
+                                      {mod.id === 'VanBan' && (() => {
+                                        const isExpanded = expandedModuleId === 'VanBan';
+                                        const vbYears = getYearsFromRule(formData.quyen_chi_tiet, 'VB_YEARS:');
+                                        const vbRulesCount = (formData.quyen_chi_tiet || '').split(',').filter(r => r.startsWith('VB_')).length;
+                                        return (
+                                          <div className="relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => setExpandedModuleId(isExpanded ? null : 'VanBan')}
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${vbRulesCount > 0 ? 'bg-blue-50 border-blue-300 text-[#05469B] font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}
+                                            >
+                                              <FileText size={13} />
+                                              <span>Phân loại & Năm văn bản {vbRulesCount > 0 ? `(${vbRulesCount})` : ''}</span>
+                                              <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                            </button>
+
+                                            {isExpanded && (
+                                              <div className="absolute left-0 top-full mt-1.5 w-80 p-3 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 animate-in fade-in zoom-in-95 space-y-3">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
+                                                  <span className="text-[11px] font-bold text-gray-700 uppercase">Quyền xem Văn bản:</span>
+                                                  <button type="button" onClick={() => setExpandedModuleId(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><X size={14}/></button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                                                  {[
+                                                    { id: 'VB_VIEW_QD', label: 'Quyết định' },
+                                                    { id: 'VB_VIEW_TB', label: 'Thông báo' },
+                                                    { id: 'VB_VIEW_TB_BDH', label: 'TB Ban ĐH' },
+                                                    { id: 'VB_VIEW_TT', label: 'Tờ trình' },
+                                                    { id: 'VB_VIEW_CV_DI', label: 'Công văn đi' },
+                                                    { id: 'VB_VIEW_CV_DEN', label: 'Công văn đến' },
+                                                    { id: 'VB_HIDE_BTN', label: 'Ẩn nút Ban hành' },
+                                                  ].map(opt => {
+                                                    const isChecked = String(formData.quyen_chi_tiet || '').split(',').map(r => r.trim()).includes(opt.id);
+                                                    return (
+                                                      <label key={opt.id} className={`flex items-center gap-1.5 p-1 rounded text-xs cursor-pointer ${isChecked ? 'bg-blue-50 text-[#05469B] font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                                        <input
+                                                          type="checkbox"
+                                                          checked={isChecked}
+                                                          onChange={() => handleToggleAdvancedRule(opt.id)}
+                                                          className="w-3.5 h-3.5 text-[#05469B] rounded focus:ring-[#05469B]"
+                                                        />
+                                                        <span className="truncate">{opt.label}</span>
+                                                      </label>
+                                                    );
+                                                  })}
+                                                </div>
+                                                <div className="pt-2 border-t border-gray-100">
+                                                  <span className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Cho phép xem theo Năm:</span>
+                                                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar">
+                                                    {yearOptions.map(y => {
+                                                      const isYearChecked = vbYears.includes(y);
+                                                      return (
+                                                        <button
+                                                          type="button"
+                                                          key={y}
+                                                          onClick={() => handleToggleYearRule('VB_YEARS:', y)}
+                                                          className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${isYearChecked ? 'bg-[#05469B] text-white border-[#05469B]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}
+                                                        >
+                                                          {y}
+                                                        </button>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+
+                                      {/* 7. QUY ĐỊNH - QUY TRÌNH */}
+                                      {mod.id === 'QuyDinh' && (() => {
+                                        const isExpanded = expandedModuleId === 'QuyDinh';
+                                        const qdYears = getYearsFromRule(formData.quyen_chi_tiet, 'QD_YEARS:');
+                                        const activeTypes = getTypesFromRule(formData.quyen_chi_tiet, 'QD_TYPES:');
+                                        const totalActive = activeTypes.length + qdYears.length;
+                                        return (
+                                          <div className="relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => setExpandedModuleId(isExpanded ? null : 'QuyDinh')}
+                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${totalActive > 0 ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}
+                                            >
+                                              <FileText size={13} />
+                                              <span>Phân loại & Năm {totalActive > 0 ? `(${totalActive})` : ''}</span>
+                                              <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                            </button>
+
+                                            {isExpanded && (
+                                              <div className="absolute left-0 top-full mt-1.5 w-80 p-3 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 animate-in fade-in zoom-in-95 space-y-3">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-gray-100">
+                                                  <span className="text-[11px] font-bold text-gray-700 uppercase">Phân loại tài liệu xem được:</span>
+                                                  <button type="button" onClick={() => setExpandedModuleId(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><X size={14}/></button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto custom-scrollbar">
+                                                  {['Quy định', 'Quy trình', 'Hướng dẫn', 'Quy chế', 'Quyết định', 'Thông báo', 'Thông báo BĐH', 'Tờ trình', 'Công văn đi', 'Công văn đến'].map(type => {
+                                                    const isTypeChecked = activeTypes.includes(type);
+                                                    return (
+                                                      <label key={type} className={`flex items-center gap-1.5 p-1 rounded text-xs cursor-pointer ${isTypeChecked ? 'bg-orange-50 text-orange-800 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                                        <input
+                                                          type="checkbox"
+                                                          checked={isTypeChecked}
+                                                          onChange={() => handleToggleTypeRule('QD_TYPES:', type)}
+                                                          className="w-3.5 h-3.5 text-orange-600 rounded focus:ring-orange-500"
+                                                        />
+                                                        <span className="truncate">{type}</span>
+                                                      </label>
+                                                    );
+                                                  })}
+                                                </div>
+                                                <div className="pt-2 border-t border-gray-100">
+                                                  <span className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Cho phép xem theo Năm:</span>
+                                                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar">
+                                                    {yearOptions.map(y => {
+                                                      const isYearChecked = qdYears.includes(y);
+                                                      return (
+                                                        <button
+                                                          type="button"
+                                                          key={y}
+                                                          onClick={() => handleToggleYearRule('QD_YEARS:', y)}
+                                                          className={`px-2 py-0.5 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${isYearChecked ? 'bg-orange-600 text-white border-orange-600' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'}`}
+                                                        >
+                                                          {y}
+                                                        </button>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+
+                                      {/* CÁC PHÂN HỆ CÒN LẠI (PCCC, ATVSLD, Nhà cung cấp, Báo cáo, Tổng quan) */}
+                                      {!['CongTy', 'NhanSu', 'Xe', 'ThietBi', 'ChiPhi', 'VanBan', 'QuyDinh'].includes(mod.id) && (
+                                        <span className="text-[11px] text-gray-400 italic">
+                                          Theo phân quyền CRUD bên trái
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
 
               </form>
@@ -1088,6 +1713,13 @@ export default function AccountPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL THÙNG RÁC VÀ PHỤC HỒI DỮ LIỆU */}
+      <RecycleBinModal 
+        isOpen={isRecycleBinOpen} 
+        onClose={() => setIsRecycleBinOpen(false)} 
+        onRestored={loadData}
+      />
     </div>
   );
 }

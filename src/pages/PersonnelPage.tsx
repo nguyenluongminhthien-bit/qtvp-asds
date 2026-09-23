@@ -263,7 +263,7 @@ const PersonnelMobileCard = React.memo(({ item, props }: any) => {
 });
 
 export default function PersonnelPage() {
-  const { user } = useAuth();
+  const { user, canDelete, canCreate, canUpdate } = useAuth();
   const hasRule = (ruleId: string) => {
     if (!user) return false;
     if (String(user.quyen).toUpperCase() === 'ADMIN') return false;
@@ -1497,11 +1497,16 @@ export default function PersonnelPage() {
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+    const deletedPerson = data.find(p => p.id === itemToDelete);
+    if (deletedPerson && !canDelete('NhanSu', deletedPerson.id_don_vi)) {
+      toast.error("Bạn không có quyền XÓA nhân sự này! Vui lòng liên hệ Quản trị viên.");
+      return;
+    }
     setSubmitting(true); setError(null);
     try {
-      await apiService.delete(itemToDelete, "ns_dich_vu");
+      await apiService.delete(itemToDelete, "ns_dich_vu", deletedPerson);
       setData(prev => prev.filter(item => item.id !== itemToDelete));
-      setIsConfirmOpen(false); setItemToDelete(null); toast.success("Xóa thành công!");
+      setIsConfirmOpen(false); setItemToDelete(null); toast.success("Xóa nhân sự thành công!");
     } catch (err: any) { setError(err.message || 'Lỗi xóa dữ liệu.'); toast.error(err.message || "Đã xảy ra lỗi!"); }
     finally { setSubmitting(false); }
   };

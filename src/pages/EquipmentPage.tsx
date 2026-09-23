@@ -129,12 +129,7 @@ const calculateWarrantyMonths = (ngayMua: string, hanBh: string): number => {
 };
 
 export default function EquipmentPage() {
-  const { user } = useAuth();
-  const hasRule = (ruleId: string) => {
-    if (!user) return false;
-    if (String(user.quyen).toUpperCase() === 'ADMIN') return false;
-    return String(user.quyen_chi_tiet || '').split(',').map(r => r.trim()).includes(ruleId);
-  };
+  const { user, canCreate, canUpdate, canDelete, hasRule } = useAuth();
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [tbData, setTbData] = useState<any[]>([]);
   const [nkData, setNkData] = useState<any[]>([]);
@@ -884,6 +879,19 @@ export default function EquipmentPage() {
 
   // --- XỬ LÝ THIẾT BỊ ---
   const openTbModal = (mode: 'create' | 'update', item?: any) => {
+    if (mode === 'create') {
+      const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
+      const targetUnitId = selectedUnitFilter || (defaultDonViId !== 'ALL' ? defaultDonViId : '');
+      if (!canCreate('ThietBi', targetUnitId)) {
+        toast.warning("Bạn không có quyền thêm mới thiết bị!");
+        return;
+      }
+    } else if (mode === 'update' && item) {
+      if (!canUpdate('ThietBi', item.id_don_vi)) {
+        toast.warning("Bạn không có quyền chỉnh sửa thiết bị này!");
+        return;
+      }
+    }
     setTbModalMode(mode);
     const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
     setShowAllNccGroups(false); // Reset to show filtered list by default
@@ -1458,6 +1466,27 @@ export default function EquipmentPage() {
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+
+    if (itemToDelete.type === 'tb') {
+      const targetTb = tbData.find(tb => tb.id === itemToDelete.id);
+      if (!canDelete('ThietBi', targetTb?.id_don_vi)) {
+        toast.error("Bạn không có quyền xóa thiết bị tại đơn vị này!");
+        setIsConfirmOpen(false);
+        setItemToDelete(null);
+        return;
+      }
+    } else {
+      const targetNk = nkData.find(nk => nk.id === itemToDelete.id);
+      const targetTb = tbData.find(tb => tb.id === targetNk?.id_ts_thiet_bi);
+      const unitId = targetNk?.id_don_vi || targetTb?.id_don_vi || selectedTbForNk?.id_don_vi;
+      if (!canDelete('ThietBi', unitId)) {
+        toast.error("Bạn không có quyền xóa nhật ký thiết bị này!");
+        setIsConfirmOpen(false);
+        setItemToDelete(null);
+        return;
+      }
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -1632,38 +1661,42 @@ export default function EquipmentPage() {
                         </button>
 
                         {/* Mục 2: Thêm từng thiết bị */}
-                        <button
-                          onClick={() => {
-                            setIsAddDropdownOpen(false);
-                            openTbModal('create');
-                          }}
-                          className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 text-gray-700 hover:text-[#05469B] cursor-pointer"
-                        >
-                          <div className="p-1.5 rounded-md bg-blue-100 text-[#05469B]">
-                            <PlusCircle size={15} />
-                          </div>
-                          <div>
-                            <div className="text-gray-800 font-bold text-xs">Thêm từng thiết bị</div>
-                            <div className="text-[10px] text-gray-500 font-normal">Tạo mới một thiết bị</div>
-                          </div>
-                        </button>
+                        {canCreate('ThietBi', selectedUnitFilter) && (
+                          <button
+                            onClick={() => {
+                              setIsAddDropdownOpen(false);
+                              openTbModal('create');
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 text-gray-700 hover:text-[#05469B] cursor-pointer"
+                          >
+                            <div className="p-1.5 rounded-md bg-blue-100 text-[#05469B]">
+                              <PlusCircle size={15} />
+                            </div>
+                            <div>
+                              <div className="text-gray-800 font-bold text-xs">Thêm từng thiết bị</div>
+                              <div className="text-[10px] text-gray-500 font-normal">Tạo mới một thiết bị</div>
+                            </div>
+                          </button>
+                        )}
 
                         {/* Mục 3: Thêm hàng loạt */}
-                        <button
-                          onClick={() => {
-                            setIsAddDropdownOpen(false);
-                            setIsPasteModalOpen(true);
-                          }}
-                          className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 cursor-pointer border-t border-gray-100 pt-1.5"
-                        >
-                          <div className="p-1.5 rounded-md bg-indigo-100 text-indigo-600">
-                            <ClipboardPaste size={15} />
-                          </div>
-                          <div>
-                            <div className="text-gray-800 font-bold text-xs">Thêm hàng loạt</div>
-                            <div className="text-[10px] text-gray-500 font-normal">Dán dữ liệu Excel nhiều dòng</div>
-                          </div>
-                        </button>
+                        {canCreate('ThietBi', selectedUnitFilter) && (
+                          <button
+                            onClick={() => {
+                              setIsAddDropdownOpen(false);
+                              setIsPasteModalOpen(true);
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 cursor-pointer border-t border-gray-100 pt-1.5"
+                          >
+                            <div className="p-1.5 rounded-md bg-indigo-100 text-indigo-600">
+                              <ClipboardPaste size={15} />
+                            </div>
+                            <div>
+                              <div className="text-gray-800 font-bold text-xs">Thêm hàng loạt</div>
+                              <div className="text-[10px] text-gray-500 font-normal">Dán dữ liệu Excel nhiều dòng</div>
+                            </div>
+                          </button>
+                        )}
                       </div>
                     </>
                   )}
@@ -1861,9 +1894,13 @@ export default function EquipmentPage() {
                             <button onClick={() => openNkModal(item)} className="w-full py-1 bg-white border border-purple-200 text-purple-600 hover:bg-purple-50 rounded text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm"><History size={13} /> Nhật ký</button>
                             <div className="grid grid-cols-4 gap-1">
                               <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="py-1 bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded flex items-center justify-center shadow-sm" title="Xem chi tiết"><Eye size={13} /></button>
-                              <button onClick={() => openTbModal('update', item)} className="py-1 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded flex items-center justify-center shadow-sm" title="Sửa"><Edit size={13} /></button>
+                              {canUpdate('ThietBi', item.id_don_vi) && (
+                                <button onClick={() => openTbModal('update', item)} className="py-1 bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 rounded flex items-center justify-center shadow-sm" title="Sửa"><Edit size={13} /></button>
+                              )}
                               <button onClick={() => { setPrintItemsList([item]); setIsPrintModalOpen(true); }} className="py-1 bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded flex items-center justify-center shadow-sm" title="In nhãn tem QR"><QrCode size={13} /></button>
-                              <button onClick={() => { setItemToDelete({ id: item.id, type: 'tb' }); setIsConfirmOpen(true); }} className="py-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded flex items-center justify-center shadow-sm" title="Xóa"><Trash2 size={13} /></button>
+                              {canDelete('ThietBi', item.id_don_vi) && (
+                                <button onClick={() => { setItemToDelete({ id: item.id, type: 'tb' }); setIsConfirmOpen(true); }} className="py-1 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded flex items-center justify-center shadow-sm" title="Xóa"><Trash2 size={13} /></button>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1942,9 +1979,13 @@ export default function EquipmentPage() {
                       <button onClick={() => openNkModal(item)} className="py-1.5 px-2 bg-white border border-purple-200 text-purple-600 hover:bg-purple-50 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 shadow-2xs" title="Xem nhật ký lịch sử thiết bị"><History size={13} /> Lịch sử</button>
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => { setViewData(item); setIsViewModalOpen(true); }} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xem chi tiết"><Eye size={13} /> Xem</button>
-                        <button onClick={() => openTbModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit size={13} /> Sửa</button>
+                        {canUpdate('ThietBi', item.id_don_vi) && (
+                          <button onClick={() => openTbModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit size={13} /> Sửa</button>
+                        )}
                         <button onClick={() => { setPrintItemsList([item]); setIsPrintModalOpen(true); }} className="p-1.5 text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="In nhãn tem QR"><QrCode size={13} /></button>
-                        <button onClick={() => { setItemToDelete({ id: item.id, type: 'tb' }); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa"><Trash2 size={13} /></button>
+                        {canDelete('ThietBi', item.id_don_vi) && (
+                          <button onClick={() => { setItemToDelete({ id: item.id, type: 'tb' }); setIsConfirmOpen(true); }} className="p-1.5 text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Xóa"><Trash2 size={13} /></button>
+                        )}
                       </div>
                     </div>
                   </div>

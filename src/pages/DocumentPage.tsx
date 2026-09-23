@@ -260,7 +260,7 @@ const generateAutoSoHieu = (
     case 'Thông báo':
       return `${nextNum}/${year}/TB-${unitAbbr}`;
     case 'Thông báo BĐH':
-      return `${nextNum}/${year}/TB-THACO INDUSTRIES&AUTO`;
+      return `${nextNum}/${year}/TB-THACO ID-TECH & AUTO`;
     case 'Công văn đi':
       return `${nextNum}/${year}/CV-${unitAbbr}`;
     case 'Công văn đến':
@@ -275,7 +275,7 @@ const generateAutoSoHieu = (
 };
 
 export default function DocumentPage() {
-  const { user } = useAuth();
+  const { user, canCreate, canUpdate, canDelete } = useAuth();
 
   const isViewerHanChe = useMemo(() => {
     if (!user) return false;
@@ -296,7 +296,7 @@ export default function DocumentPage() {
     const activeViewRules = rulesList.filter(r => [
       'VB_VIEW_QD', 'VB_VIEW_TB', 'VB_VIEW_TB_BDH', 'VB_VIEW_TT', 'VB_VIEW_CV_DI', 'VB_VIEW_CV_DEN'
     ].includes(r));
-    
+
     // 1. Nếu có cấu hình các quyền xem chi tiết mới
     if (activeViewRules.length > 0) {
       switch (type) {
@@ -309,7 +309,7 @@ export default function DocumentPage() {
         default: return true;
       }
     }
-    
+
     // 2. Tương thích ngược với các rule cũ (VB_ONLY_TB, VB_ONLY_QD)
     const hasOnlyTb = rulesList.includes('VB_ONLY_TB');
     const hasOnlyQd = rulesList.includes('VB_ONLY_QD');
@@ -327,7 +327,7 @@ export default function DocumentPage() {
     if (isViewerHanChe) {
       return type === 'Quyết định' || type === 'Thông báo' || type === 'Thông báo BĐH';
     }
-    
+
     return true;
   }, [advancedRules, isViewerHanChe]);
 
@@ -445,6 +445,12 @@ export default function DocumentPage() {
   const canEditOrDeleteDocument = useCallback((item: any) => {
     if (!user || !item) return false;
     if (isViewerHanChe) return false;
+
+    // Phải có ít nhất quyền Sửa hoặc Xóa đối với phân hệ Văn bản tại đơn vị này
+    if (!canUpdate('VanBan', item.id_don_vi) && !canDelete('VanBan', item.id_don_vi)) {
+      return false;
+    }
+
     if (isHOAdmin) return true;
 
     // Nếu không phải HO Admin:
@@ -464,7 +470,7 @@ export default function DocumentPage() {
     const myUnits = [...level1, ...level2, ...level3];
 
     return myUnits.includes(String(item.id_don_vi || '').trim());
-  }, [user, isViewerHanChe, isHOAdmin, donViList]);
+  }, [user, isViewerHanChe, isHOAdmin, donViList, canUpdate, canDelete]);
 
   const visibleDocuments = useMemo(() => {
     if (!user) return [];
@@ -800,7 +806,15 @@ export default function DocumentPage() {
   }, [filteredDocs, currentPage, actualRowsPerPage]);
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
-    if (mode === 'update' && item && !canEditOrDeleteDocument(item)) {
+    if (mode === 'create') {
+      const defaultDonViId = user?.id_don_vi || (user as any)?.idDonVi;
+      const targetUnitId = selectedUnitFilter || (defaultDonViId !== 'ALL' ? defaultDonViId : '');
+      if (!canCreate('VanBan', targetUnitId)) {
+        toast.warning("Bạn không có quyền ban hành văn bản mới!");
+        return;
+      }
+    }
+    if (mode === 'update' && item && (!canEditOrDeleteDocument(item) || !canUpdate('VanBan', item.id_don_vi))) {
       toast.warning("Bạn chỉ có quyền xem văn bản này, không có quyền chỉnh sửa!");
       return;
     }
@@ -1085,6 +1099,13 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
+    const targetDoc = vbData.find(d => String(d.id) === String(itemToDelete));
+    if (!canDelete('VanBan', targetDoc?.id_don_vi)) {
+      toast.error("Bạn không có quyền xóa văn bản này!");
+      setIsConfirmOpen(false);
+      setItemToDelete(null);
+      return;
+    }
     setSubmitting(true);
     try {
       await apiService.delete(itemToDelete, "vb_tb");
@@ -1405,7 +1426,7 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
             </div>
 
             {/* 4. 🟢 Nút ban hành (độ cao 27 px) */}
-            {!isViewerHanChe && !advancedRules.includes('VB_HIDE_BTN') && (
+            {!isViewerHanChe && !advancedRules.includes('VB_HIDE_BTN') && canCreate('VanBan', selectedUnitFilter) && (
               <button
                 onClick={() => openModal('create')}
                 className="h-[27px] px-3 flex items-center justify-center gap-1.5 bg-[#05469B] hover:bg-[#04367a] text-white rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"

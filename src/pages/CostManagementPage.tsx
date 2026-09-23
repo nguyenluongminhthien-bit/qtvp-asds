@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FileText, BarChart3, BarChart2, Tag, Building2, PanelLeftOpen, 
-  Wallet, RefreshCw, Loader2, Search, RotateCcw, Sparkles, ChevronDown, PlusCircle, Layers, FileSpreadsheet
+  Wallet, RefreshCw, Loader2, Search, RotateCcw, Sparkles, ChevronDown, PlusCircle, Layers, FileSpreadsheet, Lock, Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { apiService } from '../services/api';
@@ -21,7 +21,7 @@ import { toast } from '../utils/toast';
 import { isCostManagementUnit, getUserPermittedUnitIds, getAllSubordinateIds } from '../utils/hierarchy';
 
 export default function CostManagementPage() {
-  const { user } = useAuth();
+  const { user, canLockPeriod } = useAuth();
 
   // Unit Filter Sidebar States
   const [isListCollapsed, setIsListCollapsed] = useState(false);
@@ -36,6 +36,7 @@ export default function CostManagementPage() {
   const [costSearchTerm, setCostSearchTerm] = useState('');
   const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
   const [dnttCreateTrigger, setDnttCreateTrigger] = useState<number>(0);
+  const [chotKyTrigger, setChotKyTrigger] = useState<number>(0);
 
   const isLevel2Open = activeTab === 'admin' || activeTab === 'thong_ke';
 
@@ -55,6 +56,14 @@ export default function CostManagementPage() {
   const [loading, setLoading] = useState(true);
 
   // Danh sách Đơn vị chuẩn Quản trị chi phí (Chỉ gồm: Văn phòng, Công ty Tỉnh Thành, Showroom Quản trị)
+  const isAdmin = useMemo(() => {
+    return String(user?.quyen || '').toUpperCase() === 'ADMIN';
+  }, [user]);
+
+  const canLock = useMemo(() => {
+    return isAdmin || canLockPeriod(selectedUnitFilter || undefined);
+  }, [isAdmin, canLockPeriod, selectedUnitFilter]);
+
   const costDonViList = useMemo(() => {
     return donViList.filter(isCostManagementUnit);
   }, [donViList]);
@@ -135,8 +144,8 @@ export default function CostManagementPage() {
         apiService.getDntt ? apiService.getDntt(true).catch(() => []) : Promise.resolve([]),
         apiService.getDnttChiTiet ? apiService.getDnttChiTiet(true).catch(() => []) : Promise.resolve([]),
         apiService.getDnttPhanBo ? apiService.getDnttPhanBo(true).catch(() => []) : Promise.resolve([]),
-        apiService.getChiPhiChotKy ? apiService.getChiPhiChotKy().catch(() => []) : Promise.resolve([]),
-        apiService.getChiPhiThongKe ? apiService.getChiPhiThongKe().catch(() => []) : Promise.resolve([]),
+        apiService.getChiPhiChotKy ? apiService.getChiPhiChotKy(true).catch(() => []) : Promise.resolve([]),
+        apiService.getChiPhiThongKe ? apiService.getChiPhiThongKe(true).catch(() => []) : Promise.resolve([]),
         apiService.getDmNhomChiPhi ? apiService.getDmNhomChiPhi().catch(() => []) : Promise.resolve([])
       ]);
 
@@ -228,6 +237,29 @@ export default function CostManagementPage() {
     }).length;
   }, [permittedDnttList, selectedUnitFilter, donViList]);
 
+  // Thông báo hạn chốt kỳ chi phí: "Chốt kỳ chi phí Tháng xx trước ngày 05/xx+1/Năm hiện tại"
+  const chotKyDeadlineNotice = useMemo(() => {
+    const now = new Date();
+    const day = now.getDate();
+    const curMonth = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+
+    let targetMonth = curMonth;
+    let deadlineMonth = curMonth === 12 ? 1 : curMonth + 1;
+    let deadlineYear = curMonth === 12 ? curYear + 1 : curYear;
+
+    if (day <= 5) {
+      targetMonth = curMonth === 1 ? 12 : curMonth - 1;
+      deadlineMonth = curMonth;
+      deadlineYear = curYear;
+    }
+
+    const targetMonthStr = String(targetMonth).padStart(2, '0');
+    const deadlineMonthStr = String(deadlineMonth).padStart(2, '0');
+
+    return `Chốt kỳ chi phí Tháng ${targetMonthStr} trước ngày 05/${deadlineMonthStr}/${deadlineYear}`;
+  }, []);
+
   // Thiết lập danh sách Tab (4 tab cấp cao nhất)
   const tabs = useMemo(() => [
     {
@@ -292,7 +324,7 @@ export default function CostManagementPage() {
         <div className="shrink-0 z-20 flex flex-col mb-4">
           
           {/* DÒNG 1 & DÒNG 2 */}
-          <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
+          <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-3 gap-3 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
             
             {/* Cột trái: Dòng 1 (Tiêu đề) & Dòng 2 (Đang xem) */}
             <div className="flex items-center gap-2.5">
@@ -315,8 +347,9 @@ export default function CostManagementPage() {
               </div>
             </div>
 
-            {/* Cột phải: Cụm controls chuẩn (Ô tìm kiếm + Nút Refresh + Nút Tính năng) */}
-            <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto relative z-30">
+            {/* Cột phải: Cụm controls chuẩn + Nhãn chốt kỳ chi phí */}
+            <div className="flex flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto relative z-30">
+              <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
               
               {/* 1. Ô tìm kiếm: 256 x 32 px, nền #FFFFF0 */}
               <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
@@ -433,12 +466,41 @@ export default function CostManagementPage() {
                           <div className="text-[10px] text-gray-400 font-normal">Khối/Nghiệp vụ - Thương hiệu/Bộ phận</div>
                         </div>
                       </button>
+
+                      {/* Mục Quản lý Chốt kỳ Chi phí - Dành cho Admin hoặc tài khoản có quyền CAN_LOCK_PERIOD */}
+                      {canLock && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('thong_ke');
+                            setActiveThongKeSubTab('bao_cao');
+                            setChotKyTrigger(Date.now());
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-amber-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-amber-600 cursor-pointer border-t border-gray-100 dark:border-slate-700 pt-2.5"
+                        >
+                          <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-slate-700 text-[#D97706]">
+                            <Lock size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Quản lý Chốt kỳ Chi phí</div>
+                            <div className="text-[10px] text-gray-400 font-normal">Đóng băng số liệu kỳ kế toán</div>
+                          </div>
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
               </div>
             </div>
+
+            {/* Nhãn thông báo Chốt kỳ chi phí: Vừa vặn, thanh thoát, không làm giãn khoảng cách với Tabs */}
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 rounded-md text-[#B45309] dark:text-amber-300 text-[11px] font-semibold shadow-2xs leading-tight">
+              <Calendar size={12} className="text-[#D97706] dark:text-amber-400 shrink-0" />
+              <span>{chotKyDeadlineNotice}</span>
+            </div>
           </div>
+        </div>
 
           {/* DÒNG 3: KHU VỰC TABS PHÂN CẤP LIỀN KHỐI (NESTED CONNECTED TABS) */}
           <div className={`w-full flex flex-col select-none shrink-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
@@ -617,6 +679,7 @@ export default function CostManagementPage() {
                     loading={loading}
                     activeSubTab={activeThongKeSubTab}
                     onSubTabChange={setActiveThongKeSubTab}
+                    chotKyTrigger={chotKyTrigger}
                   />
                 </div>
               )}

@@ -5,6 +5,14 @@ export interface User {
   ho_ten: string;
   id_don_vi: string;
   quyen: string; // Đã đổi theo chuẩn Supabase (thay cho NhomQuyen)
+  quyen_truy_cap?: string;
+  quyen_chi_tiet?: string;
+  can_view?: boolean;
+  can_create?: boolean;
+  can_update?: boolean;
+  can_delete?: boolean;
+  can_delete_unit?: boolean;
+  can_lock_period?: boolean;
   [key: string]: any;
 }
 
@@ -783,6 +791,10 @@ export interface DNTT {
   created_by?: string;
   created_at?: string;
   updated_at?: string;
+  mo_khoa_chinh_sua?: boolean; // Được Admin mở khóa ngoại lệ để sửa phiếu đã chốt
+  ly_do_mo_khoa?: string;     // Ghi chú lý do mở khóa
+  nguoi_mo_khoa?: string;     // Tên Admin mở khóa
+  ngay_mo_khoa?: string;      // Thời điểm mở khóa
   [key: string]: any;
 }
 
@@ -824,6 +836,15 @@ export interface ChiPhiChotKy {
   huy_boi?: string;
   huy_luc?: string;
   ghi_chu?: string;
+  id_don_vi?: string;
+  ten_don_vi?: string;
+  danh_sach_don_vi_ap_dung?: string[];
+  danh_sach_don_vi_mo_khoa?: string[]; // Danh sách ID các đơn vị được Admin mở khóa ngoại lệ tạm thời
+  mo_khoa_toan_bo?: boolean; // Cờ mở khóa cho toàn bộ đơn vị trong phạm vi của kỳ chốt
+  han_mo_khoa?: string | null; // Mốc thời gian hết hạn gia hạn mở khóa (ISO string, VD: '2026-09-25T17:00:00')
+  ly_do_mo_khoa?: string; // Lý do mở khóa / gia hạn
+  nguoi_mo_khoa?: string; // Họ tên người thực hiện mở khóa / gia hạn
+  ngay_mo_khoa?: string; // Thời điểm kích hoạt mở khóa / gia hạn
   [key: string]: any;
 }
 
