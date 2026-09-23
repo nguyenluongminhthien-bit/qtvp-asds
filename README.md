@@ -1,28 +1,28 @@
 # 🏢 HỆ THỐNG QUẢN TRỊ VĂN PHÒNG & AN SINH ĐỜI SỐNG (QTVP-ASDS)
 
-Tài liệu này cung cấp bức tranh toàn cảnh 100% về kiến trúc, tất cả 13 phân hệ nghiệp vụ, cơ chế phân quyền, nguyên tắc tối ưu hiệu năng và giải thích cấu trúc file dự án **QTVP-ASDS**.
+Tài liệu này cung cấp bức tranh toàn cảnh 100% về kiến trúc, tất cả 14 phân hệ nghiệp vụ, cơ chế phân quyền, nguyên tắc tối ưu hiệu năng và giải thích cấu trúc file dự án **QTVP-ASDS**.
 
 ---
 
 ## 1. TỔNG QUAN HỆ THỐNG & CÔNG NGHỆ (SYSTEM OVERVIEW & TECH STACK)
 
 ### 1.1. Mục tiêu Hệ thống
-* **Mục tiêu:** Số hóa, chuẩn hóa và quản trị tập trung toàn bộ các mảng nghiệp vụ: **QTVP&ASĐS - Nhân sự - Tài sản - Xe - Thiết bị - PCCC - ATVSLĐ - An ninh Bảo vệ - VTLT - Báo cáo** cho hệ thống Đơn vị Công ty Tỉnh thành/Showroom/Điểm bán hàng trực thuộc trên toàn quốc.
-* **Mô hình kiến trúc:** Single Page Application (SPA) React + TypeScript kết hợp Supabase REST API & Smart Two-Layer Cache.
-* **Cơ chế phân quyền:** Quản trị phân quyền dựa trên cây dữ liệu đệ quy (Hierarchy-based Access Control) kết hợp vai trò người dùng (Role-based Access Control).
+* **Mục tiêu:** Số hóa, chuẩn hóa và quản trị tập trung toàn bộ các mảng nghiệp vụ: **QTVP&ASĐS - Nhân sự - Tài sản - Xe - Thiết bị - Chi phí Hành chính (CPHC) - PCCC - ATVSLĐ - An ninh Bảo vệ - VTLT - Báo cáo** cho hệ thống Đơn vị Công ty Tỉnh thành/Showroom/Điểm bán hàng trực thuộc trên toàn quốc.
+* **Mô hình kiến trúc:** Single Page Application (SPA) React + TypeScript kết hợp Supabase REST API & Smart Two-Layer Cache (kết hợp thuật toán Parallel Batch Fetching).
+* **Cơ chế phân quyền:** Quản trị phân quyền dựa trên cây dữ liệu đệ quy (Hierarchy-based Access Control) kết hợp vai trò người dùng (Role-based Access Control) và ma trận quyền chi tiết (Granular Permissions).
 
 ### 1.2. Công nghệ sử dụng (Tech Stack)
 * **Core Frontend:** React 19, TypeScript 5.8 (Strict Type Checking), Vite 6.
 * **Giao diện & Biểu tượng:** Tailwind CSS v4, Lucide React Icons, Motion (Framer Motion).
 * **Mã QR & Tiện ích:** `qrcode.react`, `html5-qrcode` (Quét & tạo mã QR tài sản).
-* **Backend & Database:** Supabase (PostgreSQL Database, REST API, Row Level Security).
-* **Xuất Báo cáo & Excel:** Xuất file Excel HTML/XML đa sheet hỗ trợ tiếng Việt có dấu.
+* **Backend & Database:** Supabase (PostgreSQL Database, REST API trực tiếp qua `fetch`, Row Level Security).
+* **Xuất Báo cáo & Tài liệu:** Xuất file Excel HTML/XML đa sheet hỗ trợ tiếng Việt có dấu, xuất tài liệu Microsoft Word (`docx`), xuất PDF in ấn trực tiếp.
 
 ---
 
-## 2. BẢN ĐỒ TẤT CẢ 13 PHÂN HỆ NGHIỆP VỤ (MODULE SITEMAP)
+## 2. BẢN ĐỒ TẤT CẢ 14 PHÂN HỆ NGHIỆP VỤ (MODULE SITEMAP)
 
-Hệ thống bao gồm 13 phân hệ chính được tích hợp liền mạch trên thanh Sidebar bên trái:
+Hệ thống bao gồm 14 phân hệ chính được tích hợp liền mạch trên thanh Sidebar bên trái:
 
 ```text
 QTVP-ASDS App
@@ -33,12 +33,13 @@ QTVP-ASDS App
 ├── 🛡️ 05. Quản lý ATVSLĐ & Thiết bị Nghiêm ngặt (ATVSLĐ)
 ├── 🚗 06. Quản lý Xe & Chi phí Vận hành (Vehicles)
 ├── 💻 07. Quản lý Trang thiết bị & QR Code (Equipments)
-├── 🤝 08. Quản lý Nhà cung cấp (Suppliers)
-├── 📄 09. Quản lý Văn bản & Thông báo (Documents)
-├── 📜 10. Quản lý Quy định & Quy trình (Policies)
-├── 📊 11. Báo cáo Tổng hợp & Custom Builder (Reports)
-├── 👤 12. Quản lý Tài khoản (Accounts)
-└── 📜 13. Nhật ký Hệ thống (System Logs)
+├── 💰 08. Quản lý Chi phí Hành chính (Cost Management - CPHC)
+├── 🤝 09. Quản lý Nhà cung cấp (Suppliers)
+├── 📄 10. Quản lý Văn bản & Thông báo (Documents)
+├── 📜 11. Quản lý Quy định & Quy trình (Policies)
+├── 📊 12. Báo cáo Tổng hợp & Custom Builder (Reports)
+├── 👤 13. Quản lý Tài khoản (Accounts)
+└── 📜 14. Nhật ký Hệ thống (System Logs)
 ```
 
 ---
@@ -149,6 +150,18 @@ QTVP-ASDS App
 
 #### 🚗 06. Phân hệ Quản lý Xe & Chi phí Vận hành (VehiclePage.tsx)
 - **Master Tài sản Xe (TS_Xe)**: Quản lý biển số, loại phương tiện, hiệu xe, số khung, số máy, năm sản xuất, hình thức sở hữu, GPS, hiện trạng, đường link xem hồ sơ xe (`ho_so_xe`).
+- **Giao diện Tab Phân cấp Liền khối Chuẩn NCT (Nested Connected Tabs FlyonUI `#005698`)**:
+  - Tab 1: **Danh sách xe**: Phân cấp 2 sub-tab con gồm *Hiện hữu* (xe đang hoạt động, sửa chữa, ngưng hoạt động) và *Đã Thanh lý* (lưu trữ lịch sử xe đã chuyển nhượng, thanh lý).
+    * *Tối ưu Bảng Danh sách xe*: Tỷ lệ phân bổ cột cân đối (Biển số 9.5%, Hãng-Loại xe 11.5%, Phương tiện 7%, Mục đích 8%, Địa điểm 23%, Đơn vị QL 24%, Tình trạng 9.5%, Thao tác 7.5%), triệt tiêu khoảng trống dư thừa.
+    * *Hiển thị 2 dòng chuẩn hóa*: Cột **Địa điểm sử dụng** và **Đơn vị quản lý** hiển thị đầy đủ tên chính ở dòng 1 (in đậm, rõ ràng), dòng 2 hiển thị đầy đủ chi tiết phân cấp trực thuộc/CSH với cỡ chữ nhỏ gọn, line-height chặt chẽ giúp bảng luôn hài hòa, không bị chiếm dụng diện tích dọc.
+  - Tab 2: **Lịch trình & Nhật ký vận hành (`VehicleScheduleTab.tsx`)**: Ghi nhận và theo dõi lịch trình điều động xe công tác/sự kiện/lái thử, thông tin tài xế, thời gian đi/về, số km đầu/cuối, lộ trình di chuyển. Tích hợp nút xuất lịch trình xe ra file Excel.
+  - Tab 3: **Thống kê Xe (`VehicleStatsTab.tsx`)**: Đồng nhất cấu trúc tab mẹ-con liền khối với 2 sub-tab:
+    * **Thống kê (Pivot đa chiều - `VehiclePivotView.tsx`)**: Công cụ xoay ma trận đa chiều với 21 chiều dữ liệu (Đơn vị, Địa bàn 3 cấp, Hãng, Dòng xe, Mục đích, Hiện trạng, Thời hạn Đăng kiểm, Bảo hiểm...), 4 chỉ số đo lường (Số lượng xe, Tổng nguyên giá, Km vận hành, Chi phí) và 6 mẫu Preset 1-click chuẩn THACO AUTO, tích hợp xuất Excel XML thụt dòng phân cấp.
+    * **Dashboard**: Giữ nguyên vẹn toàn bộ màn hình Dashboard thống kê chi phí, thẻ KPI xe, biểu đồ phân tích cơ cấu mục đích, tỷ trọng hãng xe và ước tính chi phí nhiên liệu.
+- **Bộ chọn Địa điểm Sử dụng 3 Cấp (`VehicleLocationPicker.tsx`, `vehicleLocationHelper.ts`)**:
+  - Tích hợp bộ chọn địa điểm 3 cấp chuẩn: **Khu vực (Tỉnh/Thành)** $\rightarrow$ **Showroom / Cơ sở** $\rightarrow$ **Bộ phận / Phòng ban**.
+  - Dữ liệu lưu trữ cấu trúc JSON chuẩn vào trường `dia_diem_su_dung` trong bảng `ts_xe`.
+  - Bộ lọc danh sách xe hỗ trợ tìm kiếm và đối soát chính xác vị trí xe theo từng cấp địa bàn qua hàm `isVehicleInLocation` và hiển thị nhãn chuẩn qua `formatVehicleLocationDisplay`.
 - **Tích hợp Hồ sơ xe & Tự động quét Google Drive theo Số khung**:
   - Tích hợp trường **"Hồ sơ xe"** kèm nút **"Tự động tìm file trên Drive"** tại modal Thêm mới & Cập nhật thông tin xe (nằm ngay dưới cụm Định vị GPS / Hiện trạng và phía trên Ghi chú khác).
   - Kết nối trực tiếp với Google Drive API v3 quét thư mục `Hồ sơ Xe` (ID: `1UZ5ZUTPrOZ4-ClAbxCgTQ8pbn8d6CzSa`).
@@ -156,11 +169,11 @@ QTVP-ASDS App
   - Tích hợp biểu tượng xem nhanh (`FileText`) cạnh biển số xe trên Bảng danh sách desktop và Thẻ mobile với tooltip `"Xem hồ sơ xe"`, mở trực tiếp file hoặc thư mục trên Google Drive trong tab mới.
   - Hỗ trợ xem hồ sơ trong Modal Xem chi tiết và hỗ trợ dán Excel hàng loạt với cột "Hồ sơ xe".
 - **Nhật ký Chi phí Vận hành (CP_HoatDongXe)**: Theo dõi số km, số lít nhiên liệu, chi phí nhiên liệu, cầu đường bến bãi, rửa xe, bảo dưỡng sửa chữa, khấu hao theo từng tháng/năm.
-
+- **Phân quyền Danh sách Xe được xem (`XE_ALLOW_LIST`)**: Cho phép giới hạn từng tài khoản chỉ được xem và theo dõi một số biển số xe cụ thể trong đơn vị.
 
 #### 💻 07. Phân hệ Quản lý Trang thiết bị & QR Code (EquipmentPage.tsx)
 - **Master Thiết bị CNTT & Văn phòng**: Quản lý mã tài sản, tên thiết bị, nhóm, thông số kỹ thuật (CPU, RAM, SSD, VGA, màn hình...), hạn bảo hành, nhà cung cấp.
-- **Ràng buộc Đơn vị Quản lý ↔ Pháp nhân (Công ty sở hữu)**: Khi chọn Đơn vị quản lý trong Modal Thêm/Sửa thiết bị, trường **Tài sản thuộc Pháp nhân** tự động lọc danh sách các pháp nhân thuộc Đơn vị quản lý đó (`dm_phap_nhan` theo `id_don_vi`), hỗ trợ sổ xuống chọn chuẩn xác ngay cả với các đơn vị có nhiều pháp nhân trực thuộc.
+- **Ràng buộc Đơn vị Quản lý ↔ Pháp nhân (Công ty sở hữu)**: Khi chọn Đơn vị quản lý trong Modal Thêm/Sửa thiết bị, trường **Tài sản thuộc Pháp nhân** tự động lọc danh sách các pháp nhân thuộc Đơn vị quản lý đó (`dm_phap_nhan` theo `id_don_vi`), hỗ trợ sổ xuống chọn chuẩn xác ngay cả với các đơn vị có nhiều pháp nhân trực thuộc hoặc một pháp nhân dùng chung nhiều đơn vị (chuỗi ID ngăn cách dấu phẩy).
 - **Chuẩn hóa Màu sắc & Giao diện Nhập liệu**: Đồng nhất màu nền `#FFFFF0` nhẹ dịu, chữ màu đen rõ ràng và font size đồng nhất giữa tất cả các trường dữ liệu trên bảng Thêm mới / Cập nhật tài sản.
 - **Tự động Làm sạch Chuỗi Kỹ thuật (`cleanTechnicalString`)**: Tự động loại bỏ khoảng trắng thừa quanh dấu gạch ngang (VD: `i7 - 1185G7` thành `i7-1185G7`, `Core i5 - 1135G7` thành `Core i5-1135G7`). Áp dụng tự động cho CPU, VGA, Mã tài sản, Số seri.
 - **Tự động Định dạng Đơn vị GB (`formatMemorySize`)**: Nhập số thuần (VD: `512`, `16`, `256`) hay chữ dính liền (`512gb`, `16GB`) $\rightarrow$ tự động gắn đơn vị chuẩn **`512 GB`**, **`16 GB`**, **`256 GB`**. Áp dụng đồng bộ cả khi Dán Excel hàng loạt lẫn Nhập/Sửa từng thiết bị đơn lẻ.
@@ -169,13 +182,52 @@ QTVP-ASDS App
 - **Nhật ký Thiết bị (NhatKyThietBi)**: Ghi nhận lịch sử bàn giao người sử dụng, phòng ban quản lý, lịch sử sửa chữa, nâng cấp, báo hỏng, chi phí.
 - **Deep Link & Quét mã QR**: Tạo mã QR tài sản (`qrcode.react`), hỗ trợ quét mã QR qua camera (`html5-qrcode`) hoặc truy cập thẳng qua URL `/?tab=equipment&qr=MÃ_TÀI_SẢN` để mở ngay chi tiết thiết bị.
 
-#### 🤝 08. Phân hệ Quản lý Nhà cung cấp (SupplierPage.tsx)
+#### 💰 08. Phân hệ Quản lý Chi phí Hành chính (CostManagementPage.tsx)
+- **Mục tiêu & Tầm nhìn**: Số hóa toàn diện quy trình lập Đề nghị thanh toán (DNTT), kiểm soát ngân sách chi phí hành chính, phân bổ chi phí đa chiều, và cung cấp hệ thống báo cáo ma trận quản trị chi phí phục vụ Ban điều hành / Kế toán / Ban Giám đốc Showroom trên toàn quốc. Sử dụng tông màu chủ đạo **Vàng Amber `#D97706`** sang trọng.
+- **Tab 1: Đề nghị thanh toán (DNTT - `DnttTab.tsx`)**:
+  - Quản lý danh sách và lập phiếu Đề nghị thanh toán trực quan, tự động sinh mã phiếu chuẩn `DNTT_...`.
+  - **Chi tiết Dòng chi phí (`dntt_chi_tiet`)**: Quản lý từng dòng khoản mục phí (KMP), nội dung diễn giải, số tiền, ngày phát sinh, thông tin hóa đơn chứng từ (Số HĐ, Ngày HĐ, Ký hiệu mẫu, Link file hóa đơn điện tử).
+  - **Phân bổ Chi phí Đa chiều (`dntt_phan_bo`, `DnttAllocationModal.tsx`)**: Phân bổ số tiền linh hoạt theo Đơn vị thụ hưởng chi phí, Pháp nhân/MST, Bộ phận Cấp 1 (Khối/Nghiệp vụ: Kinh doanh xe, DVPT, QTVP, BĐH...) và Bộ phận Cấp 2 (Thương hiệu/Bộ phận: Kia, Mazda, Peugeot, BMW...). Ràng buộc chặt chẽ tổng tiền các dòng phân bổ phải khớp chính xác 100% với tổng tiền phiếu DNTT.
+  - **4 Hình thức Thanh toán**: *Chuyển khoản*, *Tiền mặt*, *Cấn trừ công nợ*, *Ghi nhận chi phí*.
+  - **Trạng thái Phiếu Tối giản**: *Đã lưu*, *Lưu cập nhật*, *Lưu nháp* (hỗ trợ lưu phiếu dở dang hoặc nhân đôi phiếu).
+  - **Cập nhật Trạng thái Hàng loạt (`updateDnttStatusBulk`)**: Tích hợp cơ chế an toàn tự động kiểm tra và bỏ qua các phiếu thuộc kỳ đã chốt số liệu.
+  - **Xuất Phiếu DNTT ra Word (`exportDnttDocx.ts`) & PDF (`exportDnttPdf.ts`)**: Đúng chuẩn mẫu biểu hành chính THACO AUTO, tự động điền địa điểm ký, ngày tháng năm, đọc số tiền thành chữ tiếng Việt (`numberToWordsVN.ts`) và 4 khối chữ ký thẩm quyền (*Phê duyệt*, *Kế toán - Tài chính*, *Trưởng bộ phận*, *Người đề nghị*).
+- **Tab 2: Thống kê & Báo cáo Chi phí (`CostStatisticsTab.tsx`)**:
+  - **Báo cáo Ma trận CPHC THACO (`CostMatrixView.tsx`, `thacoCostDataEngine.ts`)**:
+    - Cấu trúc phân cấp chuẩn Tập đoàn: Cấp 1 - Nhóm chi phí La Mã (I đến VI) $\rightarrow$ Cấp 2 - Khoản mục phí (KMP) $\rightarrow$ Cấp 3 - Đơn vị / Showroom / Tháng.
+    - Bộ lọc đa chiều Cascading Multi-select: Phía (Bắc/Nam/VPĐH), Đơn vị, Loại hình đơn vị, Showroom, Khối/Nghiệp vụ, Thương hiệu/Bộ phận, Pháp nhân.
+    - Chu kỳ linh hoạt: Xem theo Tháng, Quý, 6 Tháng, Năm.
+    - Lọc phạm vi Báo cáo Hành chính (`thuoc_bao_cao_hanh_chinh`), tùy chọn xem kèm số liệu tạm tính chưa chốt kỳ.
+    - Xuất file Excel Báo cáo Ma trận THACO (`exportThacoCostReport.ts`) chuẩn bảng biểu tài chính, định dạng số, tổng cộng dòng/cột.
+  - **Động cơ Báo cáo Động (Dynamic Pivot Table Engine - `pivot/`)**:
+    - Trình dựng báo cáo động (`CostPivotBuilder.tsx`, `PivotConfigBar.tsx`, `pivotEngine.ts`): Kéo thả các chiều phân tích thành Hàng (Rows), Cột (Columns), Giá trị tính toán (Values: Sum, Count, Avg), Bộ lọc (Filters).
+    - Đa dạng chiều phân tích: Thời gian (Năm, Quý, Tháng), Công ty (Phía, Đơn vị, CTy TT, Showroom, Loại hình, Pháp nhân, Khối/Nghiệp vụ, Thương hiệu/Bộ phận), Chi phí (KMP, Nhóm chi phí La Mã).
+    - Lưu cấu hình mẫu báo cáo vào DB `chi_phi_pivot_config`: Lưu mẫu cá nhân, chia sẻ theo đơn vị, hoặc sử dụng mẫu mặc định hệ thống `PVC_DEFAULT_CPHC`.
+    - Xuất Excel Generic Pivot đa cấp (`exportGenericPivotExcel.ts`) tự động gộp tiêu đề phân cấp, hiển thị công thức và định dạng tiền tệ.
+  - **Cơ chế Chốt kỳ & Fact Table Snapshot (`chi_phi_chot_ky`, `chi_phi_thong_ke`)**:
+    - Đóng băng số liệu kỳ tháng/năm (`da_chot`), ghi nhận người chốt, thời gian và ghi chú.
+    - Tự động kết chuyển và đóng băng số liệu tổng hợp vào Fact Table `chi_phi_thong_ke` theo ma trận: `Tháng/Năm × KMP × Bộ phận × Đơn vị × Pháp nhân × MST`.
+    - Độc lập hoàn toàn với bảng gốc `dntt`, đảm bảo an toàn dữ liệu lịch sử ngay cả khi các phiếu DNTT cũ bị xóa/sửa.
+    - Khóa dữ liệu: Tự động chặn sửa/xóa các phiếu DNTT thuộc kỳ đã chốt (`checkDnttBelongsToLockedPeriod`).
+    - Hỗ trợ thao tác Hủy chốt kỳ an toàn (`huyChotKyChiPhi`).
+  - **Dashboard Phân tích (`CostDashboardTab.tsx`)**:
+    - Trực quan hóa cơ cấu chi phí theo Nhóm chi phí, KMP trọng yếu, tỷ trọng theo đơn vị.
+    - Biểu đồ xu hướng biến động chi phí qua các tháng và khối KPI tổng quan.
+- **Tab 3: Cấu hình Khoản mục phí (KMP - `KmpConfigTab.tsx`)**:
+  - Quản lý danh mục KMP (`dm_kmp`), ánh xạ trực tiếp sang 6 Nhóm chi phí La Mã (`dm_nhom_chi_phi`: I - Vận hành, II - Tiện ích VP, III - Công tác, IV - Hội họp & tiếp khách, V - CCDC & TSCĐ, VI - Phục vụ KH).
+  - Cấu hình phân loại B7 (Vận hành), B10 (Hỗ trợ), Khoản mục trọng yếu, và cờ phạm vi Báo cáo Hành chính (`thuoc_bao_cao_hanh_chinh`).
+- **Tab 4: Quản trị Khối, Bộ phận & Pháp nhân (`AdminLegalTab.tsx`)**:
+  - Quản lý danh mục Bộ phận (`dm_bo_phan`): Cấp 1 (Khối/Nghiệp vụ) và Cấp 2 (Thương hiệu/Bộ phận).
+  - Quản lý Pháp nhân & Showroom (`dm_phap_nhan`): Quản lý tên công ty, MST, địa chỉ hóa đơn.
+  - **Hỗ trợ 1 Pháp nhân dùng chung nhiều Đơn vị trực thuộc**: Cột `id_don_vi` lưu chuỗi ID phân cách bằng dấu phẩy (VD: `DV01,DV02,DV03`), giải quyết hoàn hảo mô hình một công ty tỉnh thành có nhiều showroom trực thuộc cùng xuất chung một pháp nhân hóa đơn.
+
+#### 🤝 09. Phân hệ Quản lý Nhà cung cấp (SupplierPage.tsx)
 - **Quản lý Đối tác & Nhà cung cấp**: Quản lý đầy đủ danh sách nhà cung cấp dịch vụ hành chính/tiện ích/kỹ thuật cho các đơn vị trên toàn quốc (16 nhóm dịch vụ cố định).
 - **Bộ lọc đa chiều**: Lọc đệ quy theo Cây đơn vị (Unit Tree), phân nhóm dịch vụ, trạng thái hợp tác (Đang hợp tác/Ngừng hợp tác) và tìm kiếm thông tin nhanh.
 - **Quản lý Hợp đồng & Thời hạn**: Tự động tính toán và hiển thị huy hiệu cảnh báo thời hạn hết hạn hợp đồng nếu còn dưới 30 ngày (sử dụng hàm kiểm tra `getExpiryStatus`).
 - **Modal Thao tác Nghiệp vụ**: Xem chi tiết toàn diện thông tin doanh nghiệp, thông tin liên hệ đầu mối trực tiếp, đánh giá dịch vụ, và dán đường dẫn file hồ sơ năng lực trực tuyến.
 
-#### 📄 09. Phân hệ Quản lý Văn bản & Thông báo (DocumentPage.tsx)
+#### 📄 10. Phân hệ Quản lý Văn bản & Thông báo (DocumentPage.tsx)
 - **Phân loại Văn bản**: Quản lý văn bản đến/đi, thông báo, quyết định, quy định.
 - **Phân quyền thao tác & Ma trận quyền nâng cao**:
   - Chỉ đơn vị ban hành hoặc HO Admin mới có quyền Sửa/Xóa văn bản đó. Các đơn vị khác chỉ có quyền Xem (Read-only).
@@ -189,14 +241,14 @@ QTVP-ASDS App
 - **Cấu trúc Component hóa (Modular architecture)**: Tách mã nguồn hiển thị bảng dữ liệu của từng loại văn bản thành các file `.tsx` riêng biệt (`AllDocTable`, `ThongBaoTable`, `QuyetDinhTable`, `CongVanDenTable`, `CongVanDiTable`, `ToTrinhTable`) giúp dễ bảo trì và tối ưu cột hiển thị riêng cho mỗi loại.
 - **Copy nhanh Thông tin phản hồi**: Hỗ trợ nút sao chép thông tin phản hồi định dạng chuẩn bên cạnh mục Ban hành trong bảng Chi tiết Văn bản để phản hồi ngay cho người xin cấp số (bao gồm Số hiệu, Nội dung, Ngày ban hành, Người phê duyệt, Nhân sự & Bộ phận trình).
 
-#### 📜 10. Phân hệ Quản lý Quy định & Quy trình (PolicyPage.tsx)
+#### 📜 11. Phân hệ Quản lý Quy định & Quy trình (PolicyPage.tsx)
 - Lưu trữ, phân loại và tra cứu các quy định hành chính, quy trình làm việc chuẩn áp dụng trong toàn hệ thống.
 - **Bộ lọc Quyền nâng cao**:
   - `QD_TYPES:type1|type2|...`: Giới hạn các loại tài liệu quy định (Ví dụ: chỉ cho phép xem Quy định và Quy trình).
   - `QD_YEARS:year1|year2|...`: Giới hạn các tài liệu quy định chỉ được ban hành trong các năm chỉ định.
 - **Xử lý Đa nghiệp vụ Đồng bộ**: Tự động đồng bộ và tách các chuỗi nghiệp vụ ghép từ phân hệ Văn bản. Danh sách nhóm nghiệp vụ bên trái chỉ chứa các nghiệp vụ đơn lẻ, sạch sẽ. Bộ lọc và số lượng đếm tài liệu cho mỗi nghiệp vụ được xử lý chính xác tuyệt đối.
 
-#### 📊 11. Phân hệ Báo cáo Tổng hợp & Custom Builder (ReportPage.tsx)
+#### 📊 12. Phân hệ Báo cáo Tổng hợp & Custom Builder (ReportPage.tsx)
 - **Mẫu báo cáo Cấu trúc Đơn vị (`ReportList.tsx`)**: Tổng hợp sơ đồ và thông tin liên hệ đơn vị.
 - **Mẫu báo cáo Danh sách Nhân sự theo Đơn vị (`personnel_by_unit`)**: Báo cáo hồ sơ nhân sự theo đơn vị và phòng ban. Hỗ trợ bộ lọc **Showroom** phân cấp động theo **Đơn vị** đã chọn (khi chọn Đơn vị, ô Showroom chỉ hiển thị các showroom/cơ sở trực thuộc đơn vị đó, hiển thị số lượng và tự động reset khi thay đổi Đơn vị). Báo cáo tự động lọc và chỉ xuất các CB-NV có trạng thái làm việc là **"Đang làm việc"**. Khi xuất Excel, hệ thống tự động sắp xếp cột **Chức Danh** ngay trước cột **Chức Vụ**, bổ sung cột **Showroom** ngay trước cột **Đơn Vị Quản Lý** ở sheet **Dữ liệu**, đồng thời tự động tạo thêm **Sheet "Thống kê"** ở vị trí đầu tiên (Sheet 1) tổng hợp chuyên nghiệp 5 bảng số liệu dựa trên tập nhân sự đang làm việc: *Khối KPI tổng quan*, *Bảng 1: Thống kê theo Showroom/Đơn vị*, *Bảng 2: Thống kê theo Phòng ban/Bộ phận*, *Bảng 3: Thống kê Bảo vệ & Phục vụ hậu cần (Chỉ lấy nhân sự có Phòng ban là BV,ĐTKH hoặc PVHC và có Chức danh tương ứng để phân loại NV, Tổ trưởng/phó, Cộng BV, Cộng HC)*, *Bảng 4: Tổng hợp nhân sự theo Bộ phận và Cấp bậc (Cấp quản lý, Cấp giám sát, Chuyên môn, Dịch vụ hỗ trợ, Nghiệp vụ, Khác)* và *Bảng 5: Thống kê theo Độ tuổi & Thâm niên làm việc*. Sheet *Thông tin* tự động giải mã ID Đơn vị và Showroom thành tên tiếng Việt rõ ràng.
 - **Mẫu báo cáo Pháp nhân Hóa đơn**: Tổng hợp mã số thuế và tên công ty xuất hóa đơn.
@@ -205,19 +257,26 @@ QTVP-ASDS App
 - **Trình dựng Báo cáo Tùy chỉnh (`CustomReportBuilder.tsx`)**: Cho phép chọn bảng dữ liệu, chọn cột hiển thị, thiết lập bộ lọc và xuất file Excel theo ý muốn.
 - **Tải Form Nhập Hàng Loạt Chuẩn DB theo 3 Tiêu chí**: Tích hợp khu vực tải tập trung 4 biểu mẫu dán Excel chuẩn hóa. Đặc biệt đối với **Trang thiết bị văn phòng** và **Nhân sự**, file Excel mẫu `.xls` được tạo tự động bằng cách quét 100% dữ liệu thực tế đang có trong DB và áp dụng thuật toán trích xuất 01 bản ghi mẫu theo đúng 3 tiêu chí: *1. Điền đầy đủ thông tin nhất*, *2. Thời gian thêm mới gần nhất với hiện tại*, *3. Mô tả chi tiết nhất*. Dữ liệu dòng mẫu 100% là dữ liệu thật thực tế từ hệ thống của người dùng.
 
-#### 👤 12. Phân hệ Quản lý Tài khoản (AccountPage.tsx)
-- **Quản lý Người dùng**: Tạo mới, cập nhật thông tin tài khoản, cấp lại mật khẩu.
+#### 👤 13. Phân hệ Quản lý Tài khoản (AccountPage.tsx)
+- **Quản lý Người dùng & Phân cấp Quản trị**:
+  - Tạo mới, cập nhật thông tin tài khoản, cấp lại mật khẩu.
+  - Phân cấp quản trị 3 tầng: **HO Admin** (Toàn quyền quản trị toàn hệ thống), **Admin Đơn vị** (Quản trị tài khoản các đơn vị mẹ và trực thuộc), **User** (Chỉ xem và chỉnh sửa thông tin cá nhân).
 - **Phân quyền chi tiết & Ma trận quyền nâng cao (Granular & Advanced Permissions)**: 
-  - Phân quyền theo Cây đơn vị (`id_don_vi`) quyết định phạm vi dữ liệu đơn vị trực thuộc được phép xem.
-  - Phân quyền Module thanh menu (`quyen_truy_cap`) để cấp quyền hiển thị các phân hệ chính trên Sidebar.
-  - Ma trận Quyền chi tiết (`quyen_chi_tiet`) cho phép bật/tắt các chính sách cụ thể (như ẩn lương nhân viên, ẩn giá mua thiết bị, cấm xem chi tiết, ẩn nút ban hành, giới hạn loại văn bản, giới hạn năm/phân loại quy trình) để kiểm soát truy cập dữ liệu nhạy cảm.
+  - Phân quyền theo Cây đơn vị (`id_don_vi`): Hỗ trợ gán một hoặc nhiều đơn vị trực thuộc bằng chuỗi ID phân cách bằng dấu phẩy.
+  - Phân quyền Module thanh menu (`quyen_truy_cap`): Cấp quyền hiển thị các phân hệ chính trên Sidebar (bao gồm cả phân hệ Quản lý Chi phí `ChiPhi`).
+  - Ma trận Quyền chi tiết (`quyen_chi_tiet`): Cho phép bật/tắt các chính sách cụ thể:
+    * *Nhân sự*: `NS_HIDE_SENSITIVE` (ẩn thông tin nhạy cảm), `NS_NO_DETAIL` (cấm xem chi tiết hồ sơ).
+    * *Thiết bị*: `TB_HIDE_PRICE` (ẩn cột nguyên giá mua).
+    * *Văn bản*: `VB_HIDE_BTN` (ẩn nút ban hành), các quyền xem hạn chế `VB_VIEW_*`.
+    * *Quy định*: `QD_TYPES`, `QD_YEARS`.
+    * *Xe*: `XE_ALLOW_LIST` (giới hạn danh sách xe được phép xem theo biển số).
+    * *Chi phí*: `CP_PIVOT_CLONE` (quyền tạo và nhân bản mẫu báo cáo Pivot tùy chỉnh).
 - **Cơ chế bảo mật phiên đăng nhập kết hợp**:
   - **Kiểm tra phiên bản ứng dụng (App Versioning - `APP_VERSION: '1.1.0'`)**: Tự động dọn dẹp các cache dữ liệu cũ của trình duyệt và buộc đăng nhập lại khi có cập nhật lớn trên hệ thống.
   - **Giới hạn thời hạn phiên**: Phiên đăng nhập ghi nhớ (`localStorage`) tự động hết hạn và xóa sau **2 ngày** (48 giờ) kể từ thời điểm đăng nhập thành công.
   - **Đồng bộ ngầm quyền hạn và mật khẩu (Database Sync & Password Change)**: Mỗi khi tải ứng dụng, hệ thống tự động gọi ngầm API để đối chiếu mật khẩu và đồng bộ phân quyền mới nhất từ cơ sở dữ liệu Supabase, hoặc buộc đăng xuất ngay lập tức nếu tài khoản bị khóa/xóa hoặc đổi mật khẩu.
 
-
-#### 📜 13. Phân hệ Nhật ký Hệ thống (LogPage.tsx)
+#### 📜 14. Phân hệ Nhật ký Hệ thống (LogPage.tsx)
 - **Ghi vết Tự động (SysLog)**: Tự động lưu vết lịch sử Đăng nhập, Đăng xuất, Thêm mới, Cập nhật, Xóa bản ghi (cho tất cả các phân hệ dữ liệu hệ thống), đồng thời tự động ghi log khi người dùng Xem chi tiết đối tượng (Đơn vị, Nhân sự, Xe, Thiết bị, Nhà cung cấp, Văn bản, Quy định) hoặc thực hiện các thao tác Xuất Excel. Tích hợp cơ chế tự động dọn dẹp hệ thống log cũ quá hạn 5 ngày chạy ngầm khi khởi chạy ứng dụng.
 
 ---
@@ -230,38 +289,57 @@ Nằm trong `src/services/api/cache.ts`:
 2. **Layer 2 - Persistent LocalStorage Cache**: Lưu bản nạp dữ liệu offline.
    - *Cơ chế an toàn*: Tự động bắt lỗi `QuotaExceededError` khi `localStorage` chạm ngưỡng 5MB, tự động dọn dẹp cache cũ và hạ cấp mượt mà xuống In-Memory cache mà không làm đơ/crash ứng dụng.
 
-### 3.2. Quản lý Render DOM Thông Minh (TabContainer Optimization)
+### 3.2. Thuật toán Tải Song Song Phân Trang (Parallel Batch Fetching)
+Nằm trong hàm `fetchWithCache()` (`src/services/api/cache.ts`):
+- Mặc định Supabase PostgREST giới hạn trả về tối đa 1.000 dòng cho mỗi truy vấn HTTP GET.
+- Hệ thống giải quyết triệt để vấn đề này bằng cách gửi request ban đầu với header `Range: 0-999` kèm `Prefer: count=exact`.
+- Sau khi đọc tổng số dòng thực tế từ header phản hồi `Content-Range` (ví dụ: `0-999/3450`), hệ thống tự động sinh ra mảng các Promise gọi đồng thời (`Promise.all`) tất cả các dải còn lại (`Range: 1000-1999`, `Range: 2000-2999`...) và hợp nhất dữ liệu tức thì.
+- Giúp nạp toàn bộ hàng chục ngàn dòng dữ liệu nhanh hơn từ **5 đến 10 lần** so với cơ chế gọi phân trang tuần tự truyền thống (`while hasMore`).
+
+### 3.3. Cổng Kiểm Soát Ghi Dữ Liệu Tập Trung (`checkUnitPermission`)
+Nằm trong `src/services/api/modules.ts`:
+- Tất cả các thao tác thêm mới và cập nhật bản ghi (cả bản ghi đơn lẻ lẫn mảng nhiều dòng) đều đi qua hàm `save(data, action, tableName)`.
+- Trước khi gửi request lên Supabase, hệ thống tự động kiểm tra quyền hạn của tài khoản thông qua hàm `checkUnitPermission(item, tableName)`:
+  - Nếu tài khoản không phải là Quản trị viên Toàn quyền (HO Admin), hệ thống sẽ đối chiếu trường `id_don_vi` của bản ghi với tập đơn vị được phép quản lý (`getUserPermittedUnitIds`).
+  - Hỗ trợ cả trường hợp `id_don_vi` chứa danh sách nhiều mã đơn vị phân tách bởi dấu phẩy.
+  - Ngăn chặn triệt để mọi hành vi chỉnh sửa hoặc ghi dữ liệu trái phép ngoài phạm vi đơn vị ngay tại tầng Service, trước khi request chạm đến Supabase API.
+
+### 3.4. Quản lý Xóa Cache Phụ Thuộc Tự Động (`CACHE_DEPENDENCIES`)
+Nằm trong `src/services/api/cache.ts`:
+- Khi một bảng dữ liệu thay đổi (ghi hoặc xóa), hệ thống tự động xóa sạch bộ đệm của chính bảng đó và toàn bộ các bảng có quan hệ nghiệp vụ liên kết:
+  - Sửa `dntt` $\rightarrow$ tự động xóa cache `dntt_chi_tiet`, `dntt_phan_bo`.
+  - Sửa `dm_bo_phan_cap1` $\rightarrow$ tự động xóa cache `dm_bo_phan_cap2`, `dntt_phan_bo`.
+  - Sửa `ns_dich_vu` $\rightarrow$ tự động xóa cache `dm_don_vi`, `hs_hoc_vien_khoa_huan_luyen`.
+  - Sửa `ts_xe` $\rightarrow$ tự động xóa cache `cp_hoat_dong_xe`.
+  - Sửa `hs_pccc` $\rightarrow$ tự động xóa cache `ts_pccc`.
+
+### 3.5. Quản lý Render DOM Thông Minh (TabContainer Optimization)
 Trong `src/App.tsx`:
 - Sử dụng `React.memo` cho `TabContainer`.
 - Khi chuyển đổi tab, các tab không active sẽ được gán thuộc tính `hidden` (`display: none`), ngắt hoàn toàn pipeline tính toán Layout/Paint/Compositing của trình duyệt giúp chuyển tab nhẹ và cuộn trang mượt mà.
 
-### 3.3. Thuật Toán Tra Cứu Map O(1)
-Trong `src/pages/PersonnelPage.tsx`:
-- Thay thế tìm kiếm mảng đệ quy O(N) `.find()` trong các hàm tra cứu tên đơn vị bằng `donViLookupMap` dạng `Map<string, DonVi>` cho tốc độ tra cứu O(1), tối ưu cho bảng dữ liệu chứa hàng ngàn nhân sự.
-
-### 3.4. Cổng ghi dữ liệu duy nhất (đã xác minh trực tiếp trong `services/api/modules.ts`)
-- Toàn bộ thao tác **Đọc** đi qua các hàm `getX()` (VD `getPersonnel()`, `getThietBi()`...), có cơ chế fallback tự động sang dữ liệu offline (`getLocalRecords`) nếu Supabase lỗi.
-- Toàn bộ thao tác **Ghi/Sửa** bắt buộc qua `apiService.save(data, action, tableName)` — hàm tự làm sạch payload, tự sinh `id`, và tự gọi `invalidateCache()` + `writeLog()` (ghi Audit log). Không được gọi thẳng Supabase REST trong component.
-- Toàn bộ thao tác **Xóa** qua `apiService.deleteRecord(id, tableName).`
+### 3.6. Thuật Toán Tra Cứu Map O(1)
+Trong `src/pages/PersonnelPage.tsx` và `src/pages/CostManagementPage.tsx`:
+- Thay thế tìm kiếm mảng đệ quy O(N) `.find()` trong các hàm tra cứu tên đơn vị bằng các cấu trúc `Map` dạng `Map<string, DonVi>` cho tốc độ tra cứu O(1), tối ưu cho bảng dữ liệu chứa hàng ngàn bản ghi.
 
 ---
 
 ## 4. QUY CHUẨN THIẾT KẾ GIAO DIỆN & TRẢI NGHIỆM NGƯỜI DÙNG (UI/UX DESIGN SYSTEM)
 
-Hệ thống QTVP-ASDS áp dụng bộ quy chuẩn thiết kế giao diện đồng bộ, chuẩn xác đến từng pixel và inch nhằm mang lại trải nghiệm nhất quán, hiện đại và cao cấp trên tất cả 13 phân hệ.
+Hệ thống QTVP-ASDS áp dụng bộ quy chuẩn thiết kế giao diện đồng bộ, chuẩn xác đến từng pixel và inch nhằm mang lại trải nghiệm nhất quán, hiện đại và cao cấp trên tất cả 14 phân hệ.
 
 ### 4.1. Giao diện Tabs Phân cấp Liền khối (Nested Connected Tabs - NCT) & Hiệu ứng Trượt FlyonUI
 - **Kết cấu Liền khối Không Khoảng Hở (Single Container Geometry)**:
-  - Khi phân hệ có tab con cấp 2 (ví dụ: *Quản lý Xe*: Tab cha "Danh sách xe" $\rightarrow$ Sub-tab con "Hiện hữu (2) | Thanh lý (0)"; hoặc *ATVSLĐ*: Tab cha "Hồ sơ Báo cáo cơ sở" $\rightarrow$ Sub-tab con "Định kỳ | Đột xuất"), tab cha và dải sub-tab con **BẮT BUỘC nằm chung trong 1 container duy nhất** (`gap: 0`).
+  - Khi phân hệ có tab con cấp 2 (ví dụ: *Quản lý Chi phí*: Tab cha "Thống kê" $\rightarrow$ Sub-tab con "Báo cáo thống kê | Dashboard"; hoặc *Quản lý Xe*: Tab cha "Danh sách xe" $\rightarrow$ Sub-tab con "Hiện hữu (2) | Thanh lý (0)"), tab cha và dải sub-tab con **BẮT BUỘC nằm chung trong 1 container duy nhất** (`gap: 0`).
   - Tuyệt đối không tách rời thành 2 container độc lập có khoảng hở (gap) hay bo góc rời rạc như 2 viên pill xếp chồng.
   - Mép đáy của tab cha đang active tiếp giáp liền mạch, không có viền phân cách với hàng sub-tab bên dưới (`rounded-t-xl rounded-b-none pb-2.5 sm:pb-3`), màu nền đồng nhất tạo cảm giác một khối liên hoàn.
 - **Hiệu ứng Trượt FlyonUI (Sliding Pill Effect)**:
-  - Sử dụng `motion.div` từ `motion/react` (Framer Motion) với thuộc tính `layoutId` riêng biệt theo cấp (VD: `layoutId="vehicleSubTab"`, `layoutId="atvsldSubTab"`).
+  - Sử dụng `motion.div` từ `motion/react` (Framer Motion) với thuộc tính `layoutId` riêng biệt theo cấp (VD: `layoutId="costMainTabSlide"`, `layoutId="costThongKeSubTabSlide"`, `layoutId="vehicleSubTab"`).
   - Cấu hình chuyển động `transition={{ type: "spring", stiffness: 400, damping: 30 }}` giúp khối màu nền trượt mượt mà, đàn hồi tự nhiên giữa các tab khi người dùng chuyển đổi.
 - **Hiển thị Số lượng (Count Badges)**:
   - Tất cả các tab cha và sub-tab con đều tích hợp huy hiệu số lượng tự động cập nhật:
-    * *Tab cha*: `Danh sách xe (2) | Lịch trình & Nhật ký | Thống kê`
-    * *Sub-tab*: `Hiện hữu (2) | Thanh lý (0)`
+    * *Tab cha*: `Đề nghị thanh toán (12) | Thống kê | Cấu hình KMP (45) | Quản trị và Pháp nhân`
+    * *Sub-tab*: `Hiện hữu (2) | Thanh lý (0)` hoặc `Danh mục Bộ phận (16) | Pháp nhân & Showroom (5)`
 
 ### 4.2. Quy cách Kích thước Chuẩn của Thanh Công Cụ (Header Toolbar Specifications)
 
@@ -269,7 +347,7 @@ Hệ thống QTVP-ASDS áp dụng bộ quy chuẩn thiết kế giao diện đ�
   - Kích thước chuẩn: **256 x 32 px** (`2.766 x 0.3458 in`), Tailwind: `w-[256px] h-[32px]`.
   - Màu nền: Vàng ngà nhẹ chống lóa `#FFFFF0` (`bg-[#FFFFF0]`).
   - Viền & Bo góc: Bo tròn `rounded-lg`, viền mỏng `border-gray-200`.
-  - Trạng thái Focus: Viền xanh dương thương hiệu `#05469B` (`focus:border-[#05469B] focus:ring-1 focus:ring-[#05469B] outline-none`).
+  - Trạng thái Focus: Viền xanh dương thương hiệu `#05469B` hoặc màu đặc trưng phân hệ (`focus:ring-1 outline-none`).
   - Biểu tượng: Kính lúp (Search) 14px căn giữa dọc bên trái, text placeholder 12-13px (`text-xs`).
 
 - **✨ Nút Tính năng (Features Button)**:
@@ -289,12 +367,14 @@ Hệ thống QTVP-ASDS áp dụng bộ quy chuẩn thiết kế giao diện đ�
 
 ### 4.3. Bảng Màu Đặc Trưng Theo Phân Hệ (Module Characteristic Colors)
 - **Xanh dương `#05469B`** (`from-[#05469B] to-[#0a5bc4]`): Thông tin Nhân sự, Quản lý Xe Demo/Mobile Service, Quản lý Nhà cung cấp, Quản lý Trang thiết bị VP, Quản lý Văn bản - Tài liệu lưu trữ (VTLT), Quản lý Quy định - Quy trình.
+- **Vàng Amber `#D97706`** (`from-[#D97706] to-[#b45309]`): **Quản lý Chi phí Hành chính (CPHC)**.
 - **Đỏ `#dc2626`** (`from-red-600 to-rose-700`): Quản lý Hồ sơ PCCC & CNCH.
 - **Xanh lá `#16a34a`** (`from-emerald-600 to-teal-700`): Quản lý ATVSLĐ & Thiết bị Nghiêm ngặt.
 
 ### 4.4. Ma Trận Tùy Chọn Nút "Tính Năng" Theo Phân Hệ
 - **Thông tin Nhân sự**: `Thêm từng nhân sự` | `Thêm hàng loạt` | `Xuất báo cáo`.
 - **Quản lý Xe**: `Lọc nâng cao` (ẩn/hiện thanh slicer Hãng, Loại xe, Mục đích, Tình trạng) | `Thêm từng xe` | `Thêm hàng loạt`.
+- **Quản lý Chi phí**: `Lập ĐNTT mới` | `Dashboard phân tích` | `Danh mục KMP` | `Quản trị Khối & Bộ phận`.
 - **Hồ sơ PCCC**: `Thêm mới Hồ sơ PCCC`.
 - **ATVSLĐ**: `Thêm Báo cáo cơ sở`.
 - **Trang thiết bị VP**: `Quét QR` | `Thêm từng thiết bị` | `Thêm hàng loạt`.
@@ -383,6 +463,18 @@ Dưới đây là giải thích chi tiết lý do vì sao phiên bản gốc (H�
 > Mục này được thêm sau khi quét toàn bộ 81 file `.ts/.tsx` thật trong `src/` (không suy đoán). Xem chi tiết bảng ánh xạ Tính năng ↔ File ↔ Bảng Supabase đầy đủ tại `ARCHITECTURE.md`.
 
 - **Cơ chế xác định Đơn vị mặc định khi truy cập hệ thống**: Tự động chọn đơn vị mặc định khi truy cập bất kỳ phân hệ nào qua hàm `getDefaultUnitId(user, donViList)` trong `src/utils/hierarchy.ts`. Tài khoản Admin/Toàn quyền sẽ hiển thị mặc định đơn vị **THACO AUTO**, tài khoản thường (Showroom, điểm bán lẻ) sẽ hiển thị **Đơn vị mẹ quản lý** (Công ty tỉnh thành) của tài khoản đó.
+- **Xây dựng phân hệ Quản lý Chi phí Hành chính (CPHC - `CostManagementPage.tsx`)**:
+  - Tách bạch 4 tab nghiệp vụ hoàn chỉnh: *Đề nghị thanh toán (DNTT)*, *Thống kê*, *Cấu hình KMP*, và *Quản trị & Pháp nhân*.
+  - Cơ chế **Chốt kỳ & Fact Table Snapshot** (`chi_phi_chot_ky`, `chi_phi_thong_ke`): Kết chuyển dữ liệu độc lập sang Fact Table theo cấu trúc `Tháng/Năm × KMP × Bộ phận × Đơn vị × Pháp nhân × MST`. Xóa/sửa phiếu DNTT cũ trong kỳ đã chốt bị khóa chặn tuyệt đối (`checkDnttBelongsToLockedPeriod`), bảo toàn 100% số liệu báo cáo tài chính lịch sử.
+  - Tích hợp động cơ **Dynamic Pivot Table** (`pivot/`) và mẫu báo cáo **Ma trận THACO** (`CostMatrixView.tsx`): Cho phép người dùng tùy ý kéo thả Hàng/Cột/Giá trị, lưu cấu hình vào bảng `chi_phi_pivot_config` với renderer linh hoạt (`matrix_thaco` hoặc `pivot_generic`).
+  - Hỗ trợ xuất phiếu DNTT ra file **Word (`docx`)** và **PDF** in ấn trực tiếp chuẩn 4 chữ ký thẩm quyền THACO AUTO kèm tiện ích đọc số tiền thành chữ tiếng Việt (`numberToWordsVN.ts`).
+  - **Hỗ trợ 1 Pháp nhân dùng chung nhiều Đơn vị trực thuộc**: Cột `dm_phap_nhan.id_don_vi` hỗ trợ chuỗi danh sách ID phân cách bằng dấu phẩy (VD: `DV01,DV02,DV03`), cho phép một pháp nhân liên kết nhiều showroom cùng đơn vị mẹ.
+- **Thuật toán Tải Song Song Phân Trang (Parallel Batch Fetching)**: Khắc phục giới hạn 1.000 bản ghi của Supabase PostgREST bằng cách đọc header `Content-Range` và gửi song song nhiều request `Range: x-y` qua `Promise.all()`, tăng tốc độ tải dữ liệu lên gấp 5-10 lần.
+- **Kiểm soát Phạm vi Ghi Dữ liệu (`checkUnitPermission`)**: Chặn đứng mọi hành vi ghi/sửa dữ liệu ngoài phạm vi đơn vị được phân quyền ngay tại hàm `apiService.save()` trước khi gửi request tới Supabase.
+- **Quản lý Xe: Bộ chọn Địa điểm 3 Cấp & Tab Lịch trình/Thống kê (`VehiclePage.tsx`)**:
+  - Lưu trữ JSON địa điểm 3 cấp `dia_diem_su_dung` (Khu vực $\rightarrow$ Showroom $\rightarrow$ Bộ phận) trong bảng `ts_xe` qua `VehicleLocationPicker.tsx`.
+  - Quản lý nhật ký lịch trình di chuyển xe (`VehicleScheduleTab.tsx`) và phân tích biểu đồ chi phí vận hành xe (`VehicleStatsTab.tsx`).
+  - Hỗ trợ phân quyền giới hạn danh sách xe được xem (`XE_ALLOW_LIST`).
 - **Xây dựng phân hệ Khám sức khỏe & Bệnh nghề nghiệp (`SucKhoeTab.tsx`)**: Đã chuyển đổi từ khung placeholder thành giao diện tính năng hoàn chỉnh, hỗ trợ dán Excel cá nhân (tự viết hoa chữ cái đầu họ tên, tự gán đúng đơn vị khám cũ), tự động tính toán tổng hợp đợt KSK cấp đơn vị, phân tách bộ lọc: Ma trận lọc theo đơn vị hiện tại (xem tiến trình điều chuyển), Danh sách lọc theo đơn vị lúc khám.
 - **Nâng cấp Đào tạo/Huấn luyện sang cơ chế Matrix & List View (`KhoaHocTab.tsx`)**: Tích hợp SubTab chia xem danh sách khóa học và lịch sử cá nhân. Bảng ma trận hiển thị lịch sử các năm (cột năm động) kèm timeline chi tiết, bảng danh sách lọc theo đơn vị lúc học để báo cáo chi phí. Tích hợp nút xuất Excel đề xuất học đợt tiếp theo chuẩn 14 cột. Hỗ trợ validate và đồng bộ ngược thông minh toàn hệ thống theo MSNV khi nhân sự đã điều chuyển đơn vị.
 - **utils/logger.tsx trùng lặp đã được xóa**: Đã xóa tệp `utils/logger.tsx` dư thừa, giữ lại `utils/logger.ts` làm nguồn duy nhất chứa logic export hàm `generateDiffLog()`, tránh cảnh báo khi biên dịch.
