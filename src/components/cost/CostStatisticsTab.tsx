@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   BarChart2, Calendar, Filter, Download, Lock, Unlock, AlertCircle,
-  TrendingUp, TrendingDown, CheckCircle2, ChevronDown, Layers,
+  TrendingUp, TrendingDown, CheckCircle2, ChevronDown, ChevronRight, Layers,
   Building, RefreshCw, X, ShieldAlert, Sparkles, PieChart, FileSpreadsheet,
-  Search, CheckSquare, Square
+  Search, CheckSquare, Square, Clock, CheckCheck, AlertTriangle, Globe
 } from 'lucide-react';
 import {
   ChiPhiChotKy, ChiPhiThongKe, DNTT, DnttPhanBo, DmKmp,
@@ -12,7 +12,7 @@ import {
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from '../../utils/toast';
-import { getAllSubordinateIds, getUserPermittedUnitIds } from '../../utils/hierarchy';
+import { getAllSubordinateIds, getUserPermittedUnitIds, getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../../utils/hierarchy';
 import CostMatrixView from './CostMatrixView';
 import CostPivotView from './pivot/CostPivotView';
 import CostDashboardTab from './CostDashboardTab';
@@ -35,6 +35,7 @@ interface Props {
   loading: boolean;
   activeSubTab?: 'bao_cao' | 'dashboard';
   onSubTabChange?: (sub: 'bao_cao' | 'dashboard') => void;
+  chotKyTrigger?: number;
 }
 
 type DimensionType =
@@ -75,9 +76,14 @@ export default function CostStatisticsTab({
   onRefresh,
   loading,
   activeSubTab,
-  onSubTabChange
+  onSubTabChange,
+  chotKyTrigger
 }: Props) {
-  const { user } = useAuth();
+  const { user, canLockPeriod } = useAuth();
+  const isAdmin = useMemo(() => String(user?.quyen || '').toUpperCase() === 'ADMIN', [user]);
+  const canLock = useMemo(() => {
+    return isAdmin || canLockPeriod(selectedUnitFilter || undefined);
+  }, [isAdmin, canLockPeriod, selectedUnitFilter]);
 
   // 1. STATE SUB-TABS & BỘ LỌC
   const [internalSubTab, setInternalSubTab] = useState<'bao_cao' | 'dashboard'>('bao_cao');
@@ -118,6 +124,46 @@ export default function CostStatisticsTab({
     return getUserPermittedUnitIds(user, fullDonViList || donViList);
   }, [user, fullDonViList, donViList]);
 
+  // Xác định phạm vi áp dụng của thao tác chốt kỳ:
+  const currentScopeInfo = useMemo(() => {
+    const allUnits = fullDonViList && fullDonViList.length > 0 ? fullDonViList : donViList;
+    if (isAdmin && (!selectedUnitFilter || selectedUnitFilter === 'ALL')) {
+      return {
+        scopeUnitId: 'ALL',
+        scopeUnitName: 'Toàn hệ thống (Toàn quốc)',
+        subCount: allUnits.length,
+        affectedUnitIds: undefined
+      };
+    }
+
+    let targetUnitId = selectedUnitFilter && selectedUnitFilter !== 'ALL' ? selectedUnitFilter : user?.id_don_vi;
+    if (targetUnitId && String(targetUnitId).includes(',')) {
+      targetUnitId = String(targetUnitId).split(',')[0].trim();
+    }
+
+    let targetUnit = allUnits.find(d => String(d.id) === String(targetUnitId));
+    if (!targetUnit && allUnits.length > 0) targetUnit = allUnits[0];
+
+    // Nếu là Showroom con, tìm đơn vị mẹ CTTT / VPĐH:
+    let rootUnit = targetUnit;
+    if (rootUnit?.cap_quan_ly && rootUnit.cap_quan_ly !== 'HO' && rootUnit.cap_quan_ly !== 'DV_HO') {
+      const parent = allUnits.find(u => String(u.id) === String(rootUnit?.cap_quan_ly));
+      if (parent) rootUnit = parent;
+    }
+
+    const rootId = rootUnit ? String(rootUnit.id) : '';
+    const rootName = rootUnit ? rootUnit.ten_don_vi : 'Đơn vị';
+    const subIds = rootId ? getAllSubordinateIds(rootId, allUnits) : [];
+    const affectedIds = rootId ? [rootId, ...subIds] : [];
+
+    return {
+      scopeUnitId: rootId,
+      scopeUnitName: rootName,
+      subCount: subIds.length,
+      affectedUnitIds: affectedIds
+    };
+  }, [isAdmin, selectedUnitFilter, user?.id_don_vi, fullDonViList, donViList]);
+
   // Đơn vị được lọc từ thanh bên ngoài và phân quyền tài khoản
   const allowedUnitIds = useMemo(() => {
     if (selectedUnitFilter && selectedUnitFilter !== 'ALL') {
@@ -152,6 +198,191 @@ export default function CostStatisticsTab({
   const [newChotNam, setNewChotNam] = useState<number>(now.getFullYear());
   const [newChotGhiChu, setNewChotGhiChu] = useState<string>('');
   const [revokeConfirmId, setRevokeConfirmId] = useState<string | null>(null);
+
+  // Quản lý Mở khóa ngoại lệ theo Đơn vị & Gia hạn thời gian & Đồng bộ Snapshot
+  const [unitUnlockModalOpen, setUnitUnlockModalOpen] = useState<ChiPhiChotKy | null>(null);
+  const [unlockMode, setUnlockMode] = useState<'CURRENT_FILTER' | 'ALL_SYSTEM' | 'TREE_SELECT'>('CURRENT_FILTER');
+  const [selectedUnitsToUnlock, setSelectedUnitsToUnlock] = useState<string[]>([]);
+  const [expandedUnitTreeParents, setExpandedUnitTreeParents] = useState<string[]>([]);
+  const [unlockHasDeadline, setUnlockHasDeadline] = useState<boolean>(true);
+  const [unlockDeadline, setUnlockDeadline] = useState<string>('');
+  const [unitSearchKeyword, setUnitSearchKeyword] = useState<string>('');
+  const [unitUnlockReason, setUnitUnlockReason] = useState<string>('');
+  const [unitUnlockSubmitting, setUnitUnlockSubmitting] = useState(false);
+  const [syncingSnapshotId, setSyncingSnapshotId] = useState<string | null>(null);
+
+  // Modal Gia hạn thời gian riêng
+  const [extensionModalOpen, setExtensionModalOpen] = useState<ChiPhiChotKy | null>(null);
+  const [extensionHasDeadline, setExtensionHasDeadline] = useState<boolean>(true);
+  const [extensionDeadline, setExtensionDeadline] = useState<string>('');
+  const [extensionReason, setExtensionReason] = useState<string>('');
+  const [extensionSubmitting, setExtensionSubmitting] = useState(false);
+
+  // Helpers định dạng thời gian cho input datetime-local
+  const formatDateTimeLocalInput = (date: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const y = date.getFullYear();
+    const m = pad(date.getMonth() + 1);
+    const d = pad(date.getDate());
+    const h = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    return `${y}-${m}-${d}T${h}:${min}`;
+  };
+
+  const getFutureDateAt2359 = (daysAhead: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysAhead);
+    d.setHours(23, 59, 0, 0);
+    return formatDateTimeLocalInput(d);
+  };
+
+  const getEndOfWeekDateAt2359 = () => {
+    const d = new Date();
+    const day = d.getDay(); // 0 is Sunday
+    const diff = day === 0 ? 0 : 7 - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(23, 59, 0, 0);
+    return formatDateTimeLocalInput(d);
+  };
+
+  const openUnlockModal = (ck: ChiPhiChotKy) => {
+    setUnitUnlockModalOpen(ck);
+    setUnlockMode('CURRENT_FILTER');
+    setSelectedUnitsToUnlock([]);
+    setExpandedUnitTreeParents([]);
+    setUnitSearchKeyword('');
+    setUnlockHasDeadline(true);
+    setUnlockDeadline(getFutureDateAt2359(2)); // Mặc định 2 ngày tới
+    setUnitUnlockReason('');
+  };
+
+  const openExtensionModal = (ck: ChiPhiChotKy) => {
+    setExtensionModalOpen(ck);
+    if (ck.han_mo_khoa) {
+      setExtensionHasDeadline(true);
+      const d = new Date(ck.han_mo_khoa);
+      if (!isNaN(d.getTime())) {
+        setExtensionDeadline(formatDateTimeLocalInput(d));
+      } else {
+        setExtensionDeadline(getFutureDateAt2359(2));
+      }
+    } else {
+      setExtensionHasDeadline(true);
+      setExtensionDeadline(getFutureDateAt2359(2));
+    }
+    setExtensionReason(ck.ly_do_mo_khoa || '');
+  };
+
+  const formatDeadlineBadge = (deadlineStr?: string | null) => {
+    if (!deadlineStr) return null;
+    const d = new Date(deadlineStr);
+    if (isNaN(d.getTime())) return null;
+    const now = new Date();
+    const isExpired = now > d;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())} ngày ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+    
+    if (isExpired) {
+      return {
+        isExpired: true,
+        badgeClass: "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800",
+        label: `Đã hết hạn (${timeStr})`,
+        tooltip: `Đã hết hạn lúc ${timeStr}. Hệ thống đang tự động đóng băng an toàn các phiếu DNTT.`
+      };
+    }
+    
+    const diffMs = d.getTime() - now.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    const remHours = diffHours % 24;
+    const remainStr = diffDays > 0 ? `Còn ${diffDays} ngày ${remHours}h` : `Còn ${Math.max(1, diffHours)}h`;
+
+    return {
+      isExpired: false,
+      badgeClass: "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700",
+      label: `Hạn: ${timeStr} (${remainStr})`,
+      tooltip: `Đang mở khóa có thời hạn đến ${timeStr} (${remainStr}). Sau thời hạn này hệ thống sẽ tự động đóng băng an toàn.`
+    };
+  };
+
+  // Mở modal khi nhận trigger từ menu tính năng bên ngoài (Chỉ Admin hoặc người có quyền Chốt kỳ)
+  useEffect(() => {
+    if (chotKyTrigger && chotKyTrigger > 0 && canLock) {
+      setChotKyModalOpen(true);
+    }
+  }, [chotKyTrigger, canLock]);
+
+  // Cấu trúc Cây Đơn vị Phân cấp chuẩn theo Bộ lọc Đơn vị của Quản lý Chi phí
+  const unitTreeData = useMemo(() => {
+    const allUnits = fullDonViList && fullDonViList.length > 0 ? fullDonViList : donViList;
+    
+    // Lọc theo phân quyền người dùng
+    let permitted = userPermittedUnitIds
+      ? allUnits.filter(u => userPermittedUnitIds.has(String(u.id)))
+      : allUnits;
+
+    // Nếu kỳ chốt có id_don_vi cụ thể (không phải 'ALL'), chỉ lấy các đơn vị trong phạm vi của kỳ đó
+    if (unitUnlockModalOpen?.id_don_vi && unitUnlockModalOpen.id_don_vi !== 'ALL') {
+      const allowedScopeIds = new Set([
+        String(unitUnlockModalOpen.id_don_vi),
+        ...getAllSubordinateIds(unitUnlockModalOpen.id_don_vi, allUnits).map(String)
+      ]);
+      permitted = permitted.filter(u => allowedScopeIds.has(String(u.id)));
+    }
+
+    // Tìm kiếm nhanh theo từ khóa
+    let searchedUnits = permitted;
+    if (unitSearchKeyword.trim()) {
+      const lower = unitSearchKeyword.toLowerCase().trim();
+      const matchedIds = new Set<string>();
+      permitted.forEach(u => {
+        if (
+          String(u.ten_don_vi || '').toLowerCase().includes(lower) ||
+          String(u.ma_don_vi || '').toLowerCase().includes(lower) ||
+          String(u.id || '').toLowerCase().includes(lower)
+        ) {
+          matchedIds.add(String(u.id));
+          let pId = u.cap_quan_ly;
+          while (pId && pId !== 'HO' && pId !== 'DV_HO') {
+            matchedIds.add(String(pId));
+            const pUnit = permitted.find(p => String(p.id) === String(pId));
+            pId = pUnit ? pUnit.cap_quan_ly : null;
+          }
+        }
+      });
+      const addChildren = (parentId: string) => {
+        permitted.forEach(u => {
+          if (String(u.cap_quan_ly) === parentId && !matchedIds.has(String(u.id))) {
+            matchedIds.add(String(u.id));
+            addChildren(String(u.id));
+          }
+        });
+      };
+      Array.from(matchedIds).forEach(id => addChildren(id));
+      searchedUnits = permitted.filter(u => matchedIds.has(String(u.id)));
+    }
+
+    const searchedUnitIds = new Set(searchedUnits.map(u => String(u.id)));
+    const parents = searchedUnits.filter(u =>
+      u.cap_quan_ly === 'HO' || u.cap_quan_ly === 'DV_HO' || !u.cap_quan_ly || !searchedUnitIds.has(String(u.cap_quan_ly))
+    );
+
+    const getChildren = (parentId: string) =>
+      sortDonViByThuTu(searchedUnits.filter(u => String(u.cap_quan_ly) === String(parentId)));
+
+    const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = groupParentUnits(parents);
+
+    return {
+      allUnits: permitted,
+      searchedUnits,
+      parents,
+      getChildren,
+      vpdhUnits,
+      ctttNamUnits,
+      ctttBacUnits,
+      otherUnits
+    };
+  }, [fullDonViList, donViList, userPermittedUnitIds, unitUnlockModalOpen, unitSearchKeyword]);
 
   // 2. MAPPING DICTIONARIES
   const donViMap = useMemo(() => new Map(donViList.map(d => [String(d.id), d])), [donViList]);
@@ -983,15 +1214,23 @@ export default function CostStatisticsTab({
       return;
     }
 
+    if (!canLock) {
+      toast.error('Bạn không có quyền CHỐT KỲ chi phí!');
+      return;
+    }
+
     setChotKySubmitting(true);
     try {
       const res = await apiService.chotKyChiPhi(
         newChotThang,
         newChotNam,
         user?.ho_ten || user?.email || 'Quản trị viên',
-        newChotGhiChu
+        newChotGhiChu,
+        currentScopeInfo.scopeUnitId,
+        currentScopeInfo.scopeUnitName,
+        currentScopeInfo.affectedUnitIds
       );
-      toast.success(`Chốt kỳ Tháng ${newChotThang}/${newChotNam} thành công! Đã snapshot ${res.so_dong_snapshot} dòng thống kê.`);
+      toast.success(`Chốt kỳ Tháng ${newChotThang}/${newChotNam} cho "${currentScopeInfo.scopeUnitName}" thành công! Đã snapshot ${res.so_dong_snapshot} dòng thống kê.`);
       setNewChotGhiChu('');
       await onRefresh();
     } catch (err: any) {
@@ -1004,6 +1243,11 @@ export default function CostStatisticsTab({
 
   // 7. XỬ LÝ HỦY CHỐT KỲ
   const handleRevokeChotKy = async (chotKyId: string) => {
+    if (!canLock) {
+      toast.error('Bạn không có quyền HỦY CHỐT KỲ chi phí!');
+      return;
+    }
+
     setChotKySubmitting(true);
     try {
       await apiService.huyChotKyChiPhi(chotKyId, user?.ho_ten || user?.email || 'Quản trị viên');
@@ -1015,6 +1259,172 @@ export default function CostStatisticsTab({
       toast.error(err?.message || 'Có lỗi xảy ra khi hủy chốt kỳ!');
     } finally {
       setChotKySubmitting(false);
+    }
+  };
+
+  // 7.1 XỬ LÝ MỞ KHÓA KỲ CHỐT (THEO BỘ LỌC ĐANG XEM / TOÀN BỘ HỆ THỐNG / CÂY ĐƠN VỊ PHÂN CẤP)
+  const handleUnlockSubmit = async () => {
+    if (!unitUnlockModalOpen) return;
+
+    if (unlockMode === 'TREE_SELECT' && selectedUnitsToUnlock.length === 0) {
+      toast.warning('Vui lòng chọn ít nhất 1 đơn vị cần mở khóa từ cây đơn vị!');
+      return;
+    }
+
+    if (unlockHasDeadline && !unlockDeadline) {
+      toast.warning('Vui lòng chọn ngày giờ hạn chót gia hạn!');
+      return;
+    }
+
+    setUnitUnlockSubmitting(true);
+    try {
+      const deadlineValue = unlockHasDeadline ? new Date(unlockDeadline).toISOString() : null;
+      const userName = user?.ho_ten || user?.user_name || 'Admin';
+
+      if (unlockMode === 'ALL_SYSTEM') {
+        // Mở khóa toàn quốc
+        await apiService.moKhoaToanBoDonViChotKy(
+          unitUnlockModalOpen.id,
+          userName,
+          deadlineValue,
+          unitUnlockReason
+        );
+        toast.success('Đã mở khóa TOÀN BỘ hệ thống cho kỳ chốt này thành công!');
+      } else if (unlockMode === 'CURRENT_FILTER') {
+        if (currentScopeInfo.scopeUnitId === 'ALL' || !unitUnlockModalOpen.id_don_vi || unitUnlockModalOpen.id_don_vi === 'ALL') {
+          // Mở khóa toàn quốc
+          await apiService.moKhoaToanBoDonViChotKy(
+            unitUnlockModalOpen.id,
+            userName,
+            deadlineValue,
+            unitUnlockReason
+          );
+          toast.success('Đã mở khóa TOÀN BỘ hệ thống cho kỳ chốt này thành công!');
+        } else {
+          // Mở khóa các đơn vị thuộc bộ lọc hiện tại
+          const unitIds = currentScopeInfo.affectedUnitIds || [];
+          await apiService.moKhoaHangLoatDonViChotKy(
+            unitUnlockModalOpen.id,
+            unitIds,
+            userName,
+            deadlineValue,
+            unitUnlockReason
+          );
+          toast.success(`Đã mở khóa thành công cho ${unitIds.length} đơn vị thuộc ${currentScopeInfo.scopeUnitName}!`);
+        }
+      } else {
+        // unlockMode === 'TREE_SELECT'
+        const allUnits = fullDonViList && fullDonViList.length > 0 ? fullDonViList : donViList;
+        if (selectedUnitsToUnlock.length >= allUnits.length) {
+          await apiService.moKhoaToanBoDonViChotKy(
+            unitUnlockModalOpen.id,
+            userName,
+            deadlineValue,
+            unitUnlockReason
+          );
+          toast.success('Đã mở khóa TOÀN BỘ hệ thống cho kỳ chốt này thành công!');
+        } else {
+          await apiService.moKhoaHangLoatDonViChotKy(
+            unitUnlockModalOpen.id,
+            selectedUnitsToUnlock,
+            userName,
+            deadlineValue,
+            unitUnlockReason
+          );
+          toast.success(`Đã mở khóa thành công cho ${selectedUnitsToUnlock.length} đơn vị đã chọn!`);
+        }
+      }
+
+      setUnitUnlockModalOpen(null);
+      setSelectedUnitsToUnlock([]);
+      setExpandedUnitTreeParents([]);
+      setUnitUnlockReason('');
+      await onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi mở khóa kỳ chốt');
+    } finally {
+      setUnitUnlockSubmitting(false);
+    }
+  };
+
+  // 7.2 KHÓA LẠI ĐƠN VỊ CỤ THỂ VÀ ĐỒNG BỘ SNAPSHOT
+  const handleRelockUnitInPeriod = async (chotKyId: string, unitId: string) => {
+    setChotKySubmitting(true);
+    try {
+      await apiService.khoaLaiDonViChotKy(
+        chotKyId,
+        unitId,
+        user?.ho_ten || user?.user_name || 'Admin'
+      );
+      toast.success('Đã khóa lại đơn vị và đồng bộ snapshot thống kê thành công!');
+      await onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi khóa lại đơn vị');
+    } finally {
+      setChotKySubmitting(false);
+    }
+  };
+
+  // 7.3 KHÓA LẠI TOÀN BỘ VÀ ĐỒNG BỘ SNAPSHOT (1-CLICK RELOCK)
+  const handleRelockAllInPeriod = async (chotKyId: string) => {
+    setChotKySubmitting(true);
+    try {
+      const res = await apiService.khoaLaiToanBoChotKy(
+        chotKyId,
+        user?.ho_ten || user?.user_name || 'Admin'
+      );
+      toast.success(`Đã khóa lại toàn bộ kỳ chốt và đồng bộ snapshot thành công (${res.so_dong_snapshot} dòng)!`);
+      await onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi khóa lại toàn bộ');
+    } finally {
+      setChotKySubmitting(false);
+    }
+  };
+
+  // 7.4 LƯU CẬP NHẬT GIA HẠN THỜI GIAN
+  const handleSaveExtension = async () => {
+    if (!extensionModalOpen) return;
+    if (extensionHasDeadline && !extensionDeadline) {
+      toast.warning('Vui lòng chọn ngày giờ hạn chót gia hạn!');
+      return;
+    }
+
+    setExtensionSubmitting(true);
+    try {
+      const deadlineValue = extensionHasDeadline ? new Date(extensionDeadline).toISOString() : null;
+      await apiService.giaHanThoiGianChotKy(
+        extensionModalOpen.id,
+        deadlineValue,
+        user?.ho_ten || user?.user_name || 'Admin',
+        extensionReason
+      );
+      toast.success(deadlineValue ? 'Đã cập nhật thời hạn gia hạn kỳ chốt!' : 'Đã chuyển sang mở khóa vô thời hạn!');
+      setExtensionModalOpen(null);
+      setExtensionDeadline('');
+      setExtensionReason('');
+      await onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi gia hạn thời gian');
+    } finally {
+      setExtensionSubmitting(false);
+    }
+  };
+
+  // 7.3 ĐỒNG BỘ LẠI SNAPSHOT THỐNG KÊ TỪ DNTT
+  const handleSyncSnapshot = async (chotKyId: string) => {
+    setSyncingSnapshotId(chotKyId);
+    try {
+      const res = await apiService.dongBoSnapshotChotKy(
+        chotKyId,
+        user?.ho_ten || user?.user_name || 'Admin'
+      );
+      toast.success(`Đã cập nhật lại snapshot! Đồng bộ thành công ${res.so_dong_snapshot} dòng số liệu.`);
+      await onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi đồng bộ snapshot');
+    } finally {
+      setSyncingSnapshotId(null);
     }
   };
 
@@ -1289,15 +1699,15 @@ export default function CostStatisticsTab({
             onToggleIncludeTemporary={setIncludeTemporary}
             onlyAdministrative={onlyAdministrative}
             onToggleOnlyAdministrative={setOnlyAdministrative}
-            onOpenChotKyModal={() => setChotKyModalOpen(true)}
+            onOpenChotKyModal={canLock ? () => setChotKyModalOpen(true) : undefined}
           />
         </div>
       )}
 
-      {/* 4. MODAL QUẢN LÝ CHỐT KỲ */}
-      {chotKyModalOpen && (
+      {/* 4. MODAL QUẢN LÝ CHỐT KỲ (CHO PHÉP ADMIN HOẶC TÀI KHOẢN ĐƯỢC PHÂN QUYỀN CAN_LOCK_PERIOD) */}
+      {chotKyModalOpen && canLock && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-2xl shadow-2xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-3xl shadow-2xl border border-gray-200 dark:border-slate-700 flex flex-col max-h-[90vh] overflow-hidden space-y-4 animate-in fade-in zoom-in-95 duration-200">
             {/* Header Modal */}
             <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-slate-700">
               <div className="flex items-center gap-2">
@@ -1319,6 +1729,19 @@ export default function CostStatisticsTab({
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-5 custom-scrollbar pr-1">
+              {/* Thông tin phạm vi áp dụng */}
+              <div className="p-3 bg-blue-50/80 dark:bg-slate-700/50 rounded-xl border border-blue-200 dark:border-slate-600 text-xs text-blue-900 dark:text-blue-200 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-xs text-[#05469B] dark:text-blue-300">
+                  <Building size={14} />
+                  <span>Phạm vi áp dụng: <strong>{currentScopeInfo.scopeUnitName}</strong></span>
+                </div>
+                <p className="text-[11px] text-blue-800 dark:text-blue-300 leading-relaxed">
+                  {currentScopeInfo.scopeUnitId === 'ALL'
+                    ? '🌐 Chốt kỳ sẽ áp dụng trên TOÀN BỘ hệ thống (HO & tất cả Công ty tỉnh thành, Showroom toàn quốc).'
+                    : `🏢 Thao tác chốt kỳ này sẽ đóng băng các phiếu ĐNTT của ${currentScopeInfo.scopeUnitName} và ${currentScopeInfo.subCount} đơn vị/showroom trực thuộc. Các Công ty tỉnh thành khác không bị ảnh hưởng và vẫn làm việc bình thường.`}
+                </p>
+              </div>
+
               {/* Form Chốt kỳ mới */}
               <div className="p-4 bg-amber-50/60 dark:bg-slate-700/50 rounded-xl border border-amber-200 dark:border-slate-600 space-y-3">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-[#D97706] flex items-center gap-1.5">
@@ -1356,7 +1779,7 @@ export default function CostStatisticsTab({
                       type="text"
                       value={newChotGhiChu}
                       onChange={(e) => setNewChotGhiChu(e.target.value)}
-                      placeholder="VD: Chốt sau kiểm toán T8"
+                      placeholder="VD: Chốt số liệu sau kiểm toán T8"
                       className="w-full bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg p-2 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400"
                     />
                   </div>
@@ -1386,6 +1809,8 @@ export default function CostStatisticsTab({
                     <thead className="bg-gray-50 dark:bg-slate-700/60 text-gray-600 dark:text-gray-300 font-semibold border-b border-gray-200 dark:border-slate-600">
                       <tr>
                         <th className="p-2.5">Kỳ (Tháng/Năm)</th>
+                        <th className="p-2.5">Đơn vị áp dụng</th>
+                        <th className="p-2.5">Ngoại lệ Mở khóa ĐV</th>
                         <th className="p-2.5">Trạng thái</th>
                         <th className="p-2.5">Người chốt</th>
                         <th className="p-2.5">Thời gian</th>
@@ -1396,64 +1821,233 @@ export default function CostStatisticsTab({
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                       {chotKyList.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="p-4 text-center text-gray-400 text-xs">
+                          <td colSpan={8} className="p-4 text-center text-gray-400 text-xs">
                             Chưa có kỳ nào được chốt trong hệ thống.
                           </td>
                         </tr>
                       ) : (
                         chotKyList.map(ck => (
                           <tr key={ck.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-700/30">
-                            <td className="p-2.5 font-bold text-[#D97706] font-mono">
+                            <td className="p-2.5 font-bold text-[#D97706] font-mono whitespace-nowrap">
                               Tháng {ck.thang}/{ck.nam}
+                            </td>
+                            <td className="p-2.5 font-semibold text-gray-800 dark:text-gray-200">
+                              <span className="inline-flex items-center gap-1">
+                                {ck.id_don_vi === 'ALL' || !ck.id_don_vi ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    🌐 Toàn quốc
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                    🏢 {ck.ten_don_vi || ck.id_don_vi}
+                                  </span>
+                                )}
+                              </span>
                             </td>
                             <td className="p-2.5">
                               {ck.trang_thai === 'da_chot' ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                <div className="space-y-1.5">
+                                  {/* TRƯỜNG HỢP 1: ĐANG MỞ KHÓA TOÀN BỘ */}
+                                  {ck.mo_khoa_toan_bo ? (
+                                    <div className="space-y-1">
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-900 border border-emerald-300 dark:from-emerald-950/70 dark:to-teal-950/70 dark:text-emerald-200 dark:border-emerald-700 shadow-xs">
+                                          <Unlock size={10} className="text-emerald-600 dark:text-emerald-400" />
+                                          <span>MỞ TOÀN BỘ ({ck.ten_don_vi || (ck.id_don_vi === 'ALL' ? 'Toàn quốc' : ck.id_don_vi)})</span>
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => openExtensionModal(ck)}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 cursor-pointer transition-colors"
+                                          title="Gia hạn thời hạn mở khóa"
+                                        >
+                                          <Clock size={9} /> Gia hạn
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={chotKySubmitting}
+                                          onClick={() => handleRelockAllInPeriod(ck.id)}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 cursor-pointer transition-colors"
+                                          title="Khóa lại toàn bộ & tự động đồng bộ snapshot"
+                                        >
+                                          <Lock size={9} /> Khóa lại
+                                        </button>
+                                      </div>
+                                      {/* Deadline status */}
+                                      {ck.han_mo_khoa ? (
+                                        (() => {
+                                          const dl = formatDeadlineBadge(ck.han_mo_khoa);
+                                          if (!dl) return null;
+                                          return (
+                                            <div className="flex items-center gap-1">
+                                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${dl.badgeClass}`} title={dl.tooltip}>
+                                                <Clock size={9} />
+                                                <span>{dl.label}</span>
+                                              </span>
+                                              {dl.isExpired && (
+                                                <span className="text-[9px] font-bold text-rose-600 italic">(Đã tự đóng băng)</span>
+                                              )}
+                                            </div>
+                                          );
+                                        })()
+                                      ) : (
+                                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 italic block">
+                                          Vô thời hạn (cho đến khi Khóa lại)
+                                        </span>
+                                      )}
+                                      {ck.ly_do_mo_khoa && (
+                                        <div className="text-[10px] text-gray-500 italic max-w-[220px] truncate" title={ck.ly_do_mo_khoa}>
+                                          Lý do: {ck.ly_do_mo_khoa}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : ck.danh_sach_don_vi_mo_khoa && ck.danh_sach_don_vi_mo_khoa.length > 0 ? (
+                                    /* TRƯỜNG HỢP 2: ĐANG MỞ THEO DANH SÁCH ĐƠN VỊ */
+                                    <div className="space-y-1">
+                                      <div className="flex flex-wrap gap-1 items-center">
+                                        {ck.danh_sach_don_vi_mo_khoa.map(uId => {
+                                          const u = (fullDonViList || donViList).find(item => String(item.id) === String(uId));
+                                          const uName = u ? u.ten_don_vi : uId;
+                                          return (
+                                            <span key={uId} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-900/60 dark:text-amber-200 dark:border-amber-700">
+                                              <Unlock size={9} className="text-amber-600" />
+                                              <span className="max-w-[110px] truncate" title={uName}>{uName}</span>
+                                              <button
+                                                type="button"
+                                                disabled={unitUnlockSubmitting}
+                                                onClick={() => handleRelockUnitInPeriod(ck.id, uId)}
+                                                className="ml-1 text-amber-700 hover:text-red-600 cursor-pointer font-black text-xs leading-none"
+                                                title="Khóa lại đơn vị này & tự động cập nhật snapshot"
+                                              >
+                                                ×
+                                              </button>
+                                            </span>
+                                          );
+                                        })}
+                                        <button
+                                          type="button"
+                                          onClick={() => openUnlockModal(ck)}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 transition-colors cursor-pointer"
+                                          title="Admin: Mở khóa thêm đơn vị"
+                                        >
+                                          <Unlock size={9} /> + Mở ĐV
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openExtensionModal(ck)}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 cursor-pointer transition-colors"
+                                          title="Gia hạn thời hạn mở khóa"
+                                        >
+                                          <Clock size={9} /> Gia hạn
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={chotKySubmitting}
+                                          onClick={() => handleRelockAllInPeriod(ck.id)}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 cursor-pointer transition-colors"
+                                          title="Khóa lại toàn bộ & tự động đồng bộ snapshot"
+                                        >
+                                          <Lock size={9} /> Khóa lại tất cả
+                                        </button>
+                                      </div>
+                                      {/* Deadline status */}
+                                      {ck.han_mo_khoa && (
+                                        (() => {
+                                          const dl = formatDeadlineBadge(ck.han_mo_khoa);
+                                          if (!dl) return null;
+                                          return (
+                                            <div className="flex items-center gap-1">
+                                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${dl.badgeClass}`} title={dl.tooltip}>
+                                                <Clock size={9} />
+                                                <span>{dl.label}</span>
+                                              </span>
+                                              {dl.isExpired && (
+                                                <span className="text-[9px] font-bold text-rose-600 italic">(Đã tự đóng băng)</span>
+                                              )}
+                                            </div>
+                                          );
+                                        })()
+                                      )}
+                                    </div>
+                                  ) : (
+                                    /* TRƯỜNG HỢP 3: ĐÓNG BĂNG 100% */
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-gray-400 italic text-[11px]">Đóng băng 100%</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => openUnlockModal(ck)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-slate-700 border border-dashed border-amber-300 transition-colors cursor-pointer"
+                                        title="Admin: Mở khóa toàn bộ theo bộ lọc hoặc chọn đơn vị cụ thể, kèm gia hạn"
+                                      >
+                                        <Unlock size={9} /> Mở khóa / Gia hạn
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-[11px]">-</span>
+                              )}
+                            </td>
+                            <td className="p-2.5">
+                              {ck.trang_thai === 'da_chot' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 whitespace-nowrap">
                                   <Lock size={10} /> Đang chốt
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 whitespace-nowrap">
                                   <Unlock size={10} /> Đã hủy chốt
                                 </span>
                               )}
                             </td>
-                            <td className="p-2.5 font-medium text-gray-800 dark:text-gray-200">{ck.chot_boi || '-'}</td>
-                            <td className="p-2.5 font-mono text-gray-500 text-[11px]">
+                            <td className="p-2.5 font-medium text-gray-800 dark:text-gray-200 whitespace-nowrap">{ck.chot_boi || '-'}</td>
+                            <td className="p-2.5 font-mono text-gray-500 text-[11px] whitespace-nowrap">
                               {ck.chot_luc ? new Date(ck.chot_luc).toLocaleString('vi-VN') : '-'}
                             </td>
                             <td className="p-2.5 text-gray-600 dark:text-gray-400 max-w-[140px] truncate" title={ck.ghi_chu}>
                               {ck.ghi_chu || '-'}
                             </td>
-                            <td className="p-2.5 text-center">
+                            <td className="p-2.5 text-center whitespace-nowrap">
                               {ck.trang_thai === 'da_chot' && (
-                                revokeConfirmId === ck.id ? (
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRevokeChotKy(ck.id)}
-                                      disabled={chotKySubmitting}
-                                      className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold cursor-pointer"
-                                    >
-                                      Xác nhận
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setRevokeConfirmId(null)}
-                                      className="px-1.5 py-1 text-gray-500 hover:bg-gray-100 rounded text-[10px] cursor-pointer"
-                                    >
-                                      Hủy
-                                    </button>
-                                  </div>
-                                ) : (
+                                <div className="flex items-center justify-center gap-1.5">
                                   <button
                                     type="button"
-                                    onClick={() => setRevokeConfirmId(ck.id)}
-                                    className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-slate-700 rounded transition-colors cursor-pointer text-xs font-semibold"
-                                    title="Hủy chốt kỳ này"
+                                    disabled={syncingSnapshotId === ck.id || chotKySubmitting}
+                                    onClick={() => handleSyncSnapshot(ck.id)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-700 rounded transition-colors cursor-pointer text-[11px] font-semibold border border-blue-200 dark:border-blue-800"
+                                    title="Cập nhật lại toàn bộ Snapshot từ các phiếu DNTT mới nhất sang Thống kê"
                                   >
-                                    Hủy chốt
+                                    <RefreshCw size={11} className={syncingSnapshotId === ck.id ? "animate-spin" : ""} />
+                                    <span>{syncingSnapshotId === ck.id ? 'Đang đồng bộ...' : 'Đồng bộ'}</span>
                                   </button>
-                                )
+                                  {revokeConfirmId === ck.id ? (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRevokeChotKy(ck.id)}
+                                        disabled={chotKySubmitting}
+                                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                                      >
+                                        Xác nhận
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setRevokeConfirmId(null)}
+                                        className="px-1.5 py-1 text-gray-500 hover:bg-gray-100 rounded text-[10px] cursor-pointer"
+                                      >
+                                        Hủy
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRevokeConfirmId(ck.id)}
+                                      className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-slate-700 rounded transition-colors cursor-pointer text-xs font-semibold"
+                                      title="Hủy chốt kỳ này (Xóa toàn bộ snapshot và mở lại tất cả DNTT)"
+                                    >
+                                      Hủy chốt
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -1473,6 +2067,582 @@ export default function CostStatisticsTab({
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-lg cursor-pointer"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MODAL MỞ KHÓA KỲ CHỐT & THIẾT LẬP GIA HẠN */}
+      {unitUnlockModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="px-5 py-3.5 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-900 dark:to-slate-800">
+              <div className="flex items-center gap-2.5 text-gray-800 dark:text-gray-100 font-bold text-sm">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center">
+                  <Unlock size={17} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">Mở khóa Kỳ chốt & Gia hạn Thời gian</h4>
+                  <p className="text-[11px] text-gray-500 font-normal">Cấp quyền chỉnh sửa/phân bổ DNTT cho các đơn vị</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setUnitUnlockModalOpen(null); setSelectedUnitsToUnlock([]); setUnitUnlockReason(''); }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer p-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs overflow-y-auto custom-scrollbar flex-1">
+              {/* Banner thông tin kỳ chốt */}
+              <div className="p-3 bg-amber-50/70 dark:bg-amber-950/30 rounded-xl border border-amber-200/80 dark:border-amber-800/50 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] text-gray-500">Kỳ chốt số liệu</div>
+                  <div className="font-mono font-bold text-[#D97706] text-sm">
+                    Tháng {unitUnlockModalOpen.thang}/{unitUnlockModalOpen.nam}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] text-gray-500">Phạm vi chốt ban đầu</div>
+                  <div className="font-semibold text-gray-800 dark:text-gray-200">
+                    {unitUnlockModalOpen.ten_don_vi || (unitUnlockModalOpen.id_don_vi === 'ALL' ? '🌐 Toàn quốc' : unitUnlockModalOpen.id_don_vi)}
+                  </div>
+                </div>
+              </div>
+
+              {/* 1. Chọn phạm vi mở khóa */}
+              <div className="space-y-2">
+                <label className="block font-bold text-gray-700 dark:text-gray-200">
+                  1. Chọn phạm vi mở khóa:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {/* Card 1: Bộ lọc đang xem */}
+                  <button
+                    type="button"
+                    onClick={() => setUnlockMode('CURRENT_FILTER')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      unlockMode === 'CURRENT_FILTER'
+                        ? 'border-[#D97706] bg-amber-50/70 dark:bg-amber-950/40 ring-2 ring-[#D97706]/30 shadow-xs'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 bg-white dark:bg-slate-700/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100">
+                      <Filter size={15} className={unlockMode === 'CURRENT_FILTER' ? 'text-[#D97706]' : 'text-gray-400'} />
+                      <span>Theo Bộ lọc ngoài</span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-2" title={currentScopeInfo.scopeUnitName}>
+                      {currentScopeInfo.scopeUnitId === 'ALL'
+                        ? '🌐 Toàn quốc'
+                        : `${currentScopeInfo.scopeUnitName} (${currentScopeInfo.affectedUnitIds?.length || 0} ĐV)`}
+                    </div>
+                  </button>
+
+                  {/* Card 2: Toàn bộ hệ thống */}
+                  <button
+                    type="button"
+                    onClick={() => setUnlockMode('ALL_SYSTEM')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      unlockMode === 'ALL_SYSTEM'
+                        ? 'border-[#D97706] bg-amber-50/70 dark:bg-amber-950/40 ring-2 ring-[#D97706]/30 shadow-xs'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 bg-white dark:bg-slate-700/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100">
+                      <Globe size={15} className={unlockMode === 'ALL_SYSTEM' ? 'text-[#D97706]' : 'text-gray-400'} />
+                      <span>Toàn bộ Hệ thống</span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      🌐 Toàn quốc (Tất cả đơn vị & Showroom)
+                    </div>
+                  </button>
+
+                  {/* Card 3: Cây Đơn vị Phân cấp */}
+                  <button
+                    type="button"
+                    onClick={() => setUnlockMode('TREE_SELECT')}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      unlockMode === 'TREE_SELECT'
+                        ? 'border-[#D97706] bg-amber-50/70 dark:bg-amber-950/40 ring-2 ring-[#D97706]/30 shadow-xs'
+                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 bg-white dark:bg-slate-700/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-gray-900 dark:text-gray-100">
+                      <Building size={15} className={unlockMode === 'TREE_SELECT' ? 'text-[#D97706]' : 'text-gray-400'} />
+                      <span>Chọn theo Cây Đơn vị</span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      Cây phân cấp VPĐH, CTTT & từng Showroom
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Cây Đơn vị Phân cấp nếu chọn chế độ TREE_SELECT */}
+              {unlockMode === 'TREE_SELECT' && (
+                <div className="space-y-2.5 p-3.5 bg-gray-50 dark:bg-slate-700/40 rounded-xl border border-gray-200 dark:border-slate-600">
+                  {/* Thanh tìm kiếm & chọn tất cả */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="relative flex-1">
+                      <Search size={13} className="absolute left-2.5 top-2.5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={unitSearchKeyword}
+                        onChange={(e) => setUnitSearchKeyword(e.target.value)}
+                        placeholder="Tìm tên hoặc mã đơn vị / showroom..."
+                        className="w-full pl-8 pr-7 py-1.5 text-xs bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg outline-none focus:ring-1 focus:ring-[#D97706]"
+                      />
+                      {unitSearchKeyword && (
+                        <button
+                          type="button"
+                          onClick={() => setUnitSearchKeyword('')}
+                          className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allAvailableIds = unitTreeData.searchedUnits.map(u => String(u.id));
+                        const isAllSelected = allAvailableIds.length > 0 && allAvailableIds.every(id => selectedUnitsToUnlock.includes(id));
+                        if (isAllSelected) {
+                          setSelectedUnitsToUnlock([]);
+                        } else {
+                          setSelectedUnitsToUnlock(allAvailableIds);
+                        }
+                      }}
+                      className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg text-[11px] font-semibold text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer whitespace-nowrap"
+                    >
+                      {unitTreeData.searchedUnits.length > 0 && unitTreeData.searchedUnits.every(u => selectedUnitsToUnlock.includes(String(u.id)))
+                        ? 'Bỏ chọn hết'
+                        : 'Chọn tất cả'}
+                    </button>
+                  </div>
+
+                  {/* Vùng danh sách cây phân cấp */}
+                  <div className="max-h-64 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+                    {unitTreeData.searchedUnits.length === 0 ? (
+                      <div className="text-center py-6 text-gray-400 italic">
+                        Không tìm thấy đơn vị nào phù hợp với từ khóa "{unitSearchKeyword}"
+                      </div>
+                    ) : (
+                      <>
+                        {[
+                          { title: '🏛️ Văn phòng Điều hành (VPĐH)', units: unitTreeData.vpdhUnits },
+                          { title: '🏢 Công ty Tỉnh thành Phía Nam', units: unitTreeData.ctttNamUnits },
+                          { title: '🏢 Công ty Tỉnh thành Phía Bắc', units: unitTreeData.ctttBacUnits },
+                          { title: '📍 Đơn vị khác', units: unitTreeData.otherUnits }
+                        ]
+                          .filter(group => group.units.length > 0)
+                          .map(group => (
+                            <div key={group.title} className="space-y-1">
+                              <div className="text-[11px] font-bold text-gray-600 dark:text-gray-300 bg-gray-100/80 dark:bg-slate-800 px-2 py-1 rounded-md flex items-center justify-between">
+                                <span>{group.title}</span>
+                                <span className="text-[10px] text-gray-400 font-normal">{group.units.length} đơn vị</span>
+                              </div>
+
+                              <div className="space-y-1 pl-1">
+                                {group.units.map(parent => {
+                                  const parentId = String(parent.id);
+                                  const children = unitTreeData.getChildren(parentId);
+                                  const hasChildren = children.length > 0;
+                                  const branchIds = [parentId, ...children.map(c => String(c.id))];
+                                  
+                                  const isBranchAllSelected = branchIds.every(id => selectedUnitsToUnlock.includes(id));
+                                  const isBranchPartiallySelected = !isBranchAllSelected && branchIds.some(id => selectedUnitsToUnlock.includes(id));
+                                  const isExpanded = expandedUnitTreeParents.includes(parentId) || !!unitSearchKeyword.trim();
+
+                                  const toggleParentCascade = () => {
+                                    if (isBranchAllSelected) {
+                                      setSelectedUnitsToUnlock(prev => prev.filter(id => !branchIds.includes(id)));
+                                    } else {
+                                      setSelectedUnitsToUnlock(prev => {
+                                        const set = new Set(prev);
+                                        branchIds.forEach(id => set.add(id));
+                                        return Array.from(set);
+                                      });
+                                    }
+                                  };
+
+                                  const toggleExpand = () => {
+                                    setExpandedUnitTreeParents(prev =>
+                                      prev.includes(parentId)
+                                        ? prev.filter(id => id !== parentId)
+                                        : [...prev, parentId]
+                                    );
+                                  };
+
+                                  return (
+                                    <div key={parentId} className="rounded-lg bg-white dark:bg-slate-800/80 border border-gray-100 dark:border-slate-700/80 overflow-hidden shadow-2xs">
+                                      {/* Header Đơn vị Cha */}
+                                      <div className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50/80 dark:hover:bg-slate-700/50 transition-colors">
+                                        {/* Nút mở rộng con */}
+                                        {hasChildren ? (
+                                          <button
+                                            type="button"
+                                            onClick={toggleExpand}
+                                            className="p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer"
+                                            title={isExpanded ? 'Thu gọn' : 'Xem danh sách showroom con'}
+                                          >
+                                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                          </button>
+                                        ) : (
+                                          <span className="w-4" />
+                                        )}
+
+                                        {/* Checkbox Đơn vị Cha */}
+                                        <input
+                                          type="checkbox"
+                                          checked={isBranchAllSelected}
+                                          ref={el => {
+                                            if (el) el.indeterminate = isBranchPartiallySelected;
+                                          }}
+                                          onChange={toggleParentCascade}
+                                          className="rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer"
+                                        />
+
+                                        {/* Tên Đơn vị Cha */}
+                                        <div
+                                          onClick={hasChildren ? toggleExpand : toggleParentCascade}
+                                          className="flex-1 flex items-center justify-between gap-1.5 cursor-pointer select-none"
+                                        >
+                                          <div className="flex items-center gap-1.5">
+                                            <span>{getUnitEmoji(parent)}</span>
+                                            <span className="font-bold text-gray-800 dark:text-gray-200">{parent.ten_don_vi}</span>
+                                            {parent.ma_don_vi && (
+                                              <span className="text-[10px] text-gray-400 font-mono">({parent.ma_don_vi})</span>
+                                            )}
+                                          </div>
+                                          {hasChildren && (
+                                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950/60 text-[#D97706] font-medium border border-amber-200/60">
+                                              {children.length} showroom
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Danh sách Showroom con */}
+                                      {hasChildren && isExpanded && (
+                                        <div className="pl-8 pr-2.5 py-1 space-y-1 bg-gray-50/50 dark:bg-slate-900/30 border-t border-gray-100 dark:border-slate-700/60">
+                                          {children.map(child => {
+                                            const childId = String(child.id);
+                                            const isChildChecked = selectedUnitsToUnlock.includes(childId);
+                                            return (
+                                              <label
+                                                key={childId}
+                                                className="flex items-center gap-2 py-1 px-1.5 hover:bg-white dark:hover:bg-slate-800 rounded cursor-pointer transition-colors text-[11px]"
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={isChildChecked}
+                                                  onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                      setSelectedUnitsToUnlock(prev => {
+                                                        const next = [...prev, childId];
+                                                        const allChildrenNowChecked = children.every(c => String(c.id) === childId || prev.includes(String(c.id)));
+                                                        if (allChildrenNowChecked && !next.includes(parentId)) {
+                                                          next.push(parentId);
+                                                        }
+                                                        return next;
+                                                      });
+                                                    } else {
+                                                      setSelectedUnitsToUnlock(prev =>
+                                                        prev.filter(id => id !== childId && id !== parentId)
+                                                      );
+                                                    }
+                                                  }}
+                                                  className="rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer"
+                                                />
+                                                <span className="text-gray-400">🏪</span>
+                                                <span className="font-medium text-gray-700 dark:text-gray-300">{child.ten_don_vi}</span>
+                                                {child.ma_don_vi && (
+                                                  <span className="text-[10px] text-gray-400 font-mono">({child.ma_don_vi})</span>
+                                                )}
+                                              </label>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Đếm số lượng đơn vị đã chọn */}
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium pt-1 border-t border-gray-200 dark:border-slate-600">
+                    <span>
+                      Đã chọn: <strong className="text-[#D97706] font-bold text-xs">{selectedUnitsToUnlock.length}</strong> / {unitTreeData.allUnits.length} đơn vị
+                    </span>
+                    {selectedUnitsToUnlock.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedUnitsToUnlock([])}
+                        className="text-gray-400 hover:text-red-500 cursor-pointer text-[10px]"
+                      >
+                        Xóa chọn
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Thiết lập thời hạn gia hạn */}
+              <div className="space-y-2 p-3 bg-blue-50/50 dark:bg-slate-700/40 rounded-xl border border-blue-200/70 dark:border-slate-600">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                    <Clock size={14} className="text-[#05469B] dark:text-blue-400" />
+                    <span>2. Thời hạn mở khóa (Deadline Extension):</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={unlockHasDeadline}
+                      onChange={(e) => setUnlockHasDeadline(e.target.checked)}
+                      className="rounded text-[#05469B] focus:ring-[#05469B]"
+                    />
+                    <span>Đặt hạn chót tự động khóa</span>
+                  </label>
+                </div>
+
+                {unlockHasDeadline ? (
+                  <div className="space-y-2 pt-1">
+                    <input
+                      type="datetime-local"
+                      value={unlockDeadline}
+                      onChange={(e) => setUnlockDeadline(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 font-mono outline-none focus:ring-2 focus:ring-[#05469B]"
+                    />
+                    {/* Shortcut chips */}
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[10px] text-gray-500">Chọn nhanh:</span>
+                      <button
+                        type="button"
+                        onClick={() => setUnlockDeadline(getFutureDateAt2359(1))}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 hover:border-[#05469B] text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        +1 ngày (23:59 mai)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUnlockDeadline(getFutureDateAt2359(2))}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 hover:border-[#05469B] text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        +2 ngày (23:59 mốt)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUnlockDeadline(getFutureDateAt2359(3))}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 hover:border-[#05469B] text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        +3 ngày
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUnlockDeadline(getEndOfWeekDateAt2359())}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 hover:border-[#05469B] text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        Hết tuần này (CN)
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-blue-700 dark:text-blue-300 italic">
+                      🛡️ Sau mốc thời gian trên, hệ thống sẽ tự động đóng băng an toàn các phiếu DNTT trở lại mà không cần Admin thao tác thủ công.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500 italic">
+                    Mở khóa vô thời hạn cho đến khi Admin chủ động bấm Khóa lại.
+                  </p>
+                )}
+              </div>
+
+              {/* 3. Lý do mở khóa */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-gray-700 dark:text-gray-200">
+                  3. Lý do mở khóa / gia hạn:
+                </label>
+                <textarea
+                  value={unitUnlockReason}
+                  onChange={(e) => setUnitUnlockReason(e.target.value)}
+                  placeholder="VD: Gia hạn nhập bổ sung hóa đơn sau kiểm toán, hoàn tất phân bổ chi phí..."
+                  rows={2}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-[#D97706] outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setUnitUnlockModalOpen(null); setSelectedUnitsToUnlock([]); setUnitUnlockReason(''); }}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 text-gray-700 dark:text-gray-200 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={
+                  unitUnlockSubmitting ||
+                  (unlockMode === 'TREE_SELECT' && selectedUnitsToUnlock.length === 0) ||
+                  (unlockHasDeadline && !unlockDeadline)
+                }
+                onClick={handleUnlockSubmit}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                <Unlock size={14} />
+                <span>{unitUnlockSubmitting ? 'Đang mở khóa...' : 'Xác nhận Mở khóa'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. MODAL GIA HẠN THỜI GIAN NHANH CHO KỲ ĐÃ MỞ */}
+      {extensionModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800">
+              <div className="flex items-center gap-2.5 text-gray-800 dark:text-gray-100 font-bold text-sm">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950 text-[#05469B] dark:text-blue-300 flex items-center justify-center">
+                  <Clock size={17} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">Gia hạn Thời gian Kỳ chốt</h4>
+                  <p className="text-[11px] text-gray-500 font-normal">Điều chỉnh hạn chót tự động đóng băng số liệu</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setExtensionModalOpen(null); setExtensionDeadline(''); setExtensionReason(''); }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer p-1 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3 bg-blue-50/60 dark:bg-slate-700/40 rounded-xl border border-blue-200 dark:border-slate-600 space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Kỳ chốt:</span>
+                  <span className="font-mono font-bold text-[#D97706]">Tháng {extensionModalOpen.thang}/{extensionModalOpen.nam}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Tình trạng hiện tại:</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {extensionModalOpen.mo_khoa_toan_bo
+                      ? '🔓 Đang mở toàn bộ'
+                      : `🔓 Đang mở cho ${(extensionModalOpen.danh_sach_don_vi_mo_khoa || []).length} đơn vị`}
+                  </span>
+                </div>
+                {extensionModalOpen.han_mo_khoa && (
+                  <div className="flex justify-between text-gray-600 dark:text-gray-400 pt-1 border-t border-blue-100 dark:border-slate-600">
+                    <span>Hạn hiện tại:</span>
+                    <span className="font-mono">{new Date(extensionModalOpen.han_mo_khoa).toLocaleString('vi-VN')}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-gray-700 dark:text-gray-300">
+                    Thời hạn gia hạn mới:
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={extensionHasDeadline}
+                      onChange={(e) => setExtensionHasDeadline(e.target.checked)}
+                      className="rounded text-[#05469B] focus:ring-[#05469B]"
+                    />
+                    <span>Có thời hạn</span>
+                  </label>
+                </div>
+
+                {extensionHasDeadline ? (
+                  <div className="space-y-2">
+                    <input
+                      type="datetime-local"
+                      value={extensionDeadline}
+                      onChange={(e) => setExtensionDeadline(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 font-mono outline-none focus:ring-2 focus:ring-[#05469B]"
+                    />
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[10px] text-gray-500">Chọn nhanh:</span>
+                      <button
+                        type="button"
+                        onClick={() => setExtensionDeadline(getFutureDateAt2359(1))}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-700 hover:bg-blue-50 text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        +1 ngày
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExtensionDeadline(getFutureDateAt2359(2))}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-700 hover:bg-blue-50 text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        +2 ngày
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExtensionDeadline(getFutureDateAt2359(3))}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-700 hover:bg-blue-50 text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        +3 ngày
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExtensionDeadline(getEndOfWeekDateAt2359())}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-slate-700 hover:bg-blue-50 text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        Hết tuần này (CN)
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500 italic p-2 bg-gray-50 dark:bg-slate-700 rounded-lg">
+                    Chuyển sang mở khóa vô thời hạn (cho đến khi Admin chủ động bấm Khóa lại).
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block font-semibold text-gray-700 dark:text-gray-300">
+                  Lý do gia hạn (tùy chọn):
+                </label>
+                <textarea
+                  value={extensionReason}
+                  onChange={(e) => setExtensionReason(e.target.value)}
+                  placeholder="VD: Gia hạn thêm 2 ngày để hoàn tất đối soát hóa đơn VAT..."
+                  rows={2}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-[#05469B]"
+                />
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setExtensionModalOpen(null); setExtensionDeadline(''); setExtensionReason(''); }}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 text-gray-700 dark:text-gray-200 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={extensionSubmitting || (extensionHasDeadline && !extensionDeadline)}
+                onClick={handleSaveExtension}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-[#05469B] hover:bg-[#043675] text-white cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                <Clock size={14} />
+                <span>{extensionSubmitting ? 'Đang lưu...' : 'Lưu Gia hạn'}</span>
               </button>
             </div>
           </div>

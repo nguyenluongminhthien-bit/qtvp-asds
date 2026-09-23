@@ -255,7 +255,7 @@ export default function KhoaHocTab({
     // Bổ sung nhân sự chưa từng học thuộc đơn vị được chọn
     if (selectedUnitFilter) {
       personnelList.forEach(ns => {
-        if (ns.trang_thai === 'Đã nghỉ việc') return;
+        if (['Đã nghỉ việc', 'Đã thôi việc', 'Đã điều chuyển', 'Nghỉ việc'].includes(ns.trang_thai)) return;
         if (!activeUnitSubordinates.includes(ns.id_don_vi)) return;
         const key = String(ns.ma_so_nhan_vien || '').trim().toLowerCase();
         if (!map.has(key)) {

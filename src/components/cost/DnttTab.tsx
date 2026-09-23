@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Plus, Search, Edit, Trash2, Download, FileText, CheckCircle2,
   ArrowLeft, Save, CreditCard, Layers, RefreshCw, AlertTriangle,
-  Eye, X, Lock, CheckSquare, Square, Sparkles, ChevronDown,
+  Eye, X, Lock, Unlock, CheckSquare, Square, Sparkles, ChevronDown,
   Copy, FileEdit, Calendar
 } from 'lucide-react';
 import {
@@ -56,7 +56,14 @@ export default function DnttTab({
   externalSearchTerm,
   createTrigger
 }: Props) {
-  const { user } = useAuth();
+  const { user, canDelete, canCreate, canUpdate, canLockPeriod } = useAuth();
+  const isAdmin = useMemo(() => String(user?.quyen || '').toUpperCase() === 'ADMIN', [user]);
+  const canManageLock = useMemo(() => isAdmin || (canLockPeriod ? canLockPeriod() : false), [isAdmin, canLockPeriod]);
+
+  // Modal mở / khóa DNTT cho Admin
+  const [unlockDnttModal, setUnlockDnttModal] = useState<{ dntt: DNTT; action: 'unlock' | 'relock' } | null>(null);
+  const [unlockReason, setUnlockReason] = useState<string>('');
+  const [unlockSubmitting, setUnlockSubmitting] = useState(false);
 
   // Mode hiển thị: 'list' (danh sách) hoặc 'form' (lập/sửa phiếu DNTT)
   const [viewMode, setViewMode] = useState<'list' | 'form'>('list');
@@ -166,9 +173,6 @@ export default function DnttTab({
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  // Kiểm tra phiếu có bị khóa hay không (toàn bộ phiếu luôn được tự do sửa đổi và cập nhật live)
-  const isDnttLocked = (_d?: DNTT | Partial<DNTT> | null) => false;
-
   // =========================================================================
   // 1. XÁC ĐỊNH ĐƠN VỊ & GIA ĐÌNH ĐƠN VỊ ĐƯỢC CHỌN BÊN NGOÀI
   // =========================================================================
@@ -178,6 +182,139 @@ export default function DnttTab({
   const userPermittedUnitIds = useMemo(() => {
     return getUserPermittedUnitIds(user, fullDonViList);
   }, [user, fullDonViList]);
+
+  // Danh sách các kỳ chi phí đã chốt số liệu
+  const lockedPeriods = useMemo(() => {
+    return (chotKyList || []).filter(ck => ck.trang_thai === 'da_chot');
+  }, [chotKyList]);
+
+  // Kiểm tra đơn vị của phiếu DNTT có nằm trong phạm vi khóa của kỳ chốt hay không
+  // 0. Ngoại lệ: Nếu kỳ đang mở khóa toàn bộ hoặc đơn vị nằm trong danh_sach_don_vi_mo_khoa (và còn trong thời hạn gia hạn) => KHÔNG BỊ KHÓA
+  // 1. Nếu ck.id_don_vi là null, rỗng hoặc 'ALL' => Áp dụng toàn quốc
+  // 2. Nếu ck có id_don_vi cụ thể => Chỉ áp dụng nếu dnttUnitId trùng với ck.id_don_vi hoặc nằm trong danh_sach_don_vi_ap_dung hoặc là đơn vị con trực thuộc
+  const isDnttInLockScope = useCallback((dnttUnitId: string | undefined, ck: ChiPhiChotKy): boolean => {
+    // Kiểm tra thời hạn gia hạn mở khóa (nếu có mốc thời gian han_mo_khoa)
+    const isExtensionActive = !ck.han_mo_khoa || new Date() <= new Date(ck.han_mo_khoa);
+
+    if (isExtensionActive) {
+      // 0.1 Nếu kỳ này đang mở khóa toàn bộ đơn vị
+      if (ck.mo_khoa_toan_bo) {
+        return false;
+      }
+      // 0.2 Nếu đơn vị nằm trong danh sách mở khóa ngoại lệ của kỳ chốt
+      if (dnttUnitId && ck.danh_sach_don_vi_mo_khoa && ck.danh_sach_don_vi_mo_khoa.some(uId => String(uId) === String(dnttUnitId))) {
+        return false;
+      }
+    }
+
+    if (!ck.id_don_vi || ck.id_don_vi === 'ALL') return true;
+    if (!dnttUnitId) return false;
+    const targetId = String(dnttUnitId);
+    if (String(ck.id_don_vi) === targetId) return true;
+    if (ck.danh_sach_don_vi_ap_dung && ck.danh_sach_don_vi_ap_dung.some(uId => String(uId) === targetId)) return true;
+    const subIds = getAllSubordinateIds(ck.id_don_vi, fullDonViList);
+    return subIds.includes(targetId);
+  }, [fullDonViList]);
+
+  // Lấy kỳ chi phí bị khóa (nếu có): ví dụ "Tháng 09/2026"
+  // Áp dụng ĐÓNG BĂNG cho các DNTT trước đó thuộc kỳ đã chốt THEO ĐƠN VỊ VÀ ĐƠN VỊ TRỰC THUỘC
+  const getDnttLockedPeriod = (d?: DNTT | Partial<DNTT> | null): string | null => {
+    if (!d || lockedPeriods.length === 0) return null;
+    // 0. Nếu phiếu này đang được Admin mở khóa riêng lẻ (mo_khoa_chinh_sua === true) => Không bị khóa
+    if (d.mo_khoa_chinh_sua) return null;
+
+    // Xác định đơn vị của phiếu DNTT
+    const dnttUnitId = d.id_don_vi || currentDntt.id_don_vi || currentUnit?.id || (user?.id_don_vi ? String(user.id_don_vi).split(',')[0].trim() : undefined);
+
+    // 1. Kiểm tra từ phân bổ đã lưu trong phanBoList (áp dụng cho các DNTT đã có trong hệ thống)
+    if (d.id && phanBoList && phanBoList.length > 0) {
+      const myPhanBo = phanBoList.filter(pb => pb.dntt_id === d.id);
+      for (const pb of myPhanBo) {
+        const matched = lockedPeriods.find(ck => 
+          Number(ck.thang) === Number(pb.thang) && 
+          Number(ck.nam) === Number(pb.nam) &&
+          isDnttInLockScope(dnttUnitId, ck)
+        );
+        if (matched) return `Tháng ${String(matched.thang).padStart(2, '0')}/${matched.nam}`;
+      }
+    }
+
+    // 2. Kiểm tra từ allocationsMap (nếu đang ở màn hình soạn thảo và người dùng đã phân bổ vào kỳ đã chốt)
+    if (allocationsMap && Object.keys(allocationsMap).length > 0) {
+      const allAlloc = Object.values(allocationsMap).flat();
+      for (const pb of allAlloc) {
+        const matched = lockedPeriods.find(ck => 
+          Number(ck.thang) === Number(pb.thang) && 
+          Number(ck.nam) === Number(pb.nam) &&
+          isDnttInLockScope(dnttUnitId, ck)
+        );
+        if (matched) return `Tháng ${String(matched.thang).padStart(2, '0')}/${matched.nam}`;
+      }
+    }
+
+    // 3. Nếu là phiếu cũ đã tồn tại trong dnttList nhưng chưa có phân bổ chi tiết:
+    // Kiểm tra theo ngày hóa đơn hoặc ngày lập
+    if (d.id && dnttList.some(item => item.id === d.id)) {
+      const dateStr = d.ngay_hoa_don || d.ngay_lap;
+      if (dateStr) {
+        const dt = new Date(dateStr);
+        if (!isNaN(dt.getTime())) {
+          const m = dt.getMonth() + 1;
+          const y = dt.getFullYear();
+          const matched = lockedPeriods.find(ck => 
+            Number(ck.thang) === m && 
+            Number(ck.nam) === y &&
+            isDnttInLockScope(dnttUnitId, ck)
+          );
+          if (matched) return `Tháng ${String(matched.thang).padStart(2, '0')}/${matched.nam}`;
+        }
+      }
+    }
+
+    // Đối với DNTT mới tạo (chưa lưu hoặc formMode === 'create'):
+    // Luôn mở tự do để người dùng lập phiếu và phân bổ chi phí sang các kỳ mở
+    return null;
+  };
+
+  // Kiểm tra thông tin kỳ đang được mở khóa/gia hạn cho phiếu DNTT này
+  const getDnttUnlockedPeriodInfo = (d?: DNTT | Partial<DNTT> | null): { period: string; hanMoKhoa?: string | null; isAll: boolean } | null => {
+    if (!d || !chotKyList || chotKyList.length === 0) return null;
+    const dnttUnitId = d.id_don_vi || currentDntt.id_don_vi || currentUnit?.id;
+
+    for (const ck of chotKyList) {
+      if (ck.trang_thai !== 'da_chot') continue;
+      const isExtensionActive = !ck.han_mo_khoa || new Date() <= new Date(ck.han_mo_khoa);
+      if (!isExtensionActive) continue;
+
+      const isUnitUnlocked = ck.mo_khoa_toan_bo || (dnttUnitId && ck.danh_sach_don_vi_mo_khoa && ck.danh_sach_don_vi_mo_khoa.some(uId => String(uId) === String(dnttUnitId)));
+      if (!isUnitUnlocked) continue;
+
+      let matched = false;
+      if (d.id && phanBoList && phanBoList.length > 0) {
+        matched = phanBoList.some(pb => pb.dntt_id === d.id && Number(pb.thang) === Number(ck.thang) && Number(pb.nam) === Number(ck.nam));
+      }
+      if (!matched && (d.ngay_hoa_don || d.ngay_lap)) {
+        const dt = new Date(d.ngay_hoa_don || d.ngay_lap!);
+        if (!isNaN(dt.getTime())) {
+          matched = dt.getMonth() + 1 === Number(ck.thang) && dt.getFullYear() === Number(ck.nam);
+        }
+      }
+      if (matched) {
+        return {
+          period: `Tháng ${String(ck.thang).padStart(2, '0')}/${ck.nam}`,
+          hanMoKhoa: ck.han_mo_khoa,
+          isAll: Boolean(ck.mo_khoa_toan_bo)
+        };
+      }
+    }
+    return null;
+  };
+
+  // Kiểm tra phiếu có bị khóa hay không
+  const isDnttLocked = (d?: DNTT | Partial<DNTT> | null): boolean => {
+    if (d?.mo_khoa_chinh_sua) return false;
+    return !!getDnttLockedPeriod(d);
+  };
 
   const currentUnit = useMemo(() => {
     if (!selectedUnitFilter || selectedUnitFilter === 'ALL') {
@@ -990,6 +1127,29 @@ export default function DnttTab({
   // mode = 'draft': Lưu nháp (cho phép lưu dở dang, không ép buộc phân bổ 100%, không tính vào thống kê)
   // mode = 'official': Lưu và ghi nhận chi phí (kiểm tra nghiêm ngặt, phân bổ khớp 100%)
   const handleSaveDntt = async (mode: 'draft' | 'official' = 'official') => {
+    if (isDnttLocked(currentDntt as DNTT)) {
+      const p = getDnttLockedPeriod(currentDntt as DNTT) || 'kỳ đã chốt';
+      toast.error(`Kỳ chi phí (${p}) đã được Admin chốt số liệu đóng băng. Không thể lưu thay đổi!`);
+      return false;
+    }
+
+    // Kiểm tra xem có dòng phân bổ nào rơi vào kỳ đã chốt không (bỏ qua nếu phiếu được Admin mở khóa riêng lẻ)
+    if (!currentDntt.mo_khoa_chinh_sua && allocationsMap && Object.keys(allocationsMap).length > 0) {
+      const allAlloc = Object.values(allocationsMap).flat();
+      const currentUnitId = currentDntt.id_don_vi || currentUnit?.id || (user?.id_don_vi ? String(user.id_don_vi).split(',')[0].trim() : undefined);
+      for (const pb of allAlloc) {
+        const matched = lockedPeriods.find(ck => 
+          Number(ck.thang) === Number(pb.thang) && 
+          Number(ck.nam) === Number(pb.nam) &&
+          isDnttInLockScope(currentUnitId, ck)
+        );
+        if (matched) {
+          const unitScopeLabel = matched.ten_don_vi || 'đơn vị';
+          toast.error(`Kỳ chi phí Tháng ${String(matched.thang).padStart(2, '0')}/${matched.nam} của ${unitScopeLabel} đã được chốt số liệu đóng băng. Vui lòng phân bổ sang kỳ chi phí mở/chưa chốt!`);
+          return false;
+        }
+      }
+    }
     if (mode === 'draft') {
       if (!currentDntt.nguoi_de_nghi?.trim()) {
         toast.warning('Vui lòng nhập Họ và tên Người đề nghị trước khi lưu nháp!');
@@ -1186,12 +1346,22 @@ export default function DnttTab({
     toast.success('Đã tải Giấy Đề nghị Thanh toán dạng PDF về máy tính!');
   };
 
-  // Xóa DNTT (cho phép xóa cả phiếu thuộc kỳ đã chốt để giải phóng dung lượng)
+  // Xóa DNTT (chỉ cho phép xóa phiếu chưa chốt kỳ)
   const handleDeleteDntt = async () => {
     if (!deleteTargetDntt) return;
+    if (isDnttLocked(deleteTargetDntt)) {
+      const p = getDnttLockedPeriod(deleteTargetDntt) || 'kỳ đã chốt';
+      toast.error(`Phiếu thuộc ${p} đã chốt kỳ chi phí. Không thể xóa!`);
+      setDeleteTargetDntt(null);
+      return;
+    }
+    if (!canDelete('ChiPhi', deleteTargetDntt.id_don_vi)) {
+      toast.error('Bạn không có quyền XÓA phiếu Đề nghị thanh toán này! Vui lòng liên hệ Quản trị viên.');
+      return;
+    }
     setSubmitting(true);
     try {
-      await apiService.delete(deleteTargetDntt.id, 'dntt');
+      await apiService.delete(deleteTargetDntt.id, 'dntt', deleteTargetDntt);
       toast.success('Đã xóa phiếu Đề nghị thanh toán!');
       setDeleteTargetDntt(null);
       await onRefresh();
@@ -1200,6 +1370,27 @@ export default function DnttTab({
       toast.error(err?.message || 'Không thể xóa DNTT!');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Mở khóa / Khóa lại Phiếu DNTT cho Admin
+  const handleToggleMoKhoaDntt = async (dntt: DNTT, moKhoa: boolean, reason?: string) => {
+    try {
+      setUnlockSubmitting(true);
+      await apiService.toggleMoKhoaDntt(
+        dntt.id,
+        moKhoa,
+        user?.ho_ten || user?.user_name || 'Admin',
+        reason
+      );
+      toast.success(moKhoa ? `Đã mở khóa phiếu ${dntt.so_dntt || dntt.id} thành công!` : `Đã khóa lại phiếu ${dntt.so_dntt || dntt.id}!`);
+      setUnlockDnttModal(null);
+      setUnlockReason('');
+      await onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi cập nhật trạng thái mở khóa phiếu');
+    } finally {
+      setUnlockSubmitting(false);
     }
   };
 
@@ -1266,9 +1457,12 @@ export default function DnttTab({
     try {
       const ids: string[] = Array.from(selectedDnttIds);
       for (const id of ids) {
-        await apiService.delete(id, 'dntt').catch(() => { });
+        const target = dnttList.find(d => d.id === id);
+        if (target && !isDnttLocked(target) && canDelete('ChiPhi', target.id_don_vi)) {
+          await apiService.delete(id, 'dntt', target).catch(() => { });
+        }
       }
-      toast.success(`Đã xóa thành công ${ids.length} phiếu Đề nghị thanh toán!`);
+      toast.success(`Đã xóa thành công các phiếu Đề nghị thanh toán được phép!`);
       setSelectedDnttIds(new Set());
       setBulkDeleteModalOpen(false);
       await onRefresh();
@@ -1353,6 +1547,7 @@ export default function DnttTab({
                 ) : (
                   filteredDnttList.map((d, index) => {
                     const locked = isDnttLocked(d);
+                    const lockedPeriod = getDnttLockedPeriod(d);
                     const isChecked = selectedDnttIds.has(d.id);
 
                     return (
@@ -1365,8 +1560,10 @@ export default function DnttTab({
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            disabled={locked}
                             onChange={() => toggleSelectRow(d.id)}
-                            className="w-4 h-4 rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer"
+                            className={`w-4 h-4 rounded text-[#D97706] focus:ring-[#D97706] ${locked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                            title={locked ? `Phiếu thuộc ${lockedPeriod} đã chốt kỳ chi phí — Khóa chọn hàng loạt` : undefined}
                           />
                         </td>
                         <td className="p-1 text-center text-gray-400 font-mono text-[11px]">{index + 1}</td>
@@ -1434,29 +1631,69 @@ export default function DnttTab({
                           </span>
                         </td>
                         <td className="p-3 text-center whitespace-nowrap">
-                          {d.trang_thai === 'Lưu nháp' ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 whitespace-nowrap">
-                              <FileEdit size={10} /> Lưu nháp
-                            </span>
-                          ) : d.trang_thai === 'Lưu cập nhật' ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 whitespace-nowrap">
-                              <RefreshCw size={10} /> Lưu cập nhật
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
-                              <CheckCircle2 size={10} /> {d.trang_thai || 'Đã lưu'}
-                            </span>
-                          )}
+                          {(() => {
+                            if (d.trang_thai === 'Lưu nháp') {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 whitespace-nowrap">
+                                  <FileEdit size={10} /> Lưu nháp
+                                </span>
+                              );
+                            }
+                            if (d.trang_thai === 'Lưu cập nhật') {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2.5 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 whitespace-nowrap">
+                                  <RefreshCw size={10} /> Lưu cập nhật
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                                <CheckCircle2 size={10} /> {d.trang_thai || 'Đã lưu'}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button
                               onClick={() => handleOpenEditDntt(d)}
                               className="p-1.5 text-[#D97706] hover:bg-amber-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-                              title={locked ? "Kỳ chi phí đã chốt — Khóa sửa" : "Chỉnh sửa Đề nghị thanh toán"}
+                              title={locked ? `Kỳ chi phí (${lockedPeriod}) đã chốt — Bấm để xem chi tiết (chỉ đọc)` : "Chỉnh sửa Đề nghị thanh toán"}
                             >
                               {locked ? <Lock size={15} /> : <Edit size={15} />}
                             </button>
+                            {/* Đặc quyền Admin: Mở khóa ngoại lệ / Khóa lại phiếu */}
+                            {canManageLock && d.mo_khoa_chinh_sua && (
+                              <button
+                                onClick={() => setUnlockDnttModal({ dntt: d, action: 'relock' })}
+                                className="p-1.5 text-amber-700 hover:bg-amber-100 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                                title="Admin: Khóa lại phiếu này (kết thúc đợt mở khóa)"
+                              >
+                                <Lock size={15} />
+                              </button>
+                            )}
+                            {canManageLock && locked && !d.mo_khoa_chinh_sua && (
+                              <button
+                                onClick={() => setUnlockDnttModal({ dntt: d, action: 'unlock' })}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                                title="Admin: Mở khóa ngoại lệ phiếu này để đơn vị chỉnh sửa"
+                              >
+                                <Unlock size={15} />
+                              </button>
+                            )}
+                            {!canManageLock && locked && !d.mo_khoa_chinh_sua && (
+                              <button
+                                onClick={() => {
+                                  const text = `Kính gửi Admin, Đơn vị xin mở khóa DNTT ${d.so_dntt || d.id} (Số tiền: ${Number(d.tong_so_tien || 0).toLocaleString('vi-VN')} VNĐ) để cập nhật chi phí. Trân trọng!`;
+                                  navigator.clipboard.writeText(text);
+                                  toast.success('Đã sao chép yêu cầu mở khóa để gửi Admin!');
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
+                                title="Phiếu bị chốt kỳ — Bấm để chép yêu cầu mở khóa gửi Admin"
+                              >
+                                <Lock size={15} />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDuplicateDntt(d)}
                               disabled={submitting}
@@ -1492,13 +1729,26 @@ export default function DnttTab({
                             >
                               <Download size={15} />
                             </button>
-                            <button
-                              onClick={() => setDeleteTargetDntt(d)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg cursor-pointer transition-colors"
-                              title="Xóa phiếu"
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                            {canDelete('ChiPhi', d.id_don_vi) && (
+                              <button
+                                onClick={() => {
+                                  if (locked) {
+                                    toast.warning(`Phiếu thuộc ${lockedPeriod} đã chốt kỳ chi phí. Không thể xóa!`);
+                                    return;
+                                  }
+                                  setDeleteTargetDntt(d);
+                                }}
+                                disabled={locked}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  locked
+                                    ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed'
+                                    : 'text-red-600 hover:bg-red-50 dark:hover:bg-slate-700 cursor-pointer'
+                                }`}
+                                title={locked ? `Phiếu thuộc ${lockedPeriod} đã chốt — Không thể xóa` : "Xóa phiếu"}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1702,6 +1952,73 @@ export default function DnttTab({
 
                 {/* Nội dung chi tiết cuộn được */}
                 <div className="p-5 overflow-y-auto space-y-4 custom-scrollbar text-xs sm:text-sm">
+                  {/* Trạng thái mở khóa ngoại lệ / đóng băng kỳ chốt */}
+                  {d.mo_khoa_chinh_sua ? (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between gap-3 text-amber-900 dark:text-amber-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-700 dark:text-amber-300 shrink-0">
+                          <Unlock size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs">Phiếu này đang được Admin mở khóa ngoại lệ chỉnh sửa</p>
+                          <p className="text-[11px] opacity-85">
+                            Người mở: <span className="font-semibold">{d.nguoi_mo_khoa || 'Admin'}</span>
+                            {d.ngay_mo_khoa && ` • Lúc: ${new Date(d.ngay_mo_khoa).toLocaleString('vi-VN')}`}
+                            {d.ly_do_mo_khoa && ` • Lý do: ${d.ly_do_mo_khoa}`}
+                          </p>
+                        </div>
+                      </div>
+                      {canManageLock && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailModalDntt(null);
+                            setUnlockDnttModal({ dntt: d, action: 'relock' });
+                          }}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs"
+                        >
+                          🔒 Khóa lại phiếu
+                        </button>
+                      )}
+                    </div>
+                  ) : isLocked ? (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-300 shrink-0">
+                          <Lock size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold text-xs">Phiếu này đang bị đóng băng trong {getDnttLockedPeriod(d) || 'kỳ đã chốt'}</p>
+                          <p className="text-[11px] opacity-85">Đơn vị không thể tự ý sửa đổi hoặc xóa số liệu đã chốt.</p>
+                        </div>
+                      </div>
+                      {canManageLock ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailModalDntt(null);
+                            setUnlockDnttModal({ dntt: d, action: 'unlock' });
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer shadow-xs"
+                        >
+                          🔓 Mở khóa phiếu này
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const text = `Kính gửi Admin, Đơn vị xin mở khóa DNTT ${d.so_dntt || d.id} (Số tiền: ${Number(d.tong_so_tien || 0).toLocaleString('vi-VN')} VNĐ) để cập nhật bổ sung chi phí. Trân trọng!`;
+                            navigator.clipboard.writeText(text);
+                            toast.success('Đã sao chép yêu cầu mở khóa vào clipboard để gửi cho Admin!');
+                          }}
+                          className="px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 rounded-lg text-xs font-semibold hover:bg-amber-100 dark:hover:bg-slate-700 transition-colors shrink-0 cursor-pointer"
+                        >
+                          📨 Xin mở khóa
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+
                   {/* Ô 1: THÔNG TIN HÀNH CHÍNH (Người đề nghị | Bộ phận | Đơn vị | Pháp nhân) */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 bg-gray-50/80 dark:bg-slate-900/40 rounded-xl border border-gray-100 dark:border-slate-700/60">
                     <div>
@@ -2057,6 +2374,19 @@ export default function DnttTab({
         </div>
       </div>
 
+      {/* Banner thông báo nếu phiếu thuộc kỳ chi phí đã chốt */}
+      {(() => {
+        const lockedPeriod = getDnttLockedPeriod(currentDntt as DNTT);
+        if (!lockedPeriod) return null;
+        return (
+          <div className="flex items-center gap-2.5 px-4 py-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80 rounded-xl text-amber-900 dark:text-amber-200 text-xs sm:text-sm shadow-xs">
+            <Lock size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <span className="font-bold">Kỳ chi phí đã chốt số liệu ({lockedPeriod}):</span> Phiếu Đề nghị thanh toán này đang ở chế độ <strong>chỉ xem</strong> để bảo toàn số liệu kế toán đã đối soát. Mọi thao tác lưu và sửa đổi đã được khóa.
+            </div>
+          </div>
+        );
+      })()}
 
       {/* TỜ GIẤY ĐỀ NGHỊ THANH TOÁN (DOCUMENT CANVAS CHUẨN XÁC THEO HÌNH MẪU) */}
       <div className="w-full flex justify-center p-3 sm:p-6">
@@ -2841,6 +3171,8 @@ export default function DnttTab({
         cap1List={cap1List}
         cap2List={cap2List}
         unitId={currentDntt.id_don_vi || selectedUnitFilter}
+        chotKyList={chotKyList}
+        isDnttUnlocked={Boolean(currentDntt.mo_khoa_chinh_sua)}
       />
 
       {/* Modal Thêm Pháp nhân Nhanh */}
@@ -2860,6 +3192,97 @@ export default function DnttTab({
           }}
           onClose={() => setPnModalOpen(false)}
         />
+      )}
+
+      {/* Modal Mở khóa / Khóa lại Phiếu DNTT dành cho Admin */}
+      {unlockDnttModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2 text-gray-800 dark:text-gray-100 font-bold text-sm">
+                {unlockDnttModal.action === 'unlock' ? (
+                  <>
+                    <Unlock size={18} className="text-emerald-600" />
+                    <span>Mở khóa ngoại lệ Phiếu DNTT</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock size={18} className="text-amber-600" />
+                    <span>Khóa lại Phiếu DNTT</span>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setUnlockDnttModal(null); setUnlockReason(''); }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/60 space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Số phiếu DNTT:</span>
+                  <span className="font-mono font-bold text-[#D97706]">{unlockDnttModal.dntt.so_dntt || unlockDnttModal.dntt.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Đơn vị:</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">{unlockDnttModal.dntt.don_vi_hien_thi || fullDonViList.find(u => u.id === unlockDnttModal.dntt.id_don_vi)?.ten_don_vi || unlockDnttModal.dntt.id_don_vi || '-'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Tổng tiền:</span>
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">{Number(unlockDnttModal.dntt.tong_so_tien || 0).toLocaleString('vi-VN')} VNĐ</span>
+                </div>
+              </div>
+
+              {unlockDnttModal.action === 'unlock' ? (
+                <div className="space-y-2">
+                  <label className="block font-semibold text-gray-700 dark:text-gray-300">
+                    Lý do mở khóa cho đơn vị sửa (tùy chọn):
+                  </label>
+                  <textarea
+                    value={unlockReason}
+                    onChange={(e) => setUnlockReason(e.target.value)}
+                    placeholder="VD: Mở cho đơn vị cập nhật hóa đơn chi phí phát sinh..."
+                    rows={3}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-[#D97706] focus:border-transparent outline-none"
+                  />
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 italic">
+                    Sau khi mở khóa, đơn vị có thể sửa nội dung và phân bổ chi phí của riêng phiếu này.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-gray-700 dark:text-gray-300">
+                  Bạn có chắc chắn muốn khóa lại phiếu này để đưa về trạng thái đóng băng cố định theo kỳ đã chốt?
+                </p>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setUnlockDnttModal(null); setUnlockReason(''); }}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 text-gray-700 dark:text-gray-200 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={unlockSubmitting}
+                onClick={() => handleToggleMoKhoaDntt(unlockDnttModal.dntt, unlockDnttModal.action === 'unlock', unlockReason)}
+                className={`px-4 py-2 text-xs font-bold rounded-lg text-white cursor-pointer shadow-xs ${
+                  unlockDnttModal.action === 'unlock'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+              >
+                {unlockSubmitting ? 'Đang xử lý...' : (unlockDnttModal.action === 'unlock' ? 'Xác nhận Mở khóa' : 'Khóa lại ngay')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

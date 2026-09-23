@@ -81,6 +81,7 @@ export default function CostPivotView({
   onOpenChotKyModal
 }: CostPivotViewProps) {
   const { user } = useAuth();
+  const isAdmin = useMemo(() => String(user?.quyen || '').toUpperCase() === 'ADMIN', [user]);
 
   // Danh sách cấu hình báo cáo
   const [configs, setConfigs] = useState<ChiPhiPivotConfig[]>([FALLBACK_DEFAULT_CONFIG]);
@@ -595,7 +596,8 @@ export default function CostPivotView({
         loading={loadingConfigs}
         canModifyConfig={canModifyConfig}
         canClonePivot={canClonePivot}
-        isAdmin={!userPermittedUnitIds}
+        isAdmin={isAdmin}
+        onOpenChotKyModal={onOpenChotKyModal}
       />
 
       {/* VÙNG NỘI DUNG CHÍNH: CHUYỂN ĐỔI THEO LOẠI RENDERER */}

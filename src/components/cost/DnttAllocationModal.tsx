@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, Plus, Trash2, CheckCircle2, AlertTriangle, 
-  Layers, Calendar, Calculator, Star
+  Layers, Calendar, Calculator, Star, Lock
 } from 'lucide-react';
-import { DnttChiTiet, DnttPhanBo, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2 } from '../../types';
+import { DnttChiTiet, DnttPhanBo, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2, ChiPhiChotKy } from '../../types';
 import { toast } from '../../utils/toast';
 import { getCostGroupStyle } from '../../utils/costGroupColors';
 
@@ -18,6 +18,8 @@ interface Props {
   cap1List: BoPhanCap1[];
   cap2List: BoPhanCap2[];
   unitId?: string | null;
+  chotKyList?: ChiPhiChotKy[];
+  isDnttUnlocked?: boolean;
 }
 
 /**
@@ -101,7 +103,9 @@ export default function DnttAllocationModal({
   boPhanList,
   cap1List,
   cap2List,
-  unitId
+  unitId,
+  chotKyList = [],
+  isDnttUnlocked = false
 }: Props) {
   const [rows, setRows] = useState<DnttPhanBo[]>([]);
   const [selectedKmpId, setSelectedKmpId] = useState<string>('');
@@ -137,6 +141,38 @@ export default function DnttAllocationModal({
     }
     return cap1List.filter(c => c.active !== false).map(c => ({ ma: c.id || c.ma, ten: c.ten }));
   }, [effectiveBoPhanList, cap1List]);
+
+  // Kiểm tra xem kỳ (Tháng/Năm) đã chọn có bị chốt số liệu đóng băng cho đơn vị hiện tại hay không
+  const isPeriodLocked = useMemo(() => {
+    // Nếu phiếu ĐNTT đang được Admin đặc cách mở khóa trực tiếp -> không bị khóa
+    if (isDnttUnlocked) return false;
+    if (!chotKyList || chotKyList.length === 0) return false;
+
+    return chotKyList.some(ck => {
+      if (ck.trang_thai !== 'da_chot') return false;
+      if (Number(ck.thang) !== Number(selectedThang) || Number(ck.nam) !== Number(selectedNam)) return false;
+
+      // Kiểm tra thời hạn gia hạn mở khóa (nếu có mốc thời gian han_mo_khoa)
+      const isExtensionActive = !ck.han_mo_khoa || new Date() <= new Date(ck.han_mo_khoa);
+
+      if (isExtensionActive) {
+        // Nếu mở khóa toàn bộ cho kỳ này
+        if (ck.mo_khoa_toan_bo) return false;
+
+        // NGOẠI LỆ: Nếu đơn vị nằm trong danh sách mở khóa ngoại lệ của kỳ chốt này -> Không khóa!
+        if (unitId && ck.danh_sach_don_vi_mo_khoa && ck.danh_sach_don_vi_mo_khoa.some(uId => String(uId) === String(unitId))) {
+          return false;
+        }
+      }
+
+      // Phạm vi đơn vị: Nếu chốt toàn quốc ('ALL') hoặc đơn vị này nằm trong danh sách chốt
+      if (!ck.id_don_vi || ck.id_don_vi === 'ALL') return true;
+      if (!unitId) return false;
+      if (String(ck.id_don_vi) === String(unitId)) return true;
+      if (ck.danh_sach_don_vi_ap_dung && ck.danh_sach_don_vi_ap_dung.includes(String(unitId))) return true;
+      return false;
+    });
+  }, [isDnttUnlocked, chotKyList, selectedThang, selectedNam, unitId]);
 
   // Phân nhóm Khoản mục phí theo Nhóm chi phí
   const groupedKmp = useMemo(() => {
@@ -438,6 +474,11 @@ export default function DnttAllocationModal({
     const currentTotalAlloc = balancedRows.reduce((acc, r) => acc + (Number(r.so_tien) || 0), 0);
     const currentDiff = parentAmount - currentTotalAlloc;
 
+    if (isPeriodLocked) {
+      toast.error(`Kỳ chi phí Tháng ${String(selectedThang).padStart(2, '0')}/${selectedNam} đã được Admin chốt số liệu đóng băng. Vui lòng phân bổ sang kỳ chi phí mở/chưa chốt!`);
+      return;
+    }
+
     if (Math.abs(currentDiff) !== 0) {
       toast.error(`Tổng số tiền phân bổ chưa khớp (Chênh lệch: ${Math.round(currentDiff).toLocaleString('vi-VN')} VNĐ). Vui lòng điều chỉnh để chênh lệch bằng 0 trước khi lưu!`);
       return;
@@ -604,6 +645,14 @@ export default function DnttAllocationModal({
                 />
               </div>
             </div>
+
+            {/* Cảnh báo nếu kỳ chi phí đang chọn đã bị đóng băng */}
+            {isPeriodLocked && (
+              <div className="mt-2.5 flex items-center gap-1.5 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-lg text-amber-800 dark:text-amber-200 text-[11px] font-bold">
+                <Lock size={13} className="text-[#D97706] shrink-0" />
+                <span>Kỳ Tháng {selectedThang}/{selectedNam} đã được Admin chốt số liệu đóng băng. Vui lòng chọn kỳ mở!</span>
+              </div>
+            )}
 
             <div className="text-[11px] text-gray-400 italic mt-2">
               Kỳ hạch toán cho các dòng phân bổ con
@@ -834,15 +883,16 @@ export default function DnttAllocationModal({
             </button>
             <button
               type="button"
-              disabled={!isMatched}
+              disabled={!isMatched || isPeriodLocked}
               onClick={handleSave}
               className={`px-5 py-2 text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-all ${
-                isMatched
+                isMatched && !isPeriodLocked
                   ? 'bg-[#D97706] hover:bg-[#b45309] text-white cursor-pointer shadow-md active:scale-95'
                   : 'bg-gray-300 dark:bg-slate-600 text-gray-500 cursor-not-allowed opacity-60'
               }`}
+              title={isPeriodLocked ? `Kỳ chi phí Tháng ${selectedThang}/${selectedNam} đã chốt — Không thể phân bổ` : undefined}
             >
-              Xác nhận phân bổ
+              {isPeriodLocked ? 'Kỳ đã đóng băng' : 'Xác nhận phân bổ'}
             </button>
           </div>
         </div>

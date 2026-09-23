@@ -221,6 +221,19 @@ export default function CostMatrixView({
             </button>
           </div>
 
+          {/* Nút Quản lý Chốt kỳ Chi phí */}
+          {onOpenChotKyModal && (
+            <button
+              type="button"
+              onClick={onOpenChotKyModal}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#D97706] hover:bg-[#b45309] text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer active:scale-95"
+              title="Quản lý Chốt kỳ Chi phí (Khóa số liệu & Đóng băng DNTT)"
+            >
+              <Lock size={14} />
+              <span>Chốt kỳ chi phí</span>
+            </button>
+          )}
+
           {/* Nút Xuất Excel Đa Sheet */}
           <button
             type="button"

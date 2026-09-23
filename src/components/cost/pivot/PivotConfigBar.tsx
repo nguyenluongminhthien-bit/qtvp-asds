@@ -20,6 +20,7 @@ interface Props {
   canModifyConfig?: boolean;
   canClonePivot?: boolean;
   isAdmin?: boolean;
+  onOpenChotKyModal?: () => void;
 }
 
 export default function PivotConfigBar({
@@ -36,7 +37,8 @@ export default function PivotConfigBar({
   loading = false,
   canModifyConfig = true,
   canClonePivot = true,
-  isAdmin = false
+  isAdmin = false,
+  onOpenChotKyModal
 }: Props) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
@@ -272,6 +274,19 @@ export default function PivotConfigBar({
               </button>
             )}
           </>
+        )}
+
+        {/* Nút Quản lý Chốt kỳ Chi phí */}
+        {onOpenChotKyModal && (
+          <button
+            type="button"
+            onClick={onOpenChotKyModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#D97706] hover:bg-[#b45309] text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95"
+            title="Quản lý Chốt kỳ Chi phí (Khóa số liệu & Đóng băng DNTT)"
+          >
+            <Lock size={13} />
+            <span>Chốt kỳ</span>
+          </button>
         )}
 
         {/* Nút Xuất Excel */}

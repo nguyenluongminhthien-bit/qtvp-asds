@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
 import { Car, BarChart3, Receipt, ShieldCheck, AlertTriangle, TrendingUp, Wrench } from "lucide-react";
-import { TS_Xe } from "../../types";
+import { TS_Xe, DonVi } from "../../types";
 import { formatCurrencySpace as formatCurrency } from "../../utils/formatters";
+import VehiclePivotView from "./pivot/VehiclePivotView";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const getCostCarId = (cp: any) => cp.id_ts_xe || cp.id_phuong_tien || "";
@@ -28,6 +29,7 @@ const PURPOSE_COLORS: Record<string, string> = {
   "Xe cho thuê": "#06b6d4",
   "Xe thay thế cho KH": "#f59e0b",
   "Xe sửa chữa lưu động": "#f97316",
+  "Xe SCLĐ": "#f97316",
 };
 const getPurposeColor = (p: string) =>
   PURPOSE_COLORS[p] || "#9ca3af";
@@ -65,6 +67,15 @@ const getBrandColor = (brandStr: string = '') => {
   return '#3b82f6';
 };
 
+// Tái xuất khẩu cấu hình thương hiệu tập trung từ vehicleBrandConfig
+export {
+  getBrandBadgeStyle,
+  getBrandEmoji,
+  renderBrandBadge,
+  getBrandConfig,
+  VEHICLE_BRANDS
+} from '../../constants/vehicleBrandConfig';
+
 const fmtMonth = (s: string) => {
   if (!s) return "";
   const [y, m] = s.split("-");
@@ -76,8 +87,10 @@ interface Props {
   filteredCars: (TS_Xe & any)[];
   chiPhiData: any[];
   donViMap: Record<string, string>;
+  donViList?: DonVi[];
   onViewCar: (car: TS_Xe & any) => void;
   nhatKyData: any[];
+  subTab?: 'pivot' | 'dashboard';
 }
 
 // ─── LEGAL CARD COLOR ────────────────────────────────────────────────────────
@@ -88,7 +101,31 @@ const legalCardCls = (s: { expired: number; warning: number }) => {
 };
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
-export default function VehicleStatsTab({ filteredCars, chiPhiData, donViMap, onViewCar, nhatKyData }: Props) {
+export default function VehicleStatsTab({
+  filteredCars,
+  chiPhiData,
+  donViMap,
+  donViList = [],
+  onViewCar,
+  nhatKyData,
+  subTab = 'pivot'
+}: Props) {
+  // Nếu chọn subTab là pivot, hiển thị Báo cáo Thống kê Đa chiều
+  if (subTab === 'pivot') {
+    return (
+      <VehiclePivotView
+        cars={filteredCars}
+        donViList={donViList}
+        donViMap={donViMap}
+        nhatKyData={nhatKyData}
+        chiPhiData={chiPhiData}
+      />
+    );
+  }
+
+  // Alias danh sách xe
+  const cars = filteredCars;
+
   // Chi phi lien quan
   const relevantCosts = useMemo(() => {
     const ids = new Set(filteredCars.map((x) => x.id));
@@ -260,20 +297,32 @@ export default function VehicleStatsTab({ filteredCars, chiPhiData, donViMap, on
       {/* HANG / MUC DICH / HIEN TRANG / NAM SX */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-sm"><Car size={16} className="text-[#05469B]" /> Phân loại Hãng xe</h4>
-          {brandStats.length === 0 ? <p className="text-gray-400 text-sm text-center py-6">Chua co du lieu</p> : (
-            <div className="space-y-2.5">
-              {brandStats.slice(0, 8).map(([brand, count]) => (
-                <div key={brand}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[12px] font-bold text-gray-700 truncate">{brand}</span>
-                    <span className="text-[11px] font-black text-[#05469B] ml-2">{count} xe</span>
+          <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-sm">
+            <Car size={16} className="text-[#05469B]" /> Phân loại Hãng xe
+          </h4>
+          {brandStats.length === 0 ? <p className="text-gray-400 text-sm text-center py-6">Chưa có dữ liệu</p> : (
+            <div className="space-y-3">
+              {brandStats.slice(0, 8).map(([brand, count]) => {
+                const pct = filteredCars.length > 0 ? Math.round((count / filteredCars.length) * 100) : 0;
+                const barColor = getBrandColor(brand);
+                return (
+                  <div key={brand} className="group">
+                    <div className="flex justify-between items-center mb-1.5">
+                      {renderBrandBadge(brand, 'px-2 py-0.5 rounded-md text-[11px] font-bold shadow-xs max-w-[160px]')}
+                      <div className="text-right">
+                        <span className="text-[11.5px] font-black text-gray-800">{count} xe</span>
+                        <span className="text-[10px] text-gray-400 font-medium ml-1">({pct}%)</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500 group-hover:opacity-80"
+                        style={{ width: `${(count / maxBrand) * 100}%`, backgroundColor: barColor }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(count / maxBrand) * 100}%`, backgroundColor: getBrandColor(brand) }} />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -429,8 +478,8 @@ export default function VehicleStatsTab({ filteredCars, chiPhiData, donViMap, on
                     <td className="py-2.5 px-4 font-bold text-gray-400">{i + 1}</td>
                     <td className="py-2.5 px-4 font-black text-[#05469B] whitespace-nowrap">{car.bien_so}</td>
                     <td className="py-2.5 px-4">
-                      <p className="font-bold text-gray-800">{car.hieu_xe || "---"}</p>
-                      <p className="text-[11px] text-gray-400">{car.loai_xe || ""}</p>
+                      {renderBrandBadge(car.hieu_xe, 'px-2 py-0.5 rounded-md text-[11px] font-bold shadow-xs')}
+                      <p className="text-[11px] text-gray-400 mt-0.5">{car.loai_xe || ""}</p>
                     </td>
                     <td className="py-2.5 px-4 text-gray-600 hidden md:table-cell truncate max-w-[160px]">{donViMap[car.id_don_vi] || car.id_don_vi}</td>
                     <td className="py-2.5 px-4 text-right font-black text-emerald-600 whitespace-nowrap">{formatCurrency(total)} km</td>
