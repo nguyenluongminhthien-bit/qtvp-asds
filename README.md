@@ -168,8 +168,8 @@ QTVP-ASDS App
   - **Quy tắc so khớp nghiêm ngặt theo Số khung (VIN)**: Hệ thống chuẩn hóa số khung (loại bỏ ký tự phân cách, khoảng trắng, dấu chấm, dấu gạch ngang, phần mở rộng file) và tìm kiếm cả **Tệp tin (File)** lẫn **Thư mục (Folder)** mang tên Số khung xe trong thư mục gốc và thư mục con cấp 1 (tuyệt đối không quét theo biển số xe).
   - Tích hợp biểu tượng xem nhanh (`FileText`) cạnh biển số xe trên Bảng danh sách desktop và Thẻ mobile với tooltip `"Xem hồ sơ xe"`, mở trực tiếp file hoặc thư mục trên Google Drive trong tab mới.
   - Hỗ trợ xem hồ sơ trong Modal Xem chi tiết và hỗ trợ dán Excel hàng loạt với cột "Hồ sơ xe".
-- **Nhật ký Chi phí Vận hành (CP_HoatDongXe)**: Theo dõi số km, số lít nhiên liệu, chi phí nhiên liệu, cầu đường bến bãi, rửa xe, bảo dưỡng sửa chữa, khấu hao theo từng tháng/năm.
 - **Phân quyền Danh sách Xe được xem (`XE_ALLOW_LIST`)**: Cho phép giới hạn từng tài khoản chỉ được xem và theo dõi một số biển số xe cụ thể trong đơn vị.
+- **Phân quyền Tab Thống kê Xe (`can_view_vehicle_stats`)**: Đặc quyền nghiệp vụ tích hợp trong Quản lý Tài khoản (`AccountPage.tsx`), cho phép Admin chủ động phân quyền bật hoặc tắt Tab con Thống kê xe (Pivot đa chiều & Dashboard) cho từng tài khoản người dùng.
 
 #### 💻 07. Phân hệ Quản lý Trang thiết bị & QR Code (EquipmentPage.tsx)
 - **Master Thiết bị CNTT & Văn phòng**: Quản lý mã tài sản, tên thiết bị, nhóm, thông số kỹ thuật (CPU, RAM, SSD, VGA, màn hình...), hạn bảo hành, nhà cung cấp.
@@ -184,6 +184,10 @@ QTVP-ASDS App
 
 #### 💰 08. Phân hệ Quản lý Chi phí Hành chính (CostManagementPage.tsx)
 - **Mục tiêu & Tầm nhìn**: Số hóa toàn diện quy trình lập Đề nghị thanh toán (DNTT), kiểm soát ngân sách chi phí hành chính, phân bổ chi phí đa chiều, và cung cấp hệ thống báo cáo ma trận quản trị chi phí phục vụ Ban điều hành / Kế toán / Ban Giám đốc Showroom trên toàn quốc. Sử dụng tông màu chủ đạo **Vàng Amber `#D97706`** sang trọng.
+- **Bộ lọc Đơn vị Phân cấp Quản trị Chi phí (`UnitFilterSidebar.tsx`, `hierarchy.ts`)**:
+  - Hỗ trợ đầy đủ 4 cấp loại hình/phân loại chuyên biệt trong Quản lý chi phí: **VPĐH** (🏢), **Công ty Tỉnh thành** (🏬), **Văn phòng Công ty** (💼 `VP Công ty` / `Văn phòng Công ty`), và **Showroom Quản trị** (🏪).
+  - Tự động nhận diện đơn vị `VP Công ty` (kiểm tra cả `loai_hinh` và `phan_loai`), hiển thị dạng cây con trực thuộc Công ty Tỉnh thành (CTTT) tương ứng song song với các Showroom Quản trị.
+  - Tự động liên kết đa chiều: Lọc danh sách và số lượng phiếu ĐNTT, Thống kê ma trận Pivot theo `VP Công ty`, và xuất sheet báo cáo chi tiết độc lập trong file Excel Báo cáo Ma trận THACO (`exportThacoCostReport.ts`).
 - **Tab 1: Đề nghị thanh toán (DNTT - `DnttTab.tsx`)**:
   - Quản lý danh sách và lập phiếu Đề nghị thanh toán trực quan, tự động sinh mã phiếu chuẩn `DNTT_...`.
   - **Chi tiết Dòng chi phí (`dntt_chi_tiet`)**: Quản lý từng dòng khoản mục phí (KMP), nội dung diễn giải, số tiền, ngày phát sinh, thông tin hóa đơn chứng từ (Số HĐ, Ngày HĐ, Ký hiệu mẫu, Link file hóa đơn điện tử).
@@ -191,7 +195,17 @@ QTVP-ASDS App
   - **4 Hình thức Thanh toán**: *Chuyển khoản*, *Tiền mặt*, *Cấn trừ công nợ*, *Ghi nhận chi phí*.
   - **Trạng thái Phiếu Tối giản**: *Đã lưu*, *Lưu cập nhật*, *Lưu nháp* (hỗ trợ lưu phiếu dở dang hoặc nhân đôi phiếu).
   - **Cập nhật Trạng thái Hàng loạt (`updateDnttStatusBulk`)**: Tích hợp cơ chế an toàn tự động kiểm tra và bỏ qua các phiếu thuộc kỳ đã chốt số liệu.
-  - **Xuất Phiếu DNTT ra Word (`exportDnttDocx.ts`) & PDF (`exportDnttPdf.ts`)**: Đúng chuẩn mẫu biểu hành chính THACO AUTO, tự động điền địa điểm ký, ngày tháng năm, đọc số tiền thành chữ tiếng Việt (`numberToWordsVN.ts`) và 4 khối chữ ký thẩm quyền (*Phê duyệt*, *Kế toán - Tài chính*, *Trưởng bộ phận*, *Người đề nghị*).
+  - **Xuất Phiếu DNTT ra Word (`exportDnttDocx.ts`) & PDF (`exportDnttPdf.ts`)**:
+    - Đúng chuẩn mẫu biểu hành chính THACO AUTO, tự động điền địa điểm ký, ngày tháng năm, đọc số tiền thành chữ tiếng Việt (`numberToWordsVN.ts`) và 4 khối chữ ký thẩm quyền (*Phê duyệt*, *Kế toán - Tài chính*, *Trưởng bộ phận*, *Người đề nghị*).
+    - **Tái cấu trúc Bảng kê phân bổ chi phí chuẩn in A4 (`generateBangKePhanBoHtml`)**:
+      * Bảng cấu trúc **5 CỘT CHUẨN**: `STT | Khối / Nghiệp vụ | Thương hiệu / BP | Tỷ lệ | Số tiền (VNĐ)`.
+      * Dòng 1 thông tin Người đề nghị - Đơn vị - Bộ phận hiển thị thẳng trên **1 dòng duy nhất**, không dùng ký tự `|`.
+      * Dòng mục lớn (STT 1, 2... N của Giấy ĐNTT) **merge 4 cột đầu** (STT đến Tỷ lệ), cột 5 hiển thị **Tổng số tiền của mục lớn đó**.
+      * Dòng con phân bổ chi tiết đánh số phân cấp chuyên nghiệp: `1.1, 1.2...`, `2.1, 2.2...`, `N.1, N.2...`.
+      * Dòng Tổng cộng cuối bảng hiển thị Tổng giá trị phân bổ toàn phiếu ĐNTT.
+      * Chân chữ ký dạng bảng 2 cột canh giữa trang trọng với **đường viền trong suốt (`border: none`)**, dòng ngày tháng năm canh giữa **ngay phía trên** Người đề nghị thanh toán.
+      * **Cơ chế 3 cấp độ tự động co gọn (Smart Adaptive Layout)**: Tự động tính toán số dòng và co gọn bảng + chân chữ ký vừa vặn trên **đúng 1 trang A4 duy nhất** khi bảng có từ 9 đến 16 dòng; bảng dài trên 16 dòng tự động sang trang 2 và **lặp lại tiêu đề bảng (`thead`)** ở trang tiếp theo kèm chống ngắt đôi khối chữ ký.
+      * **Popup Xem trước Trực quan (`DnttPreviewModal.tsx`)**: Cho phép xem trước Giấy ĐNTT và Bảng kê phân bổ chi phí với nút in nhanh 1-click.
 - **Tab 2: Thống kê & Báo cáo Chi phí (`CostStatisticsTab.tsx`)**:
   - **Báo cáo Ma trận CPHC THACO (`CostMatrixView.tsx`, `thacoCostDataEngine.ts`)**:
     - Cấu trúc phân cấp chuẩn Tập đoàn: Cấp 1 - Nhóm chi phí La Mã (I đến VI) $\rightarrow$ Cấp 2 - Khoản mục phí (KMP) $\rightarrow$ Cấp 3 - Đơn vị / Showroom / Tháng.
