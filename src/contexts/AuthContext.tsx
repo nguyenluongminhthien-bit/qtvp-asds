@@ -151,9 +151,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               can_view: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : (freshUser.can_view !== undefined ? Boolean(freshUser.can_view) : true),
               can_create: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : (freshUser.can_create !== undefined ? Boolean(freshUser.can_create) : true),
               can_update: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : (freshUser.can_update !== undefined ? Boolean(freshUser.can_update) : true),
-              can_delete: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : Boolean(freshUser.can_delete),
-              can_delete_unit: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : Boolean(freshUser.can_delete_unit),
-              can_lock_period: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : Boolean(freshUser.can_lock_period)
+              can_delete: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : (Boolean(freshUser.can_delete) || String(freshUser.quyen_chi_tiet || '').includes(':D') || String(freshUser.quyen_chi_tiet || '').includes('|D')),
+              can_delete_unit: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : (Boolean(freshUser.can_delete_unit) || String(freshUser.quyen_chi_tiet || '').includes('CAN_DELETE_UNIT')),
+              can_lock_period: rawRoleFresh.toUpperCase() === 'ADMIN' ? true : (Boolean(freshUser.can_lock_period) || String(freshUser.quyen_chi_tiet || '').includes('CAN_LOCK_PERIOD'))
             };
 
             setUser(updatedUser);
@@ -220,9 +220,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         can_view: rawRole.toUpperCase() === 'ADMIN' ? true : (userData.can_view !== undefined ? Boolean(userData.can_view) : true),
         can_create: rawRole.toUpperCase() === 'ADMIN' ? true : (userData.can_create !== undefined ? Boolean(userData.can_create) : true),
         can_update: rawRole.toUpperCase() === 'ADMIN' ? true : (userData.can_update !== undefined ? Boolean(userData.can_update) : true),
-        can_delete: rawRole.toUpperCase() === 'ADMIN' ? true : Boolean(userData.can_delete),
-        can_delete_unit: rawRole.toUpperCase() === 'ADMIN' ? true : Boolean(userData.can_delete_unit),
-        can_lock_period: rawRole.toUpperCase() === 'ADMIN' ? true : Boolean(userData.can_lock_period)
+        can_delete: rawRole.toUpperCase() === 'ADMIN' ? true : (Boolean(userData.can_delete) || String(userData.quyen_chi_tiet || '').includes(':D') || String(userData.quyen_chi_tiet || '').includes('|D')),
+        can_delete_unit: rawRole.toUpperCase() === 'ADMIN' ? true : (Boolean(userData.can_delete_unit) || String(userData.quyen_chi_tiet || '').includes('CAN_DELETE_UNIT')),
+        can_lock_period: rawRole.toUpperCase() === 'ADMIN' ? true : (Boolean(userData.can_lock_period) || String(userData.quyen_chi_tiet || '').includes('CAN_LOCK_PERIOD'))
       };
 
       // Lưu User vào state và LocalStorage/SessionStorage tùy chọn

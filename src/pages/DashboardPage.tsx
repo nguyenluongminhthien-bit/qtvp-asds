@@ -524,8 +524,35 @@ export default function DashboardPage() {
   }, [selectedUnitFilter, donViList, allowedDonViIds]);
 
   // 🟢 TÍNH TOÁN DỮ LIỆU NHÂN SỰ CHO WIDGET GỘP TRÊN CÙNG
-  const { widgetStats, staffRolesStats } = useMemo(() => {
-    const totalUnits = donViList.filter(dv => currentSubordinateIds.includes(dv.id) && dv.id !== selectedUnitFilter && isCountableUnit(dv)).length || 0;
+  const { widgetStats, staffRolesStats, subordinateUnitStats } = useMemo(() => {
+    let showroomCount = 0;
+    let ddkdCount = 0;
+    let daiLyCount = 0;
+
+    donViList.forEach(dv => {
+      if (!currentSubordinateIds.includes(dv.id)) return;
+      if (selectedUnitFilter && dv.id === selectedUnitFilter) return;
+
+      const status = String(dv.trang_thai || '').toLowerCase().trim();
+      if (status.includes('dự án') || status.includes('đầu tư mới')) return;
+
+      const lh = String(dv.loai_hinh || '').toLowerCase().trim();
+      const ten = String(dv.ten_don_vi || '').toLowerCase().trim();
+
+      const isDaiLy = lh === 'đại lý' || lh.includes('đại lý') || status === 'đại lý' || status.includes('đại lý') || ten.startsWith('đại lý') || ten.startsWith('đl ');
+      const isSRQT = !isDaiLy && (lh.includes('quản trị') || lh === 'showroom quản trị');
+      const isDDKD = !isDaiLy && !isSRQT && (lh === 'showroom' || (lh.includes('showroom') && !lh.includes('quản trị')));
+
+      if (isSRQT) {
+        showroomCount++;
+      } else if (isDDKD) {
+        ddkdCount++;
+      } else if (isDaiLy) {
+        daiLyCount++;
+      }
+    });
+
+    const totalUnits = showroomCount + ddkdCount + daiLyCount;
 
     let totalStaff = 0;
     let dvht = 0;
@@ -559,7 +586,12 @@ export default function DashboardPage() {
 
     return {
       widgetStats: { totalUnits, totalStaff },
-      staffRolesStats: { dvht, bv, pvhc }
+      staffRolesStats: { dvht, bv, pvhc },
+      subordinateUnitStats: {
+        showroom: showroomCount,
+        ddkd: ddkdCount,
+        daiLy: daiLyCount
+      }
     };
   }, [currentSubordinateIds, donViList, nsData, selectedUnitFilter]);
 
@@ -1488,6 +1520,7 @@ export default function DashboardPage() {
               ctttNamUnits={ctttNamUnits}
               ctttBacUnits={ctttBacUnits}
               widgetStats={widgetStats}
+              subordinateUnitStats={subordinateUnitStats}
               staffRolesStats={staffRolesStats}
             />
 

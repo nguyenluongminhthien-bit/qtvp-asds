@@ -339,7 +339,10 @@ export async function deleteRecord(id: string, tableName: string, snapshotData?:
         throw new Error('Bạn không có quyền XÓA Đơn vị / Showroom! Vui lòng liên hệ Admin.');
       }
     } else {
-      if ((currentUser as any).can_delete === false) {
+      const hasDelete = (currentUser as any).can_delete === true ||
+        String((currentUser as any).quyen_chi_tiet || '').includes(':D') ||
+        String((currentUser as any).quyen_chi_tiet || '').includes('|D');
+      if (!hasDelete && (currentUser as any).can_delete === false) {
         throw new Error('Bạn không có quyền XÓA dữ liệu! Vui lòng liên hệ Admin cấp quyền thao tác.');
       }
     }

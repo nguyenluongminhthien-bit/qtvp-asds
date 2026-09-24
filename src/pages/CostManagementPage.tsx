@@ -96,8 +96,21 @@ export default function CostManagementPage() {
 
   // Danh sách DNTT thuộc phạm vi phân quyền của tài khoản (Đơn vị mẹ + các đơn vị trực thuộc)
   const permittedDnttList = useMemo(() => {
-    if (!userPermittedUnitIds) return dnttList;
-    return dnttList.filter(d => {
+    const parseDnttDate = (dateStr?: string): number => {
+      if (!dateStr) return 0;
+      const str = String(dateStr).trim();
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(str)) {
+        const parts = str.split('/');
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parseInt(parts[2], 10);
+        return new Date(y, m, d).getTime();
+      }
+      const time = new Date(str).getTime();
+      return isNaN(time) ? 0 : time;
+    };
+
+    const baseList = !userPermittedUnitIds ? dnttList : dnttList.filter(d => {
       // 1. Khóa chặt theo id_don_vi: Nếu phiếu đã có id_don_vi thì chỉ kiểm tra id_don_vi
       if (d.id_don_vi) {
         return userPermittedUnitIds.has(String(d.id_don_vi));
@@ -114,6 +127,16 @@ export default function CostManagementPage() {
         }
       }
       return false;
+    });
+
+    return [...baseList].sort((a, b) => {
+      const timeA = parseDnttDate(a.ngay_lap);
+      const timeB = parseDnttDate(b.ngay_lap);
+      if (timeB !== timeA) return timeB - timeA;
+      const createdA = parseDnttDate(a.created_at);
+      const createdB = parseDnttDate(b.created_at);
+      if (createdB !== createdA) return createdB - createdA;
+      return String(b.so_dntt || '').localeCompare(String(a.so_dntt || ''));
     });
   }, [dnttList, userPermittedUnitIds, donViList]);
 
