@@ -260,7 +260,13 @@ export default function VehiclePivotView({
   const handleExportExcel = () => {
     const currentPreset = VEHICLE_PIVOT_PRESETS.find(p => p.id === selectedPresetId);
     const configName = currentPreset ? currentPreset.name : 'Tùy biến';
-    exportVehiclePivotExcel(pivotData, layout, configName);
+    const rowFieldLabels = layout.rowFields.map(f => VEHICLE_PIVOT_AVAILABLE_FIELDS.find(af => af.key === f)?.label || f);
+    exportVehiclePivotExcel({
+      configName,
+      data: pivotData,
+      rowFieldLabels,
+      valField: layout.valField
+    });
   };
 
   // Reset về mặc định

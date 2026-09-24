@@ -3,7 +3,7 @@ import {
   Plus, Search, Edit, Trash2, Download, FileText, CheckCircle2,
   ArrowLeft, Save, CreditCard, Layers, RefreshCw, AlertTriangle,
   Eye, X, Lock, Unlock, CheckSquare, Square, Sparkles, ChevronDown,
-  Copy, FileEdit, Calendar
+  Copy, FileEdit, Calendar, Printer
 } from 'lucide-react';
 import {
   DNTT, DnttChiTiet, DnttPhanBo, DmKmp, DmBoPhan, BoPhanCap1,
@@ -16,7 +16,7 @@ import { numberToWordsVN } from '../../utils/numberToWordsVN';
 import { getAllSubordinateIds, getUnitEmoji, sortDonViByThuTu, groupParentUnits, getUserPermittedUnitIds } from '../../utils/hierarchy';
 import { THACO_AUTO_LOGO_BASE64 } from '../../assets/thacoAutoLogo';
 import DnttAllocationModal from './DnttAllocationModal';
-import { exportDnttToPdf } from './exportDnttPdf';
+import { exportDnttToPdf, generateBangKePhanBoHtml, printBangKePhanBo, ExportDnttData } from './exportDnttPdf';
 import PnModal from '../department/PnModal';
 
 interface Props {
@@ -241,7 +241,7 @@ export default function DnttTab({
 
     // 2. Kiểm tra từ allocationsMap (nếu đang ở màn hình soạn thảo và người dùng đã phân bổ vào kỳ đã chốt)
     if (allocationsMap && Object.keys(allocationsMap).length > 0) {
-      const allAlloc = Object.values(allocationsMap).flat();
+      const allAlloc = Object.values(allocationsMap).flat() as DnttPhanBo[];
       for (const pb of allAlloc) {
         const matched = lockedPeriods.find(ck => 
           Number(ck.thang) === Number(pb.thang) && 
@@ -813,6 +813,26 @@ export default function DnttTab({
   const cap2Map = useMemo(() => new Map(cap2List.map(c => [c.id, c.ten])), [cap2List]);
   const kmpMap = useMemo(() => new Map(kmpList.map(k => [k.id, k])), [kmpList]);
 
+  // Dữ liệu phục vụ xuất & xem trước Bảng kê phân bổ chi phí đính kèm
+  const bangKePreviewData: ExportDnttData = useMemo(() => ({
+    dntt: {
+      ...(currentDntt as DNTT),
+      tong_so_tien: calculatedTotal,
+      so_tien_bang_chu: textAmount
+    },
+    details: items,
+    allocations: allocationsMap,
+    phapNhan: activePhapNhan,
+    donVi: {
+      ...((fullDonViList.find(u => String(u.id) === String(currentDntt.id_don_vi)) || currentUnit) || ({} as DonVi)),
+      ten_don_vi: currentDntt.don_vi_hien_thi || defaultDonViDisplay
+    },
+    kmpList,
+    boPhanList,
+    cap1List,
+    cap2List
+  }), [currentDntt, calculatedTotal, textAmount, items, allocationsMap, activePhapNhan, fullDonViList, currentUnit, defaultDonViDisplay, kmpList, boPhanList, cap1List, cap2List]);
+
   // Helper sinh số ĐNTT duy nhất không trùng lặp
   const generateUniqueSoDntt = (existingList: DNTT[], year?: number): string => {
     const currentYear = year || new Date().getFullYear();
@@ -1135,7 +1155,7 @@ export default function DnttTab({
 
     // Kiểm tra xem có dòng phân bổ nào rơi vào kỳ đã chốt không (bỏ qua nếu phiếu được Admin mở khóa riêng lẻ)
     if (!currentDntt.mo_khoa_chinh_sua && allocationsMap && Object.keys(allocationsMap).length > 0) {
-      const allAlloc = Object.values(allocationsMap).flat();
+      const allAlloc = Object.values(allocationsMap).flat() as DnttPhanBo[];
       const currentUnitId = currentDntt.id_don_vi || currentUnit?.id || (user?.id_don_vi ? String(user.id_don_vi).split(',')[0].trim() : undefined);
       for (const pb of allAlloc) {
         const matched = lockedPeriods.find(ck => 
@@ -3279,6 +3299,56 @@ export default function DnttTab({
                 }`}
               >
                 {unlockSubmitting ? 'Đang xử lý...' : (unlockDnttModal.action === 'unlock' ? 'Xác nhận Mở khóa' : 'Khóa lại ngay')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem Trước Bảng Kê Phân Bổ Chi Phí (Trang 2) */}
+      {previewBangKeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2 text-gray-800 dark:text-gray-100 font-bold text-sm">
+                <FileText size={18} className="text-[#D97706]" />
+                <span>Xem trước Bảng kê phân bổ chi phí (Đính kèm ĐNTT)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => printBangKePhanBo(bangKePreviewData)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
+                  title="In trực tiếp Bảng kê phân bổ này"
+                >
+                  <Printer size={14} />
+                  <span>In Bảng kê</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewBangKeOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 bg-gray-200/80 dark:bg-slate-950 flex justify-center">
+              <div
+                className="bg-white text-black shadow-xl rounded-sm p-8 max-w-[210mm] w-full min-h-[297mm] box-border"
+                dangerouslySetInnerHTML={{ __html: generateBangKePhanBoHtml(bangKePreviewData) }}
+              />
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center text-xs text-gray-500">
+              <span>(*) Bảng kê được tối ưu định dạng 5 cột chuẩn và tự động co gọn trên 1 trang A4.</span>
+              <button
+                type="button"
+                onClick={() => setPreviewBangKeOpen(false)}
+                className="px-4 py-1.5 font-semibold rounded-lg bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 text-gray-700 dark:text-gray-200 cursor-pointer"
+              >
+                Đóng
               </button>
             </div>
           </div>

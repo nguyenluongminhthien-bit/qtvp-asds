@@ -130,7 +130,7 @@ export default function UnitFilterSidebar({
           ) : (
             <div className="w-4 shrink-0" />
           )}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span>
+          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh || (parent as any).phan_loai)}</span>
           <span className="truncate text-left">{parent.ten_don_vi}</span>
         </button>
         {isExpanded && children.length > 0 && (

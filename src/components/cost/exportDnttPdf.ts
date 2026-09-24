@@ -84,6 +84,11 @@ const fallbackPrintPdf = (htmlContent: string, fileName: string) => {
         <style>
           @page { size: A4 portrait; margin: 10mm 15mm 10mm 18mm; }
           body { margin: 0; padding: 0; background: #fff; }
+          @media print {
+            thead { display: table-header-group; }
+            tbody { display: table-row-group; }
+            tr { page-break-inside: avoid; }
+          }
         </style>
       </head>
       <body>
@@ -105,7 +110,11 @@ const fallbackPrintPdf = (htmlContent: string, fileName: string) => {
 
 /**
  * Tạo nội dung HTML cho BẢNG KÊ PHÂN BỔ CHI PHÍ (Trang 2 đính kèm Giấy ĐNTT)
- * Gồm đúng 2 chữ ký: TRƯỞNG BỘ PHẬN & NGƯỜI ĐỀ NGHỊ THANH TOÁN
+ * Gồm 5 cột tinh gọn: STT | Khối/Nghiệp vụ | Thương hiệu/BP | Tỷ lệ | Số tiền (VNĐ)
+ * Mục lớn: Merge 4 cột (STT đến Tỷ lệ) chứa Nội dung — Mã B7 — Mã B10 — Khoản mục; Cột 5 hiển thị tổng tiền mục đó
+ * Dòng con: 1.1, 1.2... 2.1, 2.2... N.1, N.2...
+ * Chân chữ ký: Bảng viền trong suốt canh giữa, ngày tháng nằm phía trên Người đề nghị
+ * Cơ chế thích ứng 3 cấp độ: Tự động co gọn gom 1 trang A4 khi từ 9-16 dòng
  */
 export function generateBangKePhanBoHtml(data: ExportDnttData): string {
   const { dntt, details, allocations, phapNhan, donVi, kmpList, boPhanList, cap1List, cap2List } = data;
@@ -130,39 +139,70 @@ export function generateBangKePhanBoHtml(data: ExportDnttData): string {
   const cap1Map = new Map((cap1List || []).map(c => [c.id, c.ten]));
   const cap2Map = new Map((cap2List || []).map(c => [c.id, c.ten]));
 
-  // Duyệt qua tất cả các dòng chi tiết và các dòng phân bổ con
+  // Tính tổng số dòng hiển thị để kích hoạt chế độ phân trang thích ứng (Smart Adaptive Layout)
+  let totalRowCount = 0;
+  details.forEach((item) => {
+    const itemAllocations = allocations[item.id] || [];
+    // 1 dòng tiêu đề mục lớn + các dòng phân bổ con (tối thiểu 1 dòng con)
+    totalRowCount += 1 + (itemAllocations.length > 0 ? itemAllocations.length : 1);
+  });
+
+  // Cấp 1: Standard (<= 8 dòng) | Cấp 2: Compact Auto-fit (9 đến 16 dòng) | Cấp 3: Multi-page (> 16 dòng)
+  const isCompact = totalRowCount >= 9 && totalRowCount <= 16;
+  const cellPadding = isCompact ? '1.5pt 3.5pt' : '2.5pt 5pt';
+  const rowHeight = isCompact ? '0.42cm' : '0.55cm';
+  const tableFontSize = isCompact ? '9pt' : '10pt';
+  const signSpaceHeight = isCompact ? '36pt' : '60pt';
+  const headerMargin = isCompact ? '4pt' : '8pt';
+
+  // Duyệt qua từng chi tiết ĐNTT và sinh các hàng bảng
   let rowsHtml = '';
-  let rowCounter = 0;
   let totalAllocatedMoney = 0;
 
-  details.forEach((item) => {
+  details.forEach((item, itemIdx) => {
+    const itemStt = item.stt || (itemIdx + 1);
     const itemAllocations = (allocations[item.id] || []).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0));
+    const itemAmount = Number(item.so_tien) || 0;
 
+    // Trích xuất thông tin Khoản mục phí từ phân bổ đầu tiên hoặc item
+    const firstAlloc = itemAllocations[0];
+    const kmpObj = firstAlloc?.id_kmp ? kmpMap.get(firstAlloc.id_kmp) : null;
+    const maB7 = kmpObj?.ma_b7 || firstAlloc?.ma_b7 || '-';
+    const maB10 = kmpObj?.ma_b10 || '-';
+    const tenKmp = kmpObj?.dien_giai || kmpObj?.nhom_chi_phi || firstAlloc?.ten_khoan_muc || '-';
+
+    // 1. DÒNG MỤC LỚN (N): Merge từ STT đến Tỷ lệ (colspan=4), Cột 5 hiển thị Tổng số tiền mục lớn
+    rowsHtml += `
+      <tr style="background: #f1f5f9; font-weight: bold; height: ${rowHeight};">
+        <td colspan="4" style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: left; vertical-align: middle;">
+          <strong>${itemStt}. ${item.noi_dung}</strong>
+          ${maB7 !== '-' ? ` &nbsp;—&nbsp; Mã B7: <strong>${maB7}</strong>` : ''}
+          ${maB10 !== '-' ? ` &nbsp;—&nbsp; Mã B10: <strong>${maB10}</strong>` : ''}
+          ${tenKmp !== '-' ? ` &nbsp;—&nbsp; Khoản mục: <strong>${tenKmp}</strong>` : ''}
+        </td>
+        <td style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: right; font-weight: bold; white-space: nowrap; vertical-align: middle;">
+          ${formatMoney(itemAmount)}
+        </td>
+      </tr>
+    `;
+
+    // 2. CÁC DÒNG PHÂN BỔ CON CHO MỤC N: N.1, N.2...
     if (itemAllocations.length === 0) {
-      rowCounter++;
-      totalAllocatedMoney += Number(item.so_tien) || 0;
+      totalAllocatedMoney += itemAmount;
       rowsHtml += `
-        <tr style="height: 0.55cm;">
-          <td style="border: 1.0pt solid black; padding: 2pt 4pt; text-align: center; font-size: 10pt; vertical-align: middle;">${rowCounter}</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; vertical-align: middle;">${item.noi_dung}</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 4pt; text-align: center; font-size: 10pt; vertical-align: middle;">-</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; vertical-align: middle;">-</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; vertical-align: middle;">-</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; vertical-align: middle;">-</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 4pt; text-align: center; font-size: 10pt; vertical-align: middle;">100%</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 5pt; text-align: right; font-size: 10pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">${formatMoney(Number(item.so_tien) || 0)}</td>
-          <td style="border: 1.0pt solid black; padding: 2pt 4pt; font-size: 9.5pt; vertical-align: middle;"></td>
+        <tr style="height: ${rowHeight};">
+          <td style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: center; vertical-align: middle;">${itemStt}.1</td>
+          <td style="border: 1.0pt solid black; padding: ${cellPadding}; vertical-align: middle;">${tenDonVi}</td>
+          <td style="border: 1.0pt solid black; padding: ${cellPadding}; vertical-align: middle;">${boPhan}</td>
+          <td style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: center; vertical-align: middle;">100%</td>
+          <td style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: right; font-weight: bold; white-space: nowrap; vertical-align: middle;">${formatMoney(itemAmount)}</td>
         </tr>
       `;
     } else {
-      itemAllocations.forEach((alloc) => {
-        rowCounter++;
-        totalAllocatedMoney += Number(alloc.so_tien) || 0;
-
-        // Resolve KMP
-        const kmpObj = alloc.id_kmp ? kmpMap.get(alloc.id_kmp) : null;
-        const maB7 = kmpObj?.ma_b7 || alloc.ma_b7 || '-';
-        const tenKmp = kmpObj?.dien_giai || kmpObj?.nhom_chi_phi || alloc.ten_khoan_muc || '-';
+      itemAllocations.forEach((alloc, subIdx) => {
+        const subStt = `${itemStt}.${subIdx + 1}`;
+        const subAmount = Number(alloc.so_tien) || 0;
+        totalAllocatedMoney += subAmount;
 
         // Resolve Khối (Cấp 1) & Thương hiệu / Phòng (Cấp 2)
         let tenKhoi = '';
@@ -180,23 +220,19 @@ export function generateBangKePhanBoHtml(data: ExportDnttData): string {
         let tyLeStr = '';
         if (alloc.phan_tram !== undefined && alloc.phan_tram !== null && alloc.phan_tram > 0) {
           tyLeStr = `${alloc.phan_tram}%`;
-        } else if (Number(item.so_tien) > 0) {
-          tyLeStr = `${Math.round((Number(alloc.so_tien) / Number(item.so_tien)) * 100)}%`;
+        } else if (itemAmount > 0) {
+          tyLeStr = `${Math.round((subAmount / itemAmount) * 100)}%`;
         } else {
           tyLeStr = '-';
         }
 
         rowsHtml += `
-          <tr style="height: 0.55cm;">
-            <td style="border: 1.0pt solid black; padding: 2pt 4pt; text-align: center; font-size: 10pt; vertical-align: middle;">${rowCounter}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; font-weight: 500; vertical-align: middle;">${item.noi_dung}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 4pt; text-align: center; font-size: 10pt; font-weight: bold; vertical-align: middle;">${maB7}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; vertical-align: middle;">${tenKmp}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; vertical-align: middle;">${tenKhoi}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 5pt; font-size: 10pt; vertical-align: middle;">${tenThuongHieu}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 4pt; text-align: center; font-size: 10pt; vertical-align: middle;">${tyLeStr}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 5pt; text-align: right; font-size: 10pt; font-weight: bold; white-space: nowrap; vertical-align: middle;">${formatMoney(Number(alloc.so_tien) || 0)}</td>
-            <td style="border: 1.0pt solid black; padding: 2pt 4pt; font-size: 9.5pt; vertical-align: middle;">${alloc.ghi_chu || ''}</td>
+          <tr style="height: ${rowHeight};">
+            <td style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: center; vertical-align: middle;">${subStt}</td>
+            <td style="border: 1.0pt solid black; padding: ${cellPadding}; vertical-align: middle;">${tenKhoi}</td>
+            <td style="border: 1.0pt solid black; padding: ${cellPadding}; vertical-align: middle;">${tenThuongHieu}</td>
+            <td style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: center; vertical-align: middle;">${tyLeStr}</td>
+            <td style="border: 1.0pt solid black; padding: ${cellPadding}; text-align: right; font-weight: bold; white-space: nowrap; vertical-align: middle;">${formatMoney(subAmount)}</td>
           </tr>
         `;
       });
@@ -204,89 +240,94 @@ export function generateBangKePhanBoHtml(data: ExportDnttData): string {
   });
 
   return `
-    <div style="page-break-before: always; font-family: 'Times New Roman', Times, serif; font-size: 10.5pt; line-height: 1.35; color: #000; width: 100%; box-sizing: border-box; padding-top: 14pt; background: #ffffff;">
+    <div style="page-break-before: always; font-family: 'Times New Roman', Times, serif; font-size: 10.5pt; line-height: 1.35; color: #000; width: 100%; box-sizing: border-box; padding-top: ${isCompact ? '6pt' : '14pt'}; background: #ffffff;">
       <!-- 1. HEADER BẢNG KÊ -->
-      <div style="margin-bottom: 8pt;">
+      <div style="margin-bottom: ${headerMargin};">
         <img src="${THACO_AUTO_LOGO_BASE64}" alt="THACO AUTO" style="width: 200px; height: auto; max-height: 42px; display: block; margin-bottom: 4px;" />
         <div style="font-size: 10pt; font-weight: bold; text-transform: uppercase; line-height: 1.3;">${tenCongTy}</div>
         <div style="font-size: 9pt; color: #333; line-height: 1.3;">MST: ${mstCongTy}</div>
       </div>
 
       <!-- 2. TIÊU ĐỀ BẢNG KÊ -->
-      <div style="text-align: center; margin: 10pt 0 10pt 0;">
+      <div style="text-align: center; margin: ${isCompact ? '6pt 0' : '10pt 0'};">
         <div style="font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">BẢNG KÊ PHÂN BỔ CHI PHÍ</div>
         <div style="font-size: 10pt; font-style: italic; margin-top: 2pt;">
           (Đính kèm Giấy đề nghị thanh toán ngày: ${ngay}/${thang}/${nam})
         </div>
       </div>
 
-      <!-- 3. THÔNG TIN ĐƠN VỊ & NGƯỜI ĐỀ NGHỊ -->
-      <div style="margin-bottom: 8pt; font-size: 10pt; line-height: 1.45; border-bottom: 0.5pt solid #ddd; padding-bottom: 5pt;">
-        <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
-          <div><span style="font-weight: bold;">Người đề nghị:</span> ${nguoiDeNghi}</div>
-          <div><span style="font-weight: bold;">Đơn vị:</span> ${tenDonVi}</div>
-          <div><span style="font-weight: bold;">Bộ phận:</span> ${boPhan}</div>
-        </div>
-      </div>
+      <!-- 3. THÔNG TIN ĐƠN VỊ & NGƯỜI ĐỀ NGHỊ TRÊN CÙNG 1 DÒNG DUY NHẤT -->
+      <table style="width: 100%; border-collapse: collapse; border: none; margin-bottom: ${headerMargin}; font-size: 10pt; line-height: 1.4;">
+        <tr>
+          <td style="border: none; padding: 2pt 0; text-align: left; width: 30%; white-space: nowrap;">
+            <span style="font-weight: bold;">Người đề nghị:</span> ${nguoiDeNghi}
+          </td>
+          <td style="border: none; padding: 2pt 0; text-align: center; width: 45%; white-space: nowrap;">
+            <span style="font-weight: bold;">Đơn vị:</span> ${tenDonVi}
+          </td>
+          <td style="border: none; padding: 2pt 0; text-align: right; width: 25%; white-space: nowrap;">
+            <span style="font-weight: bold;">Bộ phận:</span> ${boPhan}
+          </td>
+        </tr>
+      </table>
 
-      <!-- 4. BẢNG 9 CỘT CHI TIẾT PHÂN BỔ -->
-      <table style="width: 100%; border-collapse: collapse; border: 1.0pt solid black; font-size: 10pt; margin-bottom: 8pt;">
+      <!-- 4. BẢNG 5 CỘT CHI TIẾT PHÂN BỔ -->
+      <table style="width: 100%; border-collapse: collapse; border: 1.0pt solid black; font-size: ${tableFontSize}; margin-bottom: 8pt;">
         <thead>
           <tr style="height: 0.65cm; background: #f5f5f5;">
-            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 0.9cm; text-align: center;">STT</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 5pt; font-weight: bold; text-align: center;">Nội dung thanh toán</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.8cm; text-align: center;">Mã B7</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 5pt; font-weight: bold; width: 3.2cm; text-align: center;">Khoản mục phí</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 4pt; font-weight: bold; width: 2.6cm; text-align: center;">Khối / Nghiệp vụ</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 4pt; font-weight: bold; width: 2.6cm; text-align: center;">Thương hiệu / BP</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.2cm; text-align: center;">Tỷ lệ</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 5pt; font-weight: bold; width: 2.6cm; text-align: center;">Số tiền (VNĐ)</th>
-            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.4cm; text-align: center;">Ghi chú</th>
+            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.2cm; text-align: center;">STT</th>
+            <th style="border: 1.0pt solid black; padding: 2pt 4pt; font-weight: bold; width: 5.0cm; text-align: center;">Khối / Nghiệp vụ</th>
+            <th style="border: 1.0pt solid black; padding: 2pt 4pt; font-weight: bold; width: 5.0cm; text-align: center;">Thương hiệu / BP</th>
+            <th style="border: 1.0pt solid black; padding: 2pt 3pt; font-weight: bold; width: 1.8cm; text-align: center;">Tỷ lệ</th>
+            <th style="border: 1.0pt solid black; padding: 2pt 5pt; font-weight: bold; width: 3.8cm; text-align: center;">Số tiền (VNĐ)</th>
           </tr>
         </thead>
         <tbody>
           ${rowsHtml}
-          <!-- DÒNG TỔNG CỘNG -->
-          <tr style="height: 0.6cm; background: #fafafa;">
-            <td style="border: 1.0pt solid black; padding: 3pt 6pt; font-weight: bold; text-align: center;" colspan="7">
+          <!-- DÒNG TỔNG CỘNG: TỔNG CỦA CÁC MỤC LỚN -->
+          <tr style="height: 0.6cm; background: #fafafa; font-weight: bold;">
+            <td colspan="4" style="border: 1.0pt solid black; padding: ${cellPadding}; font-weight: bold; text-align: center; vertical-align: middle;">
               TỔNG CỘNG GIÁ TRỊ PHÂN BỔ
             </td>
-            <td style="border: 1.0pt solid black; padding: 3pt 6pt; font-weight: bold; text-align: right; white-space: nowrap;">
+            <td style="border: 1.0pt solid black; padding: ${cellPadding}; font-weight: bold; text-align: right; white-space: nowrap; vertical-align: middle;">
               ${formatMoney(totalAllocatedMoney || tongTien)}
             </td>
-            <td style="border: 1.0pt solid black;"></td>
           </tr>
         </tbody>
       </table>
 
       <!-- SỐ TIỀN BẰNG CHỮ -->
-      <div style="font-size: 10pt; font-style: italic; margin-bottom: 12pt;">
+      <div style="font-size: 10pt; font-style: italic; margin-bottom: ${isCompact ? '6pt' : '10pt'};">
         (Bằng chữ: ${soTienChu})
       </div>
 
-      <!-- 5. NGÀY THÁNG VÀ 2 CHỮ KÝ (TRƯỞNG BỘ PHẬN & NGƯỜI ĐỀ NGHỊ THANH TOÁN) -->
-      <div style="text-align: right; font-style: italic; font-size: 10pt; margin: 6pt 0 8pt 0;">
-        ${diaDiemKy}, ngày ${ngay} tháng ${thang} năm ${nam}
+      <!-- 5. NGÀY THÁNG VÀ 2 CHỮ KÝ (BẢNG VIỀN TRONG SUỐT, NGÀY THÁNG NẰM TRÊN NGƯỜI ĐỀ NGHỊ CANH GIỮA) -->
+      <div style="page-break-inside: avoid; break-inside: avoid; margin-top: ${isCompact ? '6pt' : '10pt'};">
+        <table style="width: 100%; border-collapse: collapse; border: none; text-align: center;">
+          <tr>
+            <td style="width: 50%; border: none;"></td>
+            <td style="width: 50%; border: none; text-align: center; font-style: italic; font-size: 10pt; padding-bottom: 4pt;">
+              ${diaDiemKy}, ngày ${ngay} tháng ${thang} năm ${nam}
+            </td>
+          </tr>
+          <tr>
+            <td style="width: 50%; border: none; text-align: center; font-weight: bold; font-size: 10.5pt; padding: 1pt 0;">TRƯỞNG BỘ PHẬN</td>
+            <td style="width: 50%; border: none; text-align: center; font-weight: bold; font-size: 10.5pt; padding: 1pt 0;">NGƯỜI ĐỀ NGHỊ THANH TOÁN</td>
+          </tr>
+          <tr>
+            <td style="width: 50%; border: none; text-align: center; font-style: italic; font-size: 9.5pt; color: #555;">(Ký và ghi rõ họ tên)</td>
+            <td style="width: 50%; border: none; text-align: center; font-style: italic; font-size: 9.5pt; color: #555;">(Ký và ghi rõ họ tên)</td>
+          </tr>
+          <tr>
+            <td style="height: ${signSpaceHeight}; border: none;"></td>
+            <td style="height: ${signSpaceHeight}; border: none;"></td>
+          </tr>
+          <tr>
+            <td style="border: none; text-align: center; font-size: 10.5pt; font-weight: bold;">${dntt.ky_ho_ten_3 || ''}</td>
+            <td style="border: none; text-align: center; font-size: 10.5pt; font-weight: bold;">${dntt.ky_ho_ten_4 || nguoiDeNghi || ''}</td>
+          </tr>
+        </table>
       </div>
-
-      <table style="width: 100%; border-collapse: collapse; border: none; text-align: center; margin-top: 4pt;">
-        <tr>
-          <td style="width: 50%; border: none; text-align: center; font-weight: bold; font-size: 10.5pt; padding: 1pt 0;">TRƯỞNG BỘ PHẬN</td>
-          <td style="width: 50%; border: none; text-align: center; font-weight: bold; font-size: 10.5pt; padding: 1pt 0;">NGƯỜI ĐỀ NGHỊ THANH TOÁN</td>
-        </tr>
-        <tr>
-          <td style="width: 50%; border: none; text-align: center; font-style: italic; font-size: 9.5pt; color: #555;">(Ký và ghi rõ họ tên)</td>
-          <td style="width: 50%; border: none; text-align: center; font-style: italic; font-size: 9.5pt; color: #555;">(Ký và ghi rõ họ tên)</td>
-        </tr>
-        <tr>
-          <td style="height: 60pt; border: none;"></td>
-          <td style="height: 60pt; border: none;"></td>
-        </tr>
-        <tr>
-          <td style="border: none; text-align: center; font-size: 10.5pt; font-weight: bold;">${dntt.ky_ho_ten_3 || ''}</td>
-          <td style="border: none; text-align: center; font-size: 10.5pt; font-weight: bold;">${dntt.ky_ho_ten_4 || nguoiDeNghi || ''}</td>
-        </tr>
-      </table>
     </div>
   `;
 }
@@ -603,3 +644,12 @@ export function exportDnttToWord(data: ExportDnttData, fileName?: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * In trực tiếp Bảng kê phân bổ chi phí qua hộp thoại in của trình duyệt
+ */
+export function printBangKePhanBo(data: ExportDnttData) {
+  const fileName = `Bang_ke_phan_bo_${data.dntt.so_dntt ? String(data.dntt.so_dntt).replace(/[\/\\?%*:|"<>]/g, '_') : Date.now()}`;
+  fallbackPrintPdf(generateBangKePhanBoHtml(data), fileName);
+}
+

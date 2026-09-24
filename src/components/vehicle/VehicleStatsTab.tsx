@@ -3,6 +3,7 @@ import { Car, BarChart3, Receipt, ShieldCheck, AlertTriangle, TrendingUp, Wrench
 import { TS_Xe, DonVi } from "../../types";
 import { formatCurrencySpace as formatCurrency } from "../../utils/formatters";
 import VehiclePivotView from "./pivot/VehiclePivotView";
+import { renderBrandBadge } from "../../constants/vehicleBrandConfig";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const getCostCarId = (cp: any) => cp.id_ts_xe || cp.id_phuong_tien || "";
