@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, Users } from 'lucide-react';
+import { Building2, Users, Store } from 'lucide-react';
 
 interface KpiSectionProps {
   vpdhUnits: any[];
@@ -8,6 +8,11 @@ interface KpiSectionProps {
   widgetStats: {
     totalUnits: number;
     totalStaff: number;
+  };
+  subordinateUnitStats?: {
+    showroom: number;
+    ddkd: number;
+    daiLy: number;
   };
   staffRolesStats: {
     dvht: number;
@@ -21,6 +26,7 @@ export default function KpiSection({
   ctttNamUnits,
   ctttBacUnits,
   widgetStats,
+  subordinateUnitStats = { showroom: 0, ddkd: 0, daiLy: 0 },
   staffRolesStats,
 }: KpiSectionProps) {
   return (
@@ -46,14 +52,25 @@ export default function KpiSection({
         </div>
       </div>
       
-      {/* Card 2: Showroom/Đại lý trực thuộc */}
-      <div className="bg-gradient-to-br from-indigo-50/50 to-white p-5 rounded-2xl border border-indigo-100/50 shadow-sm flex items-center gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden">
-        <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100/30 flex items-center justify-center text-[#05469B] shrink-0 shadow-inner"><Building2 size={26}/></div>
-        <div>
-          <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-1">Showroom / Trực thuộc</p>
-          <p className="text-3xl font-black text-gray-800">{widgetStats.totalUnits}</p>
+      {/* Card 2: SHOWROOM / ĐỊA ĐIỂM KD */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all duration-300">
+        <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Store size={14} className="text-[#05469B]" />SHOWROOM / ĐỊA ĐIỂM KD</p>
+        <div className="flex items-center justify-between px-2">
+          <div className="text-center">
+            <p className="text-2xl font-black text-[#05469B]">{subordinateUnitStats.showroom}</p>
+            <p className="text-[10px] font-bold text-gray-400">SHOWROOM</p>
+          </div>
+          <div className="w-px h-8 bg-gray-100"></div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-sky-600">{subordinateUnitStats.ddkd}</p>
+            <p className="text-[10px] font-bold text-gray-400">ĐĐKD</p>
+          </div>
+          <div className="w-px h-8 bg-gray-100"></div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-amber-500">{subordinateUnitStats.daiLy}</p>
+            <p className="text-[10px] font-bold text-gray-400">ĐẠI LÝ</p>
+          </div>
         </div>
-        <div className="absolute -right-6 -bottom-6 opacity-[0.04] text-[#05469B] pointer-events-none"><Building2 size={120}/></div>
       </div>
 
       {/* Card 3 & 4: Tổng Nhân sự và nghiệp vụ */}

@@ -183,6 +183,17 @@ export default function DnttTab({
     return getUserPermittedUnitIds(user, fullDonViList);
   }, [user, fullDonViList]);
 
+  // 🟢 Hàm kiểm tra quyền XÓA phiếu DNTT chuẩn hóa theo cả Phân hệ và Phạm vi Đơn vị (kèm đơn vị con trực thuộc)
+  const canDeleteThisDntt = useCallback((d?: DNTT | null): boolean => {
+    if (!d || !user) return false;
+    if (isAdmin) return true;
+    // 1. Kiểm tra quyền XÓA trong phân hệ Quản lý Chi phí
+    if (!canDelete('ChiPhi')) return false;
+    // 2. Kiểm tra phạm vi đơn vị (Hỗ trợ tài khoản mẹ quản lý các Showroom/ĐĐKD con trực thuộc)
+    if (!d.id_don_vi || !userPermittedUnitIds) return true;
+    return userPermittedUnitIds.has(String(d.id_don_vi));
+  }, [user, isAdmin, canDelete, userPermittedUnitIds]);
+
   // Danh sách các kỳ chi phí đã chốt số liệu
   const lockedPeriods = useMemo(() => {
     return (chotKyList || []).filter(ck => ck.trang_thai === 'da_chot');
@@ -1375,7 +1386,7 @@ export default function DnttTab({
       setDeleteTargetDntt(null);
       return;
     }
-    if (!canDelete('ChiPhi', deleteTargetDntt.id_don_vi)) {
+    if (!canDeleteThisDntt(deleteTargetDntt)) {
       toast.error('Bạn không có quyền XÓA phiếu Đề nghị thanh toán này! Vui lòng liên hệ Quản trị viên.');
       return;
     }
@@ -1423,41 +1434,78 @@ export default function DnttTab({
       allowedUnitIds = userPermittedUnitIds;
     }
 
-    return dnttList.filter(d => {
-      const q = searchTerm.toLowerCase().trim();
-      const matchSearch = !q ||
-        String(d.so_dntt || '').toLowerCase().includes(q) ||
-        String(d.nguoi_de_nghi || '').toLowerCase().includes(q) ||
-        String(d.noi_dung_thanh_toan || '').toLowerCase().includes(q);
+    return dnttList
+      .filter(d => {
+        const q = searchTerm.toLowerCase().trim();
+        const matchSearch = !q ||
+          String(d.so_dntt || '').toLowerCase().includes(q) ||
+          String(d.nguoi_de_nghi || '').toLowerCase().includes(q) ||
+          String(d.noi_dung_thanh_toan || '').toLowerCase().includes(q);
 
-      let matchUnit = !allowedUnitIds;
-      if (allowedUnitIds) {
-        if (d.id_don_vi) {
-          matchUnit = allowedUnitIds.has(String(d.id_don_vi));
-        } else if (d.don_vi_hien_thi) {
-          const lower = d.don_vi_hien_thi.toLowerCase().trim();
-          const matchedUnit = fullDonViList.find(u => {
-            const uName = (u.ten_don_vi || '').toLowerCase().trim();
-            return uName && (lower === uName || lower === `thaco auto - ${uName}` || lower === `thaco auto ${uName}`);
-          });
-          matchUnit = matchedUnit ? allowedUnitIds.has(String(matchedUnit.id)) : false;
-        } else {
-          matchUnit = false;
+        let matchUnit = !allowedUnitIds;
+        if (allowedUnitIds) {
+          if (d.id_don_vi) {
+            matchUnit = allowedUnitIds.has(String(d.id_don_vi));
+          } else if (d.don_vi_hien_thi) {
+            const lower = d.don_vi_hien_thi.toLowerCase().trim();
+            const matchedUnit = fullDonViList.find(u => {
+              const uName = (u.ten_don_vi || '').toLowerCase().trim();
+              return uName && (lower === uName || lower === `thaco auto - ${uName}` || lower === `thaco auto ${uName}`);
+            });
+            matchUnit = matchedUnit ? allowedUnitIds.has(String(matchedUnit.id)) : false;
+          } else {
+            matchUnit = false;
+          }
         }
-      }
 
-      return matchSearch && matchUnit;
-    });
+        return matchSearch && matchUnit;
+      })
+      .sort((a, b) => {
+        const parseDnttDate = (dateStr?: string): number => {
+          if (!dateStr) return 0;
+          const str = String(dateStr).trim();
+          if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(str)) {
+            const parts = str.split('/');
+            const d = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const y = parseInt(parts[2], 10);
+            return new Date(y, m, d).getTime();
+          }
+          const time = new Date(str).getTime();
+          return isNaN(time) ? 0 : time;
+        };
+
+        // 1. Sắp xếp ngày lập gần nhất (mới nhất) lên trên cùng
+        const timeA = parseDnttDate(a.ngay_lap);
+        const timeB = parseDnttDate(b.ngay_lap);
+        if (timeB !== timeA) {
+          return timeB - timeA;
+        }
+
+        // 2. Nếu ngày lập trùng nhau, xét thời điểm tạo (created_at) mới nhất lên trên
+        const createdA = parseDnttDate(a.created_at);
+        const createdB = parseDnttDate(b.created_at);
+        if (createdB !== createdA) {
+          return createdB - createdA;
+        }
+
+        // 3. Nếu vẫn trùng nhau, sắp xếp theo số ĐNTT giảm dần
+        return String(b.so_dntt || '').localeCompare(String(a.so_dntt || ''));
+      });
   }, [dnttList, searchTerm, selectedUnitFilter, fullDonViList, currentUnit, userPermittedUnitIds]);
 
-  // Cho phép chọn tất cả các phiếu trong danh sách lọc để xóa hàng loạt
-  const isAllSelected = filteredDnttList.length > 0 && filteredDnttList.every(d => selectedDnttIds.has(d.id));
+  // Cho phép chọn tất cả các phiếu trong danh sách lọc để xóa hàng loạt (chỉ chọn các phiếu có quyền xóa)
+  const deletableFilteredList = useMemo(() => {
+    return filteredDnttList.filter(d => !isDnttLocked(d) && canDeleteThisDntt(d));
+  }, [filteredDnttList, isDnttLocked, canDeleteThisDntt]);
+
+  const isAllSelected = deletableFilteredList.length > 0 && deletableFilteredList.every(d => selectedDnttIds.has(d.id));
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
       setSelectedDnttIds(new Set());
     } else {
-      setSelectedDnttIds(new Set(filteredDnttList.map(d => d.id)));
+      setSelectedDnttIds(new Set(deletableFilteredList.map(d => d.id)));
     }
   };
 
@@ -1476,13 +1524,47 @@ export default function DnttTab({
     setBulkDeleting(true);
     try {
       const ids: string[] = Array.from(selectedDnttIds);
+      let successCount = 0;
+      let lockedCount = 0;
+      let unauthorizedCount = 0;
+      let errorCount = 0;
+
       for (const id of ids) {
         const target = dnttList.find(d => d.id === id);
-        if (target && !isDnttLocked(target) && canDelete('ChiPhi', target.id_don_vi)) {
-          await apiService.delete(id, 'dntt', target).catch(() => { });
+        if (!target) continue;
+
+        if (isDnttLocked(target)) {
+          lockedCount++;
+          continue;
+        }
+
+        if (!canDeleteThisDntt(target)) {
+          unauthorizedCount++;
+          continue;
+        }
+
+        try {
+          await apiService.delete(id, 'dntt', target);
+          successCount++;
+        } catch (err) {
+          console.error(`Lỗi khi xóa DNTT ${id}:`, err);
+          errorCount++;
         }
       }
-      toast.success(`Đã xóa thành công các phiếu Đề nghị thanh toán được phép!`);
+
+      if (successCount > 0) {
+        toast.success(`Đã xóa thành công ${successCount} phiếu Đề nghị thanh toán!`);
+      }
+      if (unauthorizedCount > 0) {
+        toast.error(`Có ${unauthorizedCount} phiếu bạn không có quyền xóa do ngoài phạm vi đơn vị!`);
+      }
+      if (lockedCount > 0) {
+        toast.warning(`Có ${lockedCount} phiếu thuộc kỳ đã chốt chi phí nên không thể xóa!`);
+      }
+      if (errorCount > 0) {
+        toast.error(`Có ${errorCount} phiếu gặp lỗi khi gửi lệnh xóa lên hệ thống!`);
+      }
+
       setSelectedDnttIds(new Set());
       setBulkDeleteModalOpen(false);
       await onRefresh();
@@ -1580,10 +1662,10 @@ export default function DnttTab({
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            disabled={locked}
+                            disabled={locked || !canDeleteThisDntt(d)}
                             onChange={() => toggleSelectRow(d.id)}
-                            className={`w-4 h-4 rounded text-[#D97706] focus:ring-[#D97706] ${locked ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                            title={locked ? `Phiếu thuộc ${lockedPeriod} đã chốt kỳ chi phí — Khóa chọn hàng loạt` : undefined}
+                            className={`w-4 h-4 rounded text-[#D97706] focus:ring-[#D97706] ${locked || !canDeleteThisDntt(d) ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                            title={locked ? `Phiếu thuộc ${lockedPeriod} đã chốt kỳ chi phí — Khóa chọn hàng loạt` : !canDeleteThisDntt(d) ? 'Bạn không có quyền xóa phiếu này' : undefined}
                           />
                         </td>
                         <td className="p-1 text-center text-gray-400 font-mono text-[11px]">{index + 1}</td>
@@ -1749,7 +1831,7 @@ export default function DnttTab({
                             >
                               <Download size={15} />
                             </button>
-                            {canDelete('ChiPhi', d.id_don_vi) && (
+                            {canDeleteThisDntt(d) && (
                               <button
                                 onClick={() => {
                                   if (locked) {
