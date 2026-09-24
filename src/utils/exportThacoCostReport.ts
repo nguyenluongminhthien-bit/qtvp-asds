@@ -278,8 +278,9 @@ export async function exportThacoMultiSheetExcel(params: ThacoExportParams) {
     const showrooms = donViList.filter(d => {
       if (!isCostManagementUnit(d)) return false;
       const lh = (d.loai_hinh || '').toLowerCase();
-      // Văn phòng (VPĐH) đã là đại diện của sheet Tổng hợp, không tạo sheet trùng lặp
-      if (lh === 'văn phòng' || lh.includes('văn phòng') || lh === 'vpđh' || lh.includes('tổng công ty')) {
+      // Văn phòng Điều hành (VPĐH/HO) đã là đại diện của sheet Tổng hợp, không tạo sheet trùng lặp (không loại trừ VP Công ty)
+      const isVpdh = (lh === 'văn phòng' || lh === 'vpđh' || lh.includes('tổng công ty')) && !lh.includes('công ty');
+      if (isVpdh) {
         if (selectedUnitFilter && String(selectedUnitFilter) === String(d.id)) return true;
         return false;
       }

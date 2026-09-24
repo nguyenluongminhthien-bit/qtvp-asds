@@ -314,7 +314,15 @@ const getSuggestedSpecs = (
 };
 
 export default function VehiclePage() {
-  const { user, canDelete, canCreate, canUpdate } = useAuth();
+  const { user, canDelete, canCreate, canUpdate, hasRule } = useAuth();
+
+  // 🟢 KIỂM TRA ĐẶC QUYỀN XEM TAB THỐNG KÊ (CON) - PIVOT ĐA CHIỀU (Mặc định chỉ Admin hoặc tài khoản được cấp quyền)
+  const canViewVehiclePivot = useMemo(() => {
+    if (!user) return false;
+    if (String(user.quyen || '').toUpperCase() === 'ADMIN') return true;
+    return hasRule('XE_STATS_PIVOT');
+  }, [user, hasRule]);
+
   const [donViList, setDonViList] = useState<DonVi[]>([]);
   const [xeData, setXeData] = useState<TS_Xe[]>([]);
   const [chiPhiData, setChiPhiData] = useState<any[]>([]);
@@ -347,6 +355,13 @@ export default function VehiclePage() {
   const [activeTab, setActiveTab] = useState<'list' | 'schedule' | 'stats'>('list');
   const [vehicleSubTab, setVehicleSubTab] = useState<'active' | 'liquidated'>('active');
   const [statsSubTab, setStatsSubTab] = useState<'pivot' | 'dashboard'>('pivot');
+
+  // Tự động chuyển về dashboard nếu không có đặc quyền xem tab Thống kê con
+  useEffect(() => {
+    if (!canViewVehiclePivot && statsSubTab === 'pivot') {
+      setStatsSubTab('dashboard');
+    }
+  }, [canViewVehiclePivot, statsSubTab]);
   const [filterBrand, setFilterBrand] = useState('');
   const [filterModel, setFilterModel] = useState('');
   const [filterPurpose, setFilterPurpose] = useState('');
@@ -2307,7 +2322,7 @@ export default function VehiclePage() {
                 >
                   <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
                     {[
-                      { id: 'pivot', label: 'Thống kê', icon: <TableProperties className="w-4 h-4" />, count: filteredCars.length },
+                      ...(canViewVehiclePivot ? [{ id: 'pivot', label: 'Thống kê', icon: <TableProperties className="w-4 h-4" />, count: filteredCars.length }] : []),
                       { id: 'dashboard', label: 'Dashboard', icon: <BarChart2 className="w-4 h-4" /> }
                     ].map(st => {
                       const isSubActive = statsSubTab === st.id;
@@ -3205,7 +3220,7 @@ export default function VehiclePage() {
           {/* ── TAB THỐNG KÊ ── */}
           {activeTab === 'stats' && (
             <VehicleStatsTab
-              subTab={statsSubTab}
+              subTab={canViewVehiclePivot ? statsSubTab : 'dashboard'}
               filteredCars={filteredCars}
               chiPhiData={permittedChiPhi}
               donViMap={donViMap}

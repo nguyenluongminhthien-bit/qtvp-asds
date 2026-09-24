@@ -96,6 +96,12 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
     hasDelete: true,
     advancedRules: [
       {
+        id: 'XE_STATS_PIVOT',
+        label: '📊 Quyền xem Tab Thống kê (con)',
+        type: 'checkbox',
+        description: 'Cho phép truy cập Tab Thống kê phân tích đa chiều (Pivot) trong Quản lý xe. Nếu tắt, chỉ xem được Dashboard.'
+      },
+      {
         id: 'XE_LIMIT',
         label: 'Giới hạn xe xem được theo Biển số (Bỏ trống = Xem tất cả xe thuộc ĐV)',
         type: 'plate_select',

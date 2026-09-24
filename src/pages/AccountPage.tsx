@@ -423,6 +423,7 @@ export default function AccountPage() {
     if (!rulesList.includes('CAN_DELETE_UNIT')) rulesList.push('CAN_DELETE_UNIT');
     if (!rulesList.includes('CAN_LOCK_PERIOD')) rulesList.push('CAN_LOCK_PERIOD');
     if (!rulesList.includes('CP_PIVOT_CLONE')) rulesList.push('CP_PIVOT_CLONE');
+    if (!rulesList.includes('XE_STATS_PIVOT')) rulesList.push('XE_STATS_PIVOT');
     const finalRules = rulesList.join(',');
 
     setFormData(prev => ({
@@ -841,6 +842,7 @@ export default function AccountPage() {
                         const rules = (user.quyen_chi_tiet || '').split(',').map(r => r.trim());
                         const canDeleteUnit = rules.includes('CAN_DELETE_UNIT') || Boolean(user.can_delete_unit);
                         const canLockPeriod = rules.includes('CAN_LOCK_PERIOD') || Boolean(user.can_lock_period);
+                        const canViewXePivot = rules.includes('XE_STATS_PIVOT');
 
                         return (
                           <div className="flex flex-col gap-1 mt-0.5 max-w-[280px]">
@@ -860,6 +862,11 @@ export default function AccountPage() {
                               {canLockPeriod && (
                                 <span className="text-[9px] px-1.5 py-0.5 rounded font-black border bg-purple-100 text-purple-800 border-purple-300" title="Đặc quyền: Được chốt kỳ chi phí">
                                   🔒 Chốt kỳ
+                                </span>
+                              )}
+                              {canViewXePivot && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-black border bg-teal-100 text-teal-800 border-teal-300" title="Đặc quyền: Được xem Tab Thống kê (con) xe">
+                                  📊 TK Xe
                                 </span>
                               )}
                             </div>
@@ -1419,13 +1426,25 @@ export default function AccountPage() {
                                       {mod.id === 'Xe' && (() => {
                                         const activePlates = getPlatesFromRule(formData.quyen_chi_tiet, 'XE_LIMIT:');
                                         const isExpanded = expandedModuleId === 'Xe';
+                                        const canViewXePivot = String(formData.quyen_chi_tiet || '').includes('XE_STATS_PIVOT');
                                         return (
-                                          <div className="relative">
-                                            <button
-                                              type="button"
-                                              onClick={() => setExpandedModuleId(isExpanded ? null : 'Xe')}
-                                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${activePlates.length > 0 ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}
-                                            >
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <label className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all cursor-pointer ${canViewXePivot ? 'bg-teal-50 border-teal-300 text-teal-800 shadow-2xs' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}>
+                                              <input
+                                                type="checkbox"
+                                                checked={canViewXePivot}
+                                                onChange={() => handleToggleAdvancedRule('XE_STATS_PIVOT')}
+                                                className="w-3.5 h-3.5 text-teal-600 rounded focus:ring-teal-500"
+                                              />
+                                              <span>📊 Tab Thống kê (con)</span>
+                                            </label>
+
+                                            <div className="relative">
+                                              <button
+                                                type="button"
+                                                onClick={() => setExpandedModuleId(isExpanded ? null : 'Xe')}
+                                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${activePlates.length > 0 ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold' : 'bg-gray-50/80 border-gray-200 text-gray-600 hover:bg-white'}`}
+                                              >
                                               <CarIcon size={13} />
                                               <span>{activePlates.length > 0 ? `Giới hạn: ${activePlates.length} xe xem được` : '🔍 Giới hạn Biển số xe (Tất cả xe)'}</span>
                                               <ChevronDown size={13} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -1480,8 +1499,9 @@ export default function AccountPage() {
                                               </div>
                                             )}
                                           </div>
-                                        );
-                                      })()}
+                                        </div>
+                                      );
+                                    })()}
 
                                       {/* 4. THIẾT BỊ VP */}
                                       {mod.id === 'ThietBi' && (

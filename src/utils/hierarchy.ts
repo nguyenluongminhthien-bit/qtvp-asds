@@ -5,7 +5,8 @@ export const getUnitEmoji = (loai_hinh?: string) => {
   // Dùng .trim() để xóa khoảng trắng thừa từ Google Sheets
   const lower = String(loai_hinh || '').toLowerCase().trim();
   if (lower.includes('tổng công ty')) return '🏢';
-  if (lower.includes('công ty tỉnh')) return '🏬';
+  if (lower.includes('công ty tỉnh thành')) return '🏬';
+  if (lower.includes('vp công ty') || lower.includes('văn phòng công ty')) return '💼';
   if (lower.includes('quản trị')) return '🏪';
   if (lower.includes('showroom')) return '🏣';
   if (lower.includes('điểm kinh doanh')) return '📍';
@@ -153,16 +154,21 @@ export const getDefaultUnitId = (user: any, donViList: DonVi[]): string | null =
 };
 
 // 5. Kiểm tra đơn vị có thuộc phạm vi Quản trị Chi phí hay không:
-// Điều kiện: loai_hinh là 'Văn phòng', 'Công ty Tỉnh thành', 'Showroom Quản trị'
+// Điều kiện: loai_hinh / phan_loai là 'Văn phòng', 'Công ty Tỉnh thành', 'VP Công ty', 'Showroom Quản trị'
 export const isCostManagementUnit = (dv?: DonVi | null): boolean => {
-  if (!dv || !dv.loai_hinh) return false;
-  const lh = dv.loai_hinh.trim().toLowerCase();
-  // 1. Văn phòng
-  if (lh === 'văn phòng' || lh.includes('văn phòng') || lh === 'vpđh' || lh.includes('tổng công ty')) return true;
-  // 2. Công ty Tỉnh thành / Công ty Tỉnh Thành
-  if (lh === 'công ty tỉnh thành' || lh.includes('công ty tỉnh') || lh.includes('cttt')) return true;
-  // 3. Showroom Quản trị / Showroom quản trị
-  if (lh === 'showroom quản trị' || lh.includes('quản trị') || lh.includes('srqt')) return true;
+  if (!dv) return false;
+  // Kiểm tra đồng thời loai_hinh và phan_loai (phòng hờ trường dữ liệu từ Sheets/Supabase)
+  const raw = `${dv.loai_hinh || ''} ${(dv as any).phan_loai || ''} ${(dv as any).don_vi_phan_loai || ''}`.trim().toLowerCase();
+  if (!raw) return false;
+
+  // 1. Văn phòng (VPĐH, Tổng công ty...)
+  if (raw === 'văn phòng' || raw.includes('văn phòng') || raw === 'vpđh' || raw.includes('tổng công ty')) return true;
+  // 2. VP Công ty (Văn phòng Công ty tỉnh thành)
+  if (raw === 'vp công ty' || raw.includes('vp công ty') || raw.includes('văn phòng công ty')) return true;
+  // 3. Công ty Tỉnh thành / CTTT
+  if (raw === 'công ty tỉnh thành' || raw.includes('công ty tỉnh') || raw.includes('cttt')) return true;
+  // 4. Showroom Quản trị / SRQT
+  if (raw === 'showroom quản trị' || raw.includes('quản trị') || raw.includes('srqt')) return true;
   return false;
 };
 
