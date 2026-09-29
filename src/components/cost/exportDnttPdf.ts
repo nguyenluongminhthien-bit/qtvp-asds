@@ -357,25 +357,45 @@ export function generateDnttHtml(data: ExportDnttData): string {
   // Địa điểm ký (người dùng điền vào, nếu không điền thì để '......')
   const diaDiemKy = (dntt.dia_diem_ky && dntt.dia_diem_ky.trim()) ? dntt.dia_diem_ky.trim() : '......';
 
-  // 1. Tạo các hàng bảng chi tiết (chỉ hiển thị dòng cha, giữ nguyên vẹn 3 cột chuẩn)
+  // 1. Dòng Câu dẫn (nếu có và bật hiển thị)
+  let cauDanRowHtml = '';
+  if (dntt.hien_thi_cau_dan !== false && dntt.cau_dan && dntt.cau_dan.trim()) {
+    const cauDanHtml = dntt.cau_dan.replace(/\r\n|\r|\n/g, '<br/>');
+    cauDanRowHtml = `
+      <tr style="min-height: 0.55cm;">
+        <td style="border: 1.0pt solid black; min-height: 0.55cm; padding: 2pt 4pt; text-align: center; color: #94a3b8; font-size: 10pt; width: 1.2cm; vertical-align: middle;">
+          -
+        </td>
+        <td style="border: 1.0pt solid black; min-height: 0.55cm; padding: 2pt 6pt; font-style: italic; font-size: 10.5pt; vertical-align: middle; word-break: break-word; line-height: 1.35;">
+          ${cauDanHtml}
+        </td>
+        <td style="border: 1.0pt solid black; min-height: 0.55cm; padding: 2pt 6pt; text-align: center; color: #94a3b8; font-size: 10pt; width: 3.8cm; vertical-align: middle;">
+          ...
+        </td>
+      </tr>
+    `;
+  }
+
+  // 2. Tạo các hàng bảng chi tiết (chỉ hiển thị dòng cha, giữ nguyên vẹn 3 cột chuẩn, tự co giãn đa dòng)
   let tableRowsHtml = '';
   details.forEach((item, index) => {
+    const itemNoiDungHtml = (item.noi_dung || '').replace(/\r\n|\r|\n/g, '<br/>');
     tableRowsHtml += `
-      <tr style="height: 0.55cm;">
-        <td style="border: 1.0pt solid black; height: 0.55cm; padding: 2pt 4pt; text-align: center; font-weight: bold; font-size: 11pt; width: 1.2cm; vertical-align: middle;">
+      <tr style="min-height: 0.55cm;">
+        <td style="border: 1.0pt solid black; min-height: 0.55cm; padding: 2pt 4pt; text-align: center; font-weight: bold; font-size: 11pt; width: 1.2cm; vertical-align: middle;">
           ${item.stt || (index + 1)}
         </td>
-        <td style="border: 1.0pt solid black; height: 0.55cm; padding: 2pt 6pt; font-weight: bold; font-size: 11pt; vertical-align: middle;">
-          ${item.noi_dung}
+        <td style="border: 1.0pt solid black; min-height: 0.55cm; padding: 2pt 6pt; font-weight: bold; font-size: 11pt; vertical-align: middle; word-break: break-word; line-height: 1.35;">
+          ${itemNoiDungHtml}
         </td>
-        <td style="border: 1.0pt solid black; height: 0.55cm; padding: 2pt 6pt; text-align: right; font-weight: bold; font-size: 11pt; width: 3.8cm; white-space: nowrap; vertical-align: middle;">
+        <td style="border: 1.0pt solid black; min-height: 0.55cm; padding: 2pt 6pt; text-align: right; font-weight: bold; font-size: 11pt; width: 3.8cm; white-space: nowrap; vertical-align: middle;">
           ${formatMoney(Number(item.so_tien) || 0)}
         </td>
       </tr>
     `;
   });
 
-  // 2. Dòng Thông tin hóa đơn (chỉ hiển thị nếu dntt.hien_thi_hoa_don !== false)
+  // 3. Dòng Thông tin hóa đơn (chỉ hiển thị nếu dntt.hien_thi_hoa_don !== false)
   let invoiceRowHtml = '';
   if (dntt.hien_thi_hoa_don !== false) {
     const hasSoHoaDon = Boolean(dntt.so_hoa_don && dntt.so_hoa_don.trim());
@@ -398,26 +418,7 @@ export function generateDnttHtml(data: ExportDnttData): string {
     `;
   }
 
-  // 3. Khối Thông tin chuyển khoản (nếu chọn chuyển khoản)
-  let bankTransferHtml = '';
-  if (dntt.hinh_thuc_thanh_toan === 'Chuyển khoản') {
-    const showTransferMemo = dntt.hien_thi_nd_ck !== false && Boolean(dntt.noi_dung_chuyen_khoan && dntt.noi_dung_chuyen_khoan.trim());
-
-    bankTransferHtml = `
-      <tr style="height: ${showTransferMemo ? '2.8cm' : '2.4cm'};">
-        <td style="border: 1.0pt solid black; height: ${showTransferMemo ? '2.8cm' : '2.4cm'}; padding: 4pt 6pt; font-size: 10.5pt; vertical-align: top;" colspan="2">
-          <p style="margin: 1pt 0 3pt 0; line-height: normal;"><u><strong>Thông tin chuyển khoản:</strong></u></p>
-          <p style="margin: 1pt 0; line-height: normal;">Tên tài khoản: ${dntt.ten_tai_khoan || '[...]'}</p>
-          <p style="margin: 1pt 0; line-height: normal;">Số tài khoản: ${dntt.so_tai_khoan || '[...]'}</p>
-          <p style="margin: 1pt 0; line-height: normal;">Tại: ${dntt.ten_ngan_hang || '[...]'} - Chi nhánh: ${dntt.chi_nhanh_ngan_hang || '[...]'}</p>
-          ${showTransferMemo ? `<p style="margin: 2pt 0 0 0; line-height: normal;">Nội dung: ${dntt.noi_dung_chuyen_khoan}</p>` : ''}
-        </td>
-        <td style="border: 1.0pt solid black; height: ${showTransferMemo ? '2.8cm' : '2.4cm'}; width: 3.8cm; padding: 0;"></td>
-      </tr>
-    `;
-  }
-
-  // 4. Dòng Ghi chú dưới ô chuyển khoản (nếu có và bật hiển thị)
+  // 4. Dòng Ghi chú (nếu có và bật hiển thị)
   let noteRowHtml = '';
   if (dntt.hien_thi_ghi_chu !== false && dntt.ghi_chu && dntt.ghi_chu.trim()) {
     noteRowHtml = `
@@ -429,6 +430,29 @@ export function generateDnttHtml(data: ExportDnttData): string {
       </tr>
     `;
   }
+
+  // 5. Khối Hình thức thanh toán & Thông tin ngân hàng (cùng 1 ô nằm dưới dòng Ghi chú)
+  const showBanking = dntt.hinh_thuc_thanh_toan === 'Chuyển khoản' || dntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ';
+  const showTransferMemo = dntt.hien_thi_nd_ck !== false && Boolean(dntt.noi_dung_chuyen_khoan && dntt.noi_dung_chuyen_khoan.trim());
+  const paymentMethodHtml = `
+    <tr style="height: auto;">
+      <td style="border: 1.0pt solid black; padding: 4pt 6pt; font-size: 10.5pt; vertical-align: top;" colspan="2">
+        <div style="margin: 0 0 2pt 0; line-height: 1.4;">
+          <u><strong>Hình thức thanh toán:</strong></u>&nbsp;&nbsp;<strong>${dntt.hinh_thuc_thanh_toan}</strong>
+        </div>
+        ${showBanking ? `
+          <div style="margin-top: 3pt; padding-top: 2pt; border-top: 0.5pt dashed #cbd5e1;">
+            <p style="margin: 1pt 0 2pt 0; line-height: normal;"><u><strong>Thông tin tài khoản ngân hàng${dntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ' ? ' (Cấn trừ công nợ)' : ''}:</strong></u></p>
+            <p style="margin: 1pt 0; line-height: normal;">Tên tài khoản: <strong>${dntt.ten_tai_khoan || '[...]'}</strong></p>
+            <p style="margin: 1pt 0; line-height: normal;">Số tài khoản: <strong>${dntt.so_tai_khoan || '[...]'}</strong></p>
+            <p style="margin: 1pt 0; line-height: normal;">Tại: <strong>${dntt.ten_ngan_hang || '[...]'}</strong> - Chi nhánh: <strong>${dntt.chi_nhanh_ngan_hang || '[...]'}</strong></p>
+            ${showTransferMemo ? `<p style="margin: 2pt 0 0 0; line-height: normal;">Nội dung: ${dntt.noi_dung_chuyen_khoan}</p>` : ''}
+          </div>
+        ` : ''}
+      </td>
+      <td style="border: 1.0pt solid black; width: 3.8cm; padding: 0;"></td>
+    </tr>
+  `;
 
   const page1Html = `
     <div style="font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.35; color: #000; width: 100%; box-sizing: border-box; padding: 0; background: #ffffff;">
@@ -469,12 +493,8 @@ export function generateDnttHtml(data: ExportDnttData): string {
           <span>Kính đề nghị Ban lãnh đạo duyệt thanh toán số tiền:</span>&nbsp;
           <span style="font-weight: bold; font-family: 'Times New Roman', serif;">${formatMoney(tongTien)} VNĐ</span>
         </div>
-        <div style="margin-bottom: 2pt; font-style: italic;">
-          Bằng chữ: ${soTienChu}
-        </div>
         <div>
-          <span style="width: 4.0cm; display: inline-block;">Hình thức thanh toán:</span>
-          <span>${dntt.hinh_thuc_thanh_toan}</span>
+          <em>Bằng chữ: ${soTienChu}</em>
         </div>
       </div>
 
@@ -488,10 +508,11 @@ export function generateDnttHtml(data: ExportDnttData): string {
           </tr>
         </thead>
         <tbody>
+          ${cauDanRowHtml}
           ${tableRowsHtml}
           ${invoiceRowHtml}
           ${noteRowHtml}
-          ${bankTransferHtml}
+          ${paymentMethodHtml}
           <tr style="height: 0.55cm;">
             <td style="border: 1.0pt solid black; height: 0.55cm; padding: 2pt 6pt; font-weight: bold; text-align: center; vertical-align: middle;" colspan="2">
               Giá trị phải thanh toán

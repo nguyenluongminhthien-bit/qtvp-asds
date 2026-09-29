@@ -8,37 +8,10 @@ import { buildHierarchicalOptions, getUnitEmoji } from '../../utils/hierarchy';
 import { getAnNinh } from '../../services/api/modules';
 import { toast } from '../../utils/toast';
 
-// 🟢 Danh sách 7 loại hình đơn vị thật khớp chính xác 100% với cấu hình trong dự án
-const ALL_UNIT_TYPES = [
-  'Showroom',
-  'Xưởng Dịch vụ',
-  'Điểm Kinh doanh',
-  'Kho xe',
-  'Showroom Quản trị',
-  'Công ty Tỉnh thành',
-  'Tổng Công ty'
-];
-
-// 🟢 Ánh xạ từ loại hình trên UI sang các giá trị thực tế đang lưu trong Database (kể cả các giá trị lịch sử)
-const MAP_UI_TO_DB_TYPES: Record<string, string[]> = {
-  'Showroom': ['Showroom', 'Đại lý'],
-  'Xưởng Dịch vụ': ['Xưởng Dịch vụ'],
-  'Điểm Kinh doanh': ['Điểm Kinh doanh', 'Điểm Kinh Doanh'],
-  'Kho xe': ['Kho xe'],
-  'Showroom Quản trị': ['Showroom Quản trị'],
-  'Công ty Tỉnh thành': ['Công ty Tỉnh thành'],
-  'Tổng Công ty': ['Tổng Công ty', 'Văn phòng']
-};
-
 // 🟢 Hàm tiện ích kiểm tra xem một loại hình đơn vị dưới DB có được tick chọn trên UI hay không
 const isUnitTypeSelected = (loaiHinh: string, selectedTypes: Record<string, boolean>): boolean => {
   const normType = String(loaiHinh || '').trim();
-  for (const uiKey of Object.keys(MAP_UI_TO_DB_TYPES)) {
-    if (MAP_UI_TO_DB_TYPES[uiKey].some(dbVal => dbVal.toLowerCase() === normType.toLowerCase())) {
-      return !!selectedTypes[uiKey];
-    }
-  }
-  return false;
+  return !!selectedTypes[normType];
 };
 
 // 🟢 Hàm xác định màu nền của Marker theo loại hình đơn vị (Bảng màu Sang trọng & Trực quan)
@@ -69,6 +42,7 @@ const createMarkerIcon = (isSelected: boolean, labelText: string, loaiHinh: stri
     ? 'border-white scale-125 shadow-2xl ring-4 ring-blue-400/30 z-[1000]'
     : 'border-white shadow';
   const pingEffect = isSelected ? '<span class="absolute inline-flex h-8 w-8 animate-ping rounded-full bg-blue-450 opacity-75"></span>' : '';
+  const emoji = getUnitEmoji(loaiHinh);
 
   return L.divIcon({
     className: 'custom-div-icon',
@@ -76,11 +50,8 @@ const createMarkerIcon = (isSelected: boolean, labelText: string, loaiHinh: stri
       <div class="flex flex-col items-center select-none" style="transform: translate(0, 0);">
         <div class="relative flex items-center justify-center">
           ${pingEffect}
-          <div class="relative flex h-8 w-8 items-center justify-center rounded-full border-2 ${markerColor} ${borderColor} transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
+          <div class="relative flex h-8 w-8 items-center justify-center rounded-full border-2 ${markerColor} ${borderColor} transition-all text-white text-xs">
+            ${emoji}
           </div>
         </div>
         <div class="mt-1 px-1.5 py-0.5 bg-white/95 dark:bg-slate-800/95 text-[10px] font-black rounded shadow border border-gray-200/50 whitespace-nowrap text-gray-800 dark:text-gray-100 max-w-[120px] truncate">
@@ -122,15 +93,56 @@ export default function DepartmentMapModal({
   const [radius, setRadius] = useState<number>(5);
   const [tempRadius, setTempRadius] = useState<number>(5);
   const [isCoverageActive, setIsCoverageActive] = useState(true); // Bật/tắt vẽ vòng tròn độ phủ
-  const [selectedTypes, setSelectedTypes] = useState<Record<string, boolean>>({
-    'Showroom': true,
-    'Xưởng Dịch vụ': true,
-    'Điểm Kinh doanh': true,
-    'Kho xe': true,
-    'Showroom Quản trị': false,
-    'Công ty Tỉnh thành': false,
-    'Tổng Công ty': false
-  });
+  const allAvailableTypes = useMemo(() => {
+    const types = new Set<string>();
+    units.forEach(u => {
+      const lh = String(u.loai_hinh || '').trim();
+      if (lh) types.add(lh);
+    });
+    
+    const PREDEFINED_ORDER = [
+      'Tổng Công ty',
+      'Công ty Tỉnh thành',
+      'Văn phòng Công ty',
+      'Văn phòng',
+      'VP Công ty',
+      'Showroom Quản trị',
+      'Showroom',
+      'Xưởng Dịch vụ',
+      'Điểm Kinh doanh',
+      'Điểm bán hàng',
+      'Đại lý',
+      'Kho',
+      'Kho xe'
+    ];
+    
+    return Array.from(types).sort((a, b) => {
+      const indexA = PREDEFINED_ORDER.indexOf(a);
+      const indexB = PREDEFINED_ORDER.indexOf(b);
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [units]);
+
+  const [selectedTypes, setSelectedTypes] = useState<Record<string, boolean>>({});
+
+  // Cập nhật selectedTypes khi allAvailableTypes thay đổi
+  useEffect(() => {
+    setSelectedTypes(prev => {
+      const newSelected = { ...prev };
+      let changed = false;
+      allAvailableTypes.forEach(type => {
+        if (newSelected[type] === undefined) {
+          // Mặc định chọn một số loại hình kinh doanh chính, bỏ qua khối văn phòng
+          newSelected[type] = !type.toLowerCase().includes('công ty') && !type.toLowerCase().includes('quản trị') && !type.toLowerCase().includes('văn phòng');
+          changed = true;
+        }
+      });
+      return changed ? newSelected : prev;
+    });
+  }, [allAvailableTypes]);
 
   // ---- Cột trái: Tab Khoảng cách ----
   const [distancePoints, setDistancePoints] = useState<string[]>([]);
@@ -590,11 +602,10 @@ export default function DepartmentMapModal({
     if (activeTab !== 'coverage') return [];
 
     if (centerUnitId === 'ALL') {
-      // Chế độ "Tất cả đơn vị": Trả về toàn bộ các showroom đã lọc
-      return validUnits
-        .filter(u => isUnitTypeSelected(u.loai_hinh, selectedTypes))
-        .map(u => ({ unit: u, distance: -1 })) // distance = -1 biểu thị chế độ xem tất cả
-        .sort((a, b) => a.unit.ten_don_vi.localeCompare(b.unit.ten_don_vi));
+      // Chế độ "Tất cả đơn vị": Trả về toàn bộ các showroom đã lọc, hiển thị theo định dạng hierarchy
+      return hierarchicalOptions
+        .filter(item => isUnitTypeSelected(item.unit.loai_hinh, selectedTypes))
+        .map(item => ({ unit: item.unit, distance: -1, prefix: item.prefix }));
     }
 
     const centerUnit = validUnits.find(u => u.id === centerUnitId);
@@ -607,11 +618,11 @@ export default function DepartmentMapModal({
       .filter(u => u.id !== centerUnitId && isUnitTypeSelected(u.loai_hinh, selectedTypes)) // Lọc theo bộ lọc loại hình showroom
       .map(u => {
         const d = getHaversineDistance(latCenter, lngCenter, parseFloat(u.vi_do), parseFloat(u.kinh_do));
-        return { unit: u, distance: d };
+        return { unit: u, distance: d, prefix: '' };
       })
       .filter(item => item.distance <= radius)
       .sort((a, b) => a.distance - b.distance);
-  }, [centerUnitId, radius, validUnits, activeTab, selectedTypes]);
+  }, [centerUnitId, radius, validUnits, activeTab, selectedTypes, hierarchicalOptions]);
 
   // Căn chỉnh bản đồ khớp bán kính vòng tròn
   const fitCoverageBounds = () => {
@@ -1089,26 +1100,68 @@ export default function DepartmentMapModal({
                     </div>
                   </div>
 
-                  {/* Bộ lọc 7 loại hình đơn vị */}
+                  {/* Bộ lọc loại hình đơn vị tự động */}
                   <div className="bg-white p-3.5 rounded-xl border border-slate-200/60 shadow-sm space-y-2.5">
                     <label className="block text-xs font-black uppercase text-slate-500">Lọc loại hình showroom:</label>
-                    <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
-                      {ALL_UNIT_TYPES.map(type => (
-                        <label key={type} className="flex items-center gap-1.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={!!selectedTypes[type]}
-                            onChange={(e) => {
-                              setSelectedTypes(prev => ({
-                                ...prev,
-                                [type]: e.target.checked
-                              }));
-                            }}
-                            className="w-3.5 h-3.5 accent-[#005698] cursor-pointer rounded"
-                          />
-                          <span className="truncate">{type}</span>
-                        </label>
-                      ))}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-bold text-slate-700">
+                      {/* Cột 1 */}
+                      <div className="flex flex-col gap-2.5">
+                        {[
+                          ['Tổng Công ty'], 
+                          ['Công ty Tỉnh thành'], 
+                          ['Văn phòng Công ty', 'Văn phòng', 'VP Công ty'], 
+                          ['Showroom Quản trị'], 
+                          ['Showroom']
+                        ]
+                          .map(aliases => aliases.map(k => allAvailableTypes.find(t => t.toLowerCase() === k.toLowerCase())).find(Boolean))
+                          .filter((t): t is string => !!t)
+                          .map(type => (
+                            <label key={type} className="flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={!!selectedTypes[type]}
+                                onChange={(e) => setSelectedTypes(prev => ({ ...prev, [type]: e.target.checked }))}
+                                className="w-3.5 h-3.5 accent-[#005698] cursor-pointer rounded"
+                              />
+                              <span className="truncate">{getUnitEmoji(type)} {type}</span>
+                            </label>
+                          ))}
+                      </div>
+                      {/* Cột 2 */}
+                      <div className="flex flex-col gap-2.5">
+                        {(() => {
+                          const col1Aliases = ['Tổng Công ty', 'Công ty Tỉnh thành', 'Văn phòng Công ty', 'Văn phòng', 'VP Công ty', 'Showroom Quản trị', 'Showroom'];
+                          const col2Groups = [
+                            ['Xưởng Dịch vụ'], 
+                            ['Điểm bán hàng', 'Điểm Kinh doanh'], 
+                            ['Đại lý'], 
+                            ['Kho', 'Kho xe']
+                          ];
+                          
+                          const col2Found = col2Groups
+                            .map(aliases => aliases.map(k => allAvailableTypes.find(t => t.toLowerCase() === k.toLowerCase())).find(Boolean))
+                            .filter((t): t is string => !!t);
+                            
+                          const col2Aliases = col2Groups.flat();
+                          
+                          const otherTypes = allAvailableTypes.filter(t => 
+                            !col1Aliases.some(k => t.toLowerCase() === k.toLowerCase()) && 
+                            !col2Aliases.some(k => t.toLowerCase() === k.toLowerCase())
+                          );
+                          
+                          return [...col2Found, ...otherTypes].map(type => (
+                            <label key={type} className="flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={!!selectedTypes[type]}
+                                onChange={(e) => setSelectedTypes(prev => ({ ...prev, [type]: e.target.checked }))}
+                                className="w-3.5 h-3.5 accent-[#005698] cursor-pointer rounded"
+                              />
+                              <span className="truncate">{getUnitEmoji(type)} {type}</span>
+                            </label>
+                          ));
+                        })()}
+                      </div>
                     </div>
                   </div>
 
@@ -1142,6 +1195,12 @@ export default function DepartmentMapModal({
                           >
                             <div className="min-w-0 pr-2 flex-1">
                               <div className="flex items-center gap-1.5 min-w-0">
+                                {item.prefix && (
+                                  <span className="text-xs font-mono text-slate-300 whitespace-pre select-none shrink-0">
+                                    {item.prefix.replace(/\s/g, '\u00A0')}
+                                  </span>
+                                )}
+                                <span className="text-xs shrink-0">{getUnitEmoji(item.unit.loai_hinh)}</span>
                                 <p className="text-xs font-black text-slate-800 truncate flex-1">{item.unit.ten_don_vi}</p>
                                 <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-blue-50 text-[#005698] border border-blue-100/60 shrink-0 select-none">
                                   {item.unit.loai_hinh}

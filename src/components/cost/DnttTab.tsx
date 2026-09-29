@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Plus, Search, Edit, Trash2, Download, FileText, CheckCircle2,
   ArrowLeft, Save, CreditCard, Layers, RefreshCw, AlertTriangle,
-  Eye, X, Lock, Unlock, CheckSquare, Square, Sparkles, ChevronDown,
-  Copy, FileEdit, Calendar, Printer
+  Eye, EyeOff, X, Lock, Unlock, CheckSquare, Square, Sparkles, ChevronDown,
+  Copy, FileEdit, Calendar, Printer, GripVertical, ArrowRightLeft
 } from 'lucide-react';
 import {
   DNTT, DnttChiTiet, DnttPhanBo, DmKmp, DmBoPhan, BoPhanCap1,
@@ -18,6 +18,7 @@ import { THACO_AUTO_LOGO_BASE64 } from '../../assets/thacoAutoLogo';
 import DnttAllocationModal from './DnttAllocationModal';
 import { exportDnttToPdf, generateBangKePhanBoHtml, printBangKePhanBo, ExportDnttData } from './exportDnttPdf';
 import PnModal from '../department/PnModal';
+import RichTextInput from '../ui/RichTextInput';
 
 interface Props {
   dnttList: DNTT[];
@@ -36,6 +37,9 @@ interface Props {
   loading: boolean;
   externalSearchTerm?: string;
   createTrigger?: number;
+  allowedDonViIds?: string[];
+  moveDnttRequest?: { dnttId: string; targetUnitId?: string } | null;
+  onClearMoveDnttRequest?: () => void;
 }
 
 export default function DnttTab({
@@ -54,7 +58,10 @@ export default function DnttTab({
   onRefresh,
   loading,
   externalSearchTerm,
-  createTrigger
+  createTrigger,
+  allowedDonViIds,
+  moveDnttRequest,
+  onClearMoveDnttRequest
 }: Props) {
   const { user, canDelete, canCreate, canUpdate, canLockPeriod } = useAuth();
   const isAdmin = useMemo(() => String(user?.quyen || '').toUpperCase() === 'ADMIN', [user]);
@@ -75,6 +82,87 @@ export default function DnttTab({
 
   // Modal xem chi tiết ĐNTT khi nhấp vào cột Nội dung thanh toán
   const [detailModalDntt, setDetailModalDntt] = useState<DNTT | null>(null);
+
+  // Danh sách đơn vị đầy đủ
+  const fullDonViList = useMemo(() => (allDonViList && allDonViList.length > 0 ? allDonViList : donViList), [allDonViList, donViList]);
+
+  // Phạm vi phân quyền đơn vị của người dùng (Đơn vị mẹ + các đơn vị trực thuộc, có ưu tiên CP_VIEW_UNITS)
+  const userPermittedUnitIds = useMemo(() => {
+    return getUserPermittedUnitIds(user, fullDonViList, 'ChiPhi');
+  }, [user, fullDonViList]);
+
+  // Danh sách các ID đơn vị được giao trong "Đơn vị quản lý" của tài khoản (hoặc cấu hình CP_VIEW_UNITS)
+  const directlyAssignedUnitIds = useMemo(() => {
+    if (!user) return [];
+
+    // 1. Kiểm tra cấu hình Đơn vị phụ trách riêng của phân hệ Chi phí (CP_VIEW_UNITS:id1|id2)
+    if (user.quyen_chi_tiet) {
+      const rules = String(user.quyen_chi_tiet).split(',').map(r => r.trim());
+      const rule = rules.find(r => r.startsWith('CP_VIEW_UNITS:'));
+      if (rule) {
+        const customUnits = rule.substring('CP_VIEW_UNITS:'.length).split('|').map(s => s.trim()).filter(Boolean);
+        if (customUnits.length > 0) {
+          return customUnits;
+        }
+      }
+    }
+
+    const rawIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();
+    const userRole = String(user.quyen || (user as any).role || '').trim().toUpperCase();
+
+    // 2. Admin HO / Quản trị toàn hệ thống (quyền ADMIN và không bị gán đơn vị cụ thể)
+    if (userRole === 'ADMIN' && (!rawIdDonVi || rawIdDonVi === 'ALL' || rawIdDonVi === 'HO' || rawIdDonVi === 'DV_HO')) {
+      return fullDonViList.map(dv => String(dv.id));
+    }
+
+    // 3. Nếu gán ALL / HO trong id_don_vi
+    if (rawIdDonVi === 'ALL' || rawIdDonVi === 'HO' || rawIdDonVi === 'DV_HO') {
+      return fullDonViList.map(dv => String(dv.id));
+    }
+
+    // 4. Các đơn vị được tích chọn trong trường "Đơn vị quản lý" (id_don_vi)
+    if (rawIdDonVi) {
+      return rawIdDonVi.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    return [];
+  }, [user, fullDonViList]);
+
+  // Danh sách các đơn vị mà người dùng được phép quản lý và thao tác chuyển dữ liệu (bao gồm tất cả Showroom thuộc phạm vi phân quyền)
+  const accessibleUnitIds = useMemo(() => {
+    // 1. Admin hoặc Toàn quyền: toàn bộ đơn vị
+    if (isAdmin || !userPermittedUnitIds) {
+      return fullDonViList.map(u => String(u.id));
+    }
+    // 2. Tài khoản phân quyền: Sử dụng toàn bộ đơn vị trong cây phân quyền (bao gồm CTTT và tất cả các Showroom/ĐĐKD trực thuộc)
+    if (userPermittedUnitIds && userPermittedUnitIds.size > 0) {
+      return Array.from(userPermittedUnitIds).map(String);
+    }
+    // 3. Fallback: allowedDonViIds hoặc directlyAssignedUnitIds
+    if (allowedDonViIds && allowedDonViIds.length > 0) {
+      return allowedDonViIds.map(String);
+    }
+    return directlyAssignedUnitIds.map(String);
+  }, [isAdmin, userPermittedUnitIds, fullDonViList, allowedDonViIds, directlyAssignedUnitIds]);
+
+  // Quyền chuyển ĐNTT: Khả dụng khi có từ 2 đơn vị trở lên trong phạm vi
+  const canMoveDntt = useMemo(() => {
+    return accessibleUnitIds.length >= 2;
+  }, [accessibleUnitIds]);
+
+  // Modal chuyển (Move) ĐNTT sang đơn vị khác (hỗ trợ cả đơn lẻ và hàng loạt)
+  const [moveTargetDntts, setMoveTargetDntts] = useState<DNTT[]>([]);
+  const [moveSelectedUnitId, setMoveSelectedUnitId] = useState<string>('');
+  const [movingSubmitting, setMovingSubmitting] = useState(false);
+
+  // Helper render rich text (giữ lại thẻ b, i, u, br khi hiển thị)
+  const renderRichText = (htmlText?: string) => {
+    if (!htmlText) return null;
+    if (!/<[a-z][\s\S]*>/i.test(htmlText)) {
+      return <span className="whitespace-pre-wrap">{htmlText}</span>;
+    }
+    return <span className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: htmlText }} />;
+  };
 
   // Trạng thái chọn đơn vị trực thuộc dạng cây hoặc nhập tay (Khác)
   const [isCustomUnit, setIsCustomUnit] = useState(false);
@@ -126,6 +214,8 @@ export default function DnttTab({
     bo_phan_hien_thi: 'QTPV, AS & MTLV',
     don_vi_hien_thi: '',
     noi_dung_thanh_toan: '',
+    cau_dan: '',
+    cau_dan: true,
     tong_so_tien: 0,
     so_tien_bang_chu: '',
     hinh_thuc_thanh_toan: 'Chuyển khoản',
@@ -176,23 +266,30 @@ export default function DnttTab({
   // =========================================================================
   // 1. XÁC ĐỊNH ĐƠN VỊ & GIA ĐÌNH ĐƠN VỊ ĐƯỢC CHỌN BÊN NGOÀI
   // =========================================================================
-  const fullDonViList = useMemo(() => (allDonViList && allDonViList.length > 0 ? allDonViList : donViList), [allDonViList, donViList]);
-
-  // Phạm vi phân quyền đơn vị của người dùng (Đơn vị mẹ + các đơn vị trực thuộc)
-  const userPermittedUnitIds = useMemo(() => {
-    return getUserPermittedUnitIds(user, fullDonViList);
-  }, [user, fullDonViList]);
 
   // 🟢 Hàm kiểm tra quyền XÓA phiếu DNTT chuẩn hóa theo cả Phân hệ và Phạm vi Đơn vị (kèm đơn vị con trực thuộc)
   const canDeleteThisDntt = useCallback((d?: DNTT | null): boolean => {
     if (!d || !user) return false;
+
+    // 1. Tài khoản nhóm Chỉ xem (viewer / viewer_hanche) không có quyền xóa
+    const userRole = String(user.quyen || '').toLowerCase();
+    if (userRole === 'viewer' || userRole === 'viewer_hanche') return false;
+
+    // 2. Admin toàn hệ thống luôn có toàn quyền xóa
     if (isAdmin) return true;
-    // 1. Kiểm tra quyền XÓA trong phân hệ Quản lý Chi phí
-    if (!canDelete('ChiPhi')) return false;
-    // 2. Kiểm tra phạm vi đơn vị (Hỗ trợ tài khoản mẹ quản lý các Showroom/ĐĐKD con trực thuộc)
+
+    // 3. Nếu là chính chủ người đề nghị / lập phiếu
+    const isOwner = Boolean(
+      (user.ho_ten && d.nguoi_de_nghi && user.ho_ten.trim().toLowerCase() === d.nguoi_de_nghi.trim().toLowerCase()) ||
+      (user.user_name && d.nguoi_de_nghi && user.user_name.trim().toLowerCase() === d.nguoi_de_nghi.trim().toLowerCase()) ||
+      (user.id && (d as any).created_by && String((d as any).created_by) === String(user.id))
+    );
+    if (isOwner) return true;
+
+    // 4. Kiểm tra phạm vi đơn vị (Hỗ trợ tài khoản mẹ quản lý các Showroom/ĐĐKD con trực thuộc)
     if (!d.id_don_vi || !userPermittedUnitIds) return true;
     return userPermittedUnitIds.has(String(d.id_don_vi));
-  }, [user, isAdmin, canDelete, userPermittedUnitIds]);
+  }, [user, isAdmin, userPermittedUnitIds]);
 
   // Danh sách các kỳ chi phí đã chốt số liệu
   const lockedPeriods = useMemo(() => {
@@ -241,8 +338,8 @@ export default function DnttTab({
     if (d.id && phanBoList && phanBoList.length > 0) {
       const myPhanBo = phanBoList.filter(pb => pb.dntt_id === d.id);
       for (const pb of myPhanBo) {
-        const matched = lockedPeriods.find(ck => 
-          Number(ck.thang) === Number(pb.thang) && 
+        const matched = lockedPeriods.find(ck =>
+          Number(ck.thang) === Number(pb.thang) &&
           Number(ck.nam) === Number(pb.nam) &&
           isDnttInLockScope(dnttUnitId, ck)
         );
@@ -254,8 +351,8 @@ export default function DnttTab({
     if (allocationsMap && Object.keys(allocationsMap).length > 0) {
       const allAlloc = Object.values(allocationsMap).flat() as DnttPhanBo[];
       for (const pb of allAlloc) {
-        const matched = lockedPeriods.find(ck => 
-          Number(ck.thang) === Number(pb.thang) && 
+        const matched = lockedPeriods.find(ck =>
+          Number(ck.thang) === Number(pb.thang) &&
           Number(ck.nam) === Number(pb.nam) &&
           isDnttInLockScope(dnttUnitId, ck)
         );
@@ -272,8 +369,8 @@ export default function DnttTab({
         if (!isNaN(dt.getTime())) {
           const m = dt.getMonth() + 1;
           const y = dt.getFullYear();
-          const matched = lockedPeriods.find(ck => 
-            Number(ck.thang) === m && 
+          const matched = lockedPeriods.find(ck =>
+            Number(ck.thang) === m &&
             Number(ck.nam) === y &&
             isDnttInLockScope(dnttUnitId, ck)
           );
@@ -325,6 +422,97 @@ export default function DnttTab({
   const isDnttLocked = (d?: DNTT | Partial<DNTT> | null): boolean => {
     if (d?.mo_khoa_chinh_sua) return false;
     return !!getDnttLockedPeriod(d);
+  };
+
+  // Lắng nghe yêu cầu chuyển ĐNTT từ thanh bên UnitFilterSidebar (nếu có)
+  useEffect(() => {
+    if (moveDnttRequest?.dnttId) {
+      if (!canMoveDntt) {
+        toast.warning('Tài khoản chỉ quản lý 1 đơn vị, không thể thực hiện thao tác chuyển đơn vị!');
+        onClearMoveDnttRequest?.();
+        return;
+      }
+      const target = dnttList.find(d => String(d.id) === String(moveDnttRequest.dnttId));
+      if (target) {
+        if (moveDnttRequest.targetUnitId && String(target.id_don_vi) === String(moveDnttRequest.targetUnitId)) {
+          const uName = fullDonViList.find(u => String(u.id) === String(moveDnttRequest.targetUnitId))?.ten_don_vi || 'đơn vị này';
+          toast.info(`Phiếu ĐNTT hiện đã thuộc "${uName}" rồi!`);
+          onClearMoveDnttRequest?.();
+          return;
+        }
+        if (isDnttLocked(target)) {
+          const p = getDnttLockedPeriod(target) || 'kỳ đã chốt';
+          toast.error(`Phiếu ${target.so_dntt || target.id} thuộc ${p} đã chốt số liệu đóng băng. Không thể chuyển đơn vị!`);
+        } else {
+          setMoveTargetDntts([target]);
+          if (moveDnttRequest.targetUnitId) {
+            setMoveSelectedUnitId(String(moveDnttRequest.targetUnitId));
+          } else {
+            setMoveSelectedUnitId('');
+          }
+        }
+      }
+      onClearMoveDnttRequest?.();
+    }
+  }, [moveDnttRequest, dnttList, canMoveDntt, fullDonViList]);
+
+  // Thực hiện chuyển (Move) ĐNTT sang đơn vị khác (Đơn lẻ & Hàng loạt)
+  const handleConfirmMoveDntt = async () => {
+    if (moveTargetDntts.length === 0 || !moveSelectedUnitId) {
+      toast.warning('Vui lòng chọn đơn vị chuyển đến!');
+      return;
+    }
+
+    const targetUnit = fullDonViList.find(u => String(u.id) === String(moveSelectedUnitId));
+    if (!targetUnit) {
+      toast.error('Không tìm thấy thông tin đơn vị đích!');
+      return;
+    }
+
+    setMovingSubmitting(true);
+    try {
+      const matchedPn = phapNhanList.find(p => String(p.id_don_vi) === String(moveSelectedUnitId));
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const dntt of moveTargetDntts) {
+        if (isDnttLocked(dntt)) continue;
+        const targetPnId = matchedPn ? matchedPn.id : (dntt.id_phap_nhan || null);
+
+        const updatedPayload: Partial<DNTT> = {
+          ...dntt,
+          id_don_vi: String(moveSelectedUnitId),
+          don_vi_hien_thi: targetUnit.ten_don_vi || dntt.don_vi_hien_thi,
+          id_phap_nhan: targetPnId,
+          updated_at: new Date().toISOString()
+        };
+
+        try {
+          await apiService.save(updatedPayload, 'update', 'dntt');
+          successCount++;
+        } catch (e) {
+          console.error(`Error moving DNTT ${dntt.id}:`, e);
+          errorCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Đã chuyển thành công ${successCount} phiếu ĐNTT sang đơn vị "${targetUnit.ten_don_vi}"!`);
+      }
+      if (errorCount > 0) {
+        toast.error(`Có ${errorCount} phiếu gặp lỗi khi gửi lệnh chuyển đơn vị!`);
+      }
+
+      setMoveTargetDntts([]);
+      setMoveSelectedUnitId('');
+      setSelectedDnttIds(new Set());
+      await onRefresh();
+    } catch (err: any) {
+      console.error('Error moving DNTT:', err);
+      toast.error('Có lỗi xảy ra khi chuyển đơn vị: ' + (err.message || err));
+    } finally {
+      setMovingSubmitting(false);
+    }
   };
 
   const currentUnit = useMemo(() => {
@@ -908,6 +1096,8 @@ export default function DnttTab({
       bo_phan_hien_thi: 'QTPV, AS & MTLV',
       don_vi_hien_thi: initialUnitDisplay,
       noi_dung_thanh_toan: '',
+      cau_dan: '',
+      hien_thi_cau_dan: true,
       tong_so_tien: 0,
       so_tien_bang_chu: '',
       hinh_thuc_thanh_toan: 'Chuyển khoản',
@@ -984,6 +1174,8 @@ export default function DnttTab({
       so_dntt: effectiveSoDntt,
       id_don_vi: resolvedUnitId,
       don_vi_hien_thi: unitDisplay,
+      cau_dan: dntt.cau_dan || '',
+      hien_thi_cau_dan: dntt.hien_thi_cau_dan !== false,
       hien_thi_phan_bo: dntt.hien_thi_phan_bo !== false,
       hien_thi_hoa_don: dntt.hien_thi_hoa_don !== false,
       so_hoa_don: dntt.so_hoa_don || '',
@@ -1169,8 +1361,8 @@ export default function DnttTab({
       const allAlloc = Object.values(allocationsMap).flat() as DnttPhanBo[];
       const currentUnitId = currentDntt.id_don_vi || currentUnit?.id || (user?.id_don_vi ? String(user.id_don_vi).split(',')[0].trim() : undefined);
       for (const pb of allAlloc) {
-        const matched = lockedPeriods.find(ck => 
-          Number(ck.thang) === Number(pb.thang) && 
+        const matched = lockedPeriods.find(ck =>
+          Number(ck.thang) === Number(pb.thang) &&
           Number(ck.nam) === Number(pb.nam) &&
           isDnttInLockScope(currentUnitId, ck)
         );
@@ -1237,6 +1429,8 @@ export default function DnttTab({
         id_phap_nhan: activePhapNhan?.id || null,
         id_don_vi: currentDntt.id_don_vi || currentUnit?.id || null,
         don_vi_hien_thi: currentDntt.don_vi_hien_thi || defaultDonViDisplay,
+        cau_dan: currentDntt.cau_dan || null,
+        hien_thi_cau_dan: currentDntt.hien_thi_cau_dan !== false,
         tong_so_tien: calculatedTotal,
         so_tien_bang_chu: textAmount,
         hien_thi_phan_bo: currentDntt.hien_thi_phan_bo !== false,
@@ -1576,6 +1770,217 @@ export default function DnttTab({
     }
   };
 
+  // Mở modal chuyển đơn vị hàng loạt cho các phiếu đã chọn
+  const handleStartBulkMove = () => {
+    if (selectedDnttIds.size === 0) return;
+    const selectedList = dnttList.filter(d => selectedDnttIds.has(d.id));
+    const validList = selectedList.filter(d => !isDnttLocked(d));
+    const lockedCount = selectedList.length - validList.length;
+
+    if (validList.length === 0) {
+      toast.warning('Tất cả các phiếu đã chọn đều thuộc kỳ đã chốt số liệu đóng băng, không thể chuyển đơn vị!');
+      return;
+    }
+
+    if (lockedCount > 0) {
+      toast.warning(`Có ${lockedCount} phiếu thuộc kỳ đã chốt sẽ được bỏ qua, hệ thống sẽ chuyển ${validList.length} phiếu hợp lệ.`);
+    }
+
+    setMoveTargetDntts(validList);
+    setMoveSelectedUnitId('');
+  };
+
+  // Modal Chuyển (Move) ĐNTT sang đơn vị khác (Đơn lẻ & Hàng loạt) - Dùng chung cho cả List View và Form View
+  const renderMoveModal = () => {
+    if (moveTargetDntts.length === 0) return null;
+
+    const treeTargetUnits = treeUnits.filter(item => {
+      // Nếu chỉ chuyển 1 phiếu thì không chọn lại đơn vị hiện tại của phiếu đó
+      if (moveTargetDntts.length === 1 && String(item.unit.id) === String(moveTargetDntts[0].id_don_vi)) return false;
+      return true;
+    });
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-amber-50/70 dark:bg-amber-950/40">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-[#D97706] flex items-center justify-center shrink-0">
+                <ArrowRightLeft size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 dark:text-gray-100 text-sm sm:text-base">
+                  {moveTargetDntts.length === 1
+                    ? 'Chuyển ĐNTT sang Đơn vị / Showroom khác'
+                    : `Chuyển hàng loạt ${moveTargetDntts.length} ĐNTT sang Đơn vị khác`}
+                </h3>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Chuyển giao và cập nhật đơn vị quản lý, pháp nhân trong phạm vi phân quyền
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMoveTargetDntts([]);
+                setMoveSelectedUnitId('');
+              }}
+              disabled={movingSubmitting}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-5 space-y-4 text-xs sm:text-sm">
+            {/* Thẻ thông tin phiếu hiện tại: Đơn lẻ hoặc Hàng loạt */}
+            {moveTargetDntts.length === 1 ? (
+              <div className="p-3.5 bg-gray-50 dark:bg-slate-900/50 rounded-xl border border-gray-200/80 dark:border-slate-700/80 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">Số ĐNTT:</span>
+                  <span className="font-mono font-bold text-[#D97706]">{moveTargetDntts[0].so_dntt || moveTargetDntts[0].id}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">Người đề nghị:</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">{moveTargetDntts[0].nguoi_de_nghi}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">Số tiền:</span>
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                    {Number(moveTargetDntts[0].tong_so_tien || 0).toLocaleString('vi-VN')} VNĐ
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-1.5 border-t border-gray-200/60 dark:border-slate-700/60">
+                  <span className="text-gray-500 dark:text-gray-400 text-xs">Đơn vị hiện tại:</span>
+                  <span className="font-bold text-red-600 dark:text-red-400">
+                    {moveTargetDntts[0].don_vi_hien_thi || fullDonViList.find(u => u.id === moveTargetDntts[0].id_don_vi)?.ten_don_vi || 'Chưa xác định'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-200/80 dark:border-purple-800/80 space-y-2.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-300 text-xs font-semibold">Số lượng phiếu chuyển:</span>
+                  <span className="font-bold text-purple-700 dark:text-purple-300 font-mono text-sm">{moveTargetDntts.length} phiếu</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600 dark:text-gray-300 text-xs font-semibold">Tổng số tiền:</span>
+                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                    {moveTargetDntts.reduce((sum, d) => sum + Number(d.tong_so_tien || 0), 0).toLocaleString('vi-VN')} VNĐ
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-purple-200/60 dark:border-purple-800/60">
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400 block mb-1">Danh sách phiếu chọn:</span>
+                  <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
+                    {moveTargetDntts.map(d => (
+                      <div key={d.id} className="flex justify-between items-center text-[11px] py-0.5 px-2 bg-white/70 dark:bg-slate-800/70 rounded border border-purple-100 dark:border-purple-900/50">
+                        <span className="font-mono font-bold text-[#D97706]">{d.so_dntt || d.id}</span>
+                        <span className="text-gray-500 truncate max-w-[180px]">{d.don_vi_hien_thi || fullDonViList.find(u => u.id === d.id_don_vi)?.ten_don_vi || '-'}</span>
+                        <span className="font-mono text-gray-700 dark:text-gray-300">{Number(d.tong_so_tien || 0).toLocaleString('vi-VN')} đ</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Chọn đơn vị đích */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                Chọn Showroom / Đơn vị chuyển đến: <span className="text-red-500">*</span>
+              </label>
+              {treeTargetUnits.length === 0 ? (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-300">
+                  <p className="font-semibold">Không tìm thấy Showroom/Đơn vị khác trong phạm vi phân quyền của bạn để chuyển đến.</p>
+                  <p className="text-[11px] mt-0.5 opacity-80">(Tài khoản hiện chỉ có quyền tại 1 đơn vị duy nhất)</p>
+                </div>
+              ) : (
+                <select
+                  value={moveSelectedUnitId}
+                  onChange={(e) => setMoveSelectedUnitId(e.target.value)}
+                  disabled={movingSubmitting}
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#D97706] focus:border-[#D97706] cursor-pointer"
+                >
+                  <option value="">-- Chọn showroom / đơn vị chuyển đến --</option>
+                  {treeTargetUnits.map(item => (
+                    <option key={item.unit.id} value={item.unit.id}>
+                      {item.depth > 0 ? `\u00A0\u00A0${item.isLast ? '└── ' : '├── '}` : ''}{item.emoji} {item.unit.ten_don_vi} {item.depth > 0 ? '(Showroom)' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Hiển thị pháp nhân tự động map */}
+            {moveSelectedUnitId && (() => {
+              const targetUnit = fullDonViList.find(u => String(u.id) === String(moveSelectedUnitId));
+              const matchedPn = phapNhanList.find(p => String(p.id_don_vi) === String(moveSelectedUnitId));
+              return (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 size={13} className="text-emerald-600" />
+                    <span>Đơn vị mới: <strong>{targetUnit?.ten_don_vi}</strong></span>
+                  </p>
+                  {matchedPn ? (
+                    <p className="text-[11px] pl-5 opacity-90">
+                      Pháp nhân tương ứng: <strong>{matchedPn.ten_cong_ty}</strong> (MST: {matchedPn.ma_so_thue})
+                    </p>
+                  ) : (
+                    <p className="text-[11px] pl-5 text-amber-700 italic">
+                      (Đơn vị này chưa cấu hình Pháp nhân riêng, sẽ giữ nguyên thông tin pháp nhân hiện tại)
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            <p className="text-[11px] text-gray-500 italic">
+              💡 Lưu ý: Hệ thống sẽ tự động cập nhật đơn vị quản lý, đơn vị hiển thị và ánh xạ pháp nhân phù hợp cho {moveTargetDntts.length > 1 ? `tất cả ${moveTargetDntts.length} phiếu ĐNTT này` : 'phiếu ĐNTT này'}.
+            </p>
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-3.5 border-t border-gray-100 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-900/50 flex justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setMoveTargetDntts([]);
+                setMoveSelectedUnitId('');
+              }}
+              disabled={movingSubmitting}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmMoveDntt}
+              disabled={!moveSelectedUnitId || movingSubmitting || treeTargetUnits.length === 0}
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-xs cursor-pointer ${!moveSelectedUnitId || movingSubmitting || treeTargetUnits.length === 0
+                ? 'bg-gray-300 dark:bg-slate-700 text-gray-500 cursor-not-allowed'
+                : 'bg-[#D97706] hover:bg-[#b45309] text-white active:scale-95 shadow-amber-500/20 shadow-md'
+                }`}
+            >
+              {movingSubmitting ? (
+                <>
+                  <RefreshCw size={13} className="animate-spin" />
+                  <span>Đang chuyển...</span>
+                </>
+              ) : (
+                <>
+                  <ArrowRightLeft size={13} />
+                  <span>{moveTargetDntts.length > 1 ? `Xác nhận chuyển (${moveTargetDntts.length})` : 'Xác nhận chuyển'}</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // =========================================================================
   // GIAO DIỆN 1: DANH SÁCH GIẤY ĐỀ NGHỊ THANH TOÁN
   // =========================================================================
@@ -1612,19 +2017,14 @@ export default function DnttTab({
               <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700/80 text-gray-600 dark:text-gray-200 font-semibold border-b border-gray-200 dark:border-slate-600">
                 <tr>
                   <th className="p-3 w-10 text-center">
-                    <button
-                      type="button"
-                      onClick={toggleSelectAll}
-                      disabled={filteredDnttList.length === 0}
-                      className="inline-flex items-center justify-center p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-600 cursor-pointer disabled:opacity-30"
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      disabled={deletableFilteredList.length === 0}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                       title={isAllSelected ? "Bỏ chọn tất cả" : "Chọn tất cả phiếu"}
-                    >
-                      {isAllSelected ? (
-                        <CheckSquare size={10} className="text-[#D97706]" />
-                      ) : (
-                        <Square size={10} className="text-gray-400" />
-                      )}
-                    </button>
+                    />
                   </th>
                   <th className="p-1 w-10 text-center">TT</th>
                   <th className="p-2 w-24 text-center">Số ĐNTT</th>
@@ -1668,7 +2068,9 @@ export default function DnttTab({
                             title={locked ? `Phiếu thuộc ${lockedPeriod} đã chốt kỳ chi phí — Khóa chọn hàng loạt` : !canDeleteThisDntt(d) ? 'Bạn không có quyền xóa phiếu này' : undefined}
                           />
                         </td>
-                        <td className="p-1 text-center text-gray-400 font-mono text-[11px]">{index + 1}</td>
+                        <td className="p-2 text-center text-gray-400 font-mono text-[11px]">
+                          {index + 1}
+                        </td>
                         <td className="p-1 font-mono font-bold text-[11px] text-[#D97706] text-center">
                           <div className="flex items-center justify-center gap-1">
                             {(() => {
@@ -1696,24 +2098,23 @@ export default function DnttTab({
                             <div
                               onClick={() => setDetailModalDntt(d)}
                               className="font-medium line-clamp-1 cursor-pointer text-gray-900 dark:text-gray-100 hover:text-[#D97706] dark:hover:text-[#F59E0B] hover:underline decoration-amber-400/60 underline-offset-2 transition-colors"
-                              title={d.noi_dung_thanh_toan || ''}
+                              title={d.noi_dung_thanh_toan ? d.noi_dung_thanh_toan.replace(/<[^>]+>/g, '') : ''}
                             >
-                              {d.noi_dung_thanh_toan || '-'}
+                              {renderRichText(d.noi_dung_thanh_toan) || '-'}
                             </div>
 
                             {/* Tooltip hiển thị khi rê chuột vào, hiển thị đúng và đủ toàn bộ các dòng nội dung thanh toán */}
                             {d.noi_dung_thanh_toan && (
-                              <div className={`hidden group-hover/ndtt:block absolute left-0 z-50 pointer-events-none min-w-[280px] max-w-lg p-3 bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs rounded-xl shadow-2xl border border-slate-700/80 backdrop-blur-xs animate-in fade-in duration-100 ${
-                                index >= Math.max(filteredDnttList.length - 2, 2) ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
-                              }`}>
+                              <div className={`hidden group-hover/ndtt:block absolute left-0 z-50 pointer-events-none min-w-[280px] max-w-lg p-3 bg-slate-900/95 dark:bg-slate-800/95 text-white text-xs rounded-xl shadow-2xl border border-slate-700/80 backdrop-blur-xs animate-in fade-in duration-100 ${index >= Math.max(filteredDnttList.length - 2, 2) ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                                }`}>
                                 <div className="whitespace-pre-wrap leading-relaxed select-none font-normal text-slate-100">
-                                  {d.noi_dung_thanh_toan}
+                                  {renderRichText(d.noi_dung_thanh_toan)}
                                 </div>
                               </div>
                             )}
 
-                            <div className="text-[11px] text-gray-400 font-mono">
-                              Đơn vị: {d.don_vi_hien_thi || fullDonViList.find(u => u.id === d.id_don_vi)?.ten_don_vi || d.id_don_vi || '-'}
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono flex items-center flex-wrap gap-1.5 mt-0.5">
+                              <span>Đơn vị: <strong className="text-gray-700 dark:text-gray-200 font-sans font-semibold">{d.don_vi_hien_thi || fullDonViList.find(u => u.id === d.id_don_vi)?.ten_don_vi || d.id_don_vi || '-'}</strong></span>
                             </div>
                           </div>
                         </td>
@@ -1831,26 +2232,7 @@ export default function DnttTab({
                             >
                               <Download size={15} />
                             </button>
-                            {canDeleteThisDntt(d) && (
-                              <button
-                                onClick={() => {
-                                  if (locked) {
-                                    toast.warning(`Phiếu thuộc ${lockedPeriod} đã chốt kỳ chi phí. Không thể xóa!`);
-                                    return;
-                                  }
-                                  setDeleteTargetDntt(d);
-                                }}
-                                disabled={locked}
-                                className={`p-1.5 rounded-lg transition-colors ${
-                                  locked
-                                    ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed'
-                                    : 'text-red-600 hover:bg-red-50 dark:hover:bg-slate-700 cursor-pointer'
-                                }`}
-                                title={locked ? `Phiếu thuộc ${lockedPeriod} đã chốt — Không thể xóa` : "Xóa phiếu"}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            )}
+
                           </div>
                         </td>
                       </tr>
@@ -1898,6 +2280,15 @@ export default function DnttTab({
             </div>
             <div className="h-4 w-px bg-slate-700" />
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleStartBulkMove}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Chuyển các phiếu đã chọn sang đơn vị khác"
+              >
+                <ArrowRightLeft size={14} />
+                <span>Chuyển đơn vị ({selectedDnttIds.size})</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setBulkDeleteModalOpen(true)}
@@ -2147,7 +2538,7 @@ export default function DnttTab({
                       <FileText size={13} /> Nội dung thanh toán
                     </div>
                     <div className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap leading-relaxed select-text">
-                      {d.noi_dung_thanh_toan || '-'}
+                      {renderRichText(d.noi_dung_thanh_toan) || '-'}
                     </div>
                   </div>
 
@@ -2180,7 +2571,7 @@ export default function DnttTab({
                                 <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-700/30">
                                   <td className="p-2.5 text-center font-mono text-gray-400">{item.stt || idx + 1}</td>
                                   <td className="p-2.5 font-medium text-gray-900 dark:text-gray-100">
-                                    {item.noi_dung}
+                                    {renderRichText(item.noi_dung)}
                                   </td>
                                   <td className="p-2.5 text-gray-700 dark:text-gray-300">
                                     {matchingPb.length > 0 ? (
@@ -2212,7 +2603,7 @@ export default function DnttTab({
                             <tr>
                               <td className="p-2.5 text-center font-mono text-gray-400">1</td>
                               <td className="p-2.5 font-medium text-gray-900 dark:text-gray-100">
-                                {d.noi_dung_thanh_toan || '-'}
+                                {renderRichText(d.noi_dung_thanh_toan) || '-'}
                               </td>
                               <td className="p-2.5 text-gray-400 italic text-[11px]">-</td>
                               <td className="p-2.5 text-right font-mono font-bold text-[#D97706]">
@@ -2231,11 +2622,10 @@ export default function DnttTab({
                       <CreditCard size={13} /> Hình thức thanh toán
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        d.hinh_thuc_thanh_toan === 'Chuyển khoản' || d.hinh_thuc_thanh_toan === 'Cấn trừ công nợ'
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                      }`}>
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold ${d.hinh_thuc_thanh_toan === 'Chuyển khoản' || d.hinh_thuc_thanh_toan === 'Cấn trừ công nợ'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                        }`}>
                         {d.hinh_thuc_thanh_toan}
                       </span>
                     </div>
@@ -2353,6 +2743,9 @@ export default function DnttTab({
             </div>
           );
         })()}
+
+        {/* Modal Chuyển (Move) ĐNTT sang đơn vị khác */}
+        {renderMoveModal()}
 
       </div>
     );
@@ -2727,17 +3120,18 @@ export default function DnttTab({
               </div>
             </div>
 
-            {/* Dòng 3: Nội dung thanh toán */}
+            {/* Dòng 3: Nội dung thanh toán (RichText) */}
             <div className="flex items-baseline">
               <span className="font-bold text-black w-44 shrink-0">Nội dung thanh toán:</span>
-              <input
-                type="text"
-                required
-                placeholder="Tiền điện tháng 08 năm 2026"
-                value={currentDntt.noi_dung_thanh_toan || ''}
-                onChange={(e) => setCurrentDntt(p => ({ ...p, noi_dung_thanh_toan: e.target.value }))}
-                className="flex-1 bg-transparent px-1 py-0.5 text-black focus:outline-none focus:bg-blue-50/50"
-              />
+              <div className="flex-1">
+                <RichTextInput
+                  value={currentDntt.noi_dung_thanh_toan || ''}
+                  onChange={(val) => setCurrentDntt(p => ({ ...p, noi_dung_thanh_toan: val }))}
+                  placeholder="Tiền điện tháng 08 năm 2026"
+                  multiline={true}
+                  className="w-full bg-transparent px-1 py-0.5 text-black focus:outline-none focus:bg-blue-50/50 text-[13px] break-words"
+                />
+              </div>
             </div>
 
             {/* Dòng 4: Kính đề nghị Ban lãnh đạo duyệt thanh toán số tiền (nối tiếp chỉ cách 1 khoảng trắng) */}
@@ -2752,28 +3146,6 @@ export default function DnttTab({
             <div className="italic text-black">
               Bằng chữ: {textAmount || 'Không đồng'}
             </div>
-
-            {/* Dòng 6: Hình thức thanh toán (4 hình thức) */}
-            <div className="flex items-center pt-0.5">
-              <span className="text-black w-44 shrink-0">Hình thức thanh toán:</span>
-              <div className="flex items-center gap-4 sm:gap-6 font-sans text-xs flex-wrap">
-                {(['Chuyển khoản', 'Tiền mặt', 'Cấn trừ công nợ', 'Ghi nhận chi phí'] as const).map(ht => (
-                  <label key={ht} className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="radio"
-                      name="form_hinh_thuc"
-                      value={ht}
-                      checked={currentDntt.hinh_thuc_thanh_toan === ht}
-                      onChange={() => setCurrentDntt(p => ({ ...p, hinh_thuc_thanh_toan: ht }))}
-                      className="text-[#D97706] focus:ring-[#D97706] cursor-pointer"
-                    />
-                    <span className={currentDntt.hinh_thuc_thanh_toan === ht ? 'font-bold text-[#D97706]' : 'text-gray-700'}>
-                      {ht}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* 4. BẢNG CHI TIẾT NỘI DUNG THANH TOÁN (KẺ KHUNG TOÀN BỘ - CAO MỖI HÀNG 0.5CM, PARAGRAPH TRƯỚC 3PT SAU 3PT) */}
@@ -2786,6 +3158,56 @@ export default function DnttTab({
               </tr>
             </thead>
             <tbody>
+              {/* DÒNG CÂU DẪN TRƯỚC DÒNG STT 1 (ĐƯỜNG GẠCH NÉT ĐỨT CỰC NHẠT VỚI DÒNG STT 1, CỘT TIỀN KHÓA HIỂN THỊ "...") */}
+              <tr className="bg-white/60 border-b border-dashed border-slate-300" style={{ minHeight: '0.5cm' }}>
+                <td className="border border-black px-2 text-center text-slate-400 font-mono text-[11px] align-middle select-none border-b border-dashed border-slate-300" style={{ minHeight: '0.5cm', padding: '3pt 6px' }}>
+                  -
+                </td>
+                <td className="border border-black px-2 align-middle border-b border-dashed border-slate-300" style={{ minHeight: '0.5cm', padding: '3pt 6px' }}>
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="flex-1 min-w-0">
+                      <RichTextInput
+                        value={currentDntt.cau_dan || ''}
+                        onChange={(val) => setCurrentDntt(p => ({ ...p, cau_dan: val }))}
+                        placeholder="Thanh toán chi phí..."
+                        multiline={true}
+                        className={`w-full text-black px-1 py-0.5 italic text-[12.5px] break-words leading-relaxed ${currentDntt.hien_thi_cau_dan === false ? 'opacity-40 line-through text-gray-400' : ''
+                          }`}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto justify-end">
+                      {currentDntt.hien_thi_cau_dan === false && (
+                        <span className="text-[11px] text-gray-400 italic font-normal text-right select-none whitespace-nowrap">
+                          (Đang ẩn trên phiếu in)
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = currentDntt.hien_thi_cau_dan === false;
+                          setCurrentDntt(p => ({ ...p, hien_thi_cau_dan: nextVal }));
+                          if (nextVal) {
+                            toast.success('Đã bật hiển thị Câu dẫn trên phiếu in');
+                          } else {
+                            toast.info('Đã ẩn Câu dẫn trên phiếu in');
+                          }
+                        }}
+                        className={`p-1 rounded-md transition-colors cursor-pointer ${currentDntt.hien_thi_cau_dan === false
+                          ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700'
+                          : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-slate-700'
+                          }`}
+                        title={currentDntt.hien_thi_cau_dan === false ? "Đang ẩn trên phiếu in - Nhấn để hiển thị" : "Đang hiển thị trên phiếu in - Nhấn để ẩn"}
+                      >
+                        {currentDntt.hien_thi_cau_dan === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </td>
+                <td className="border border-black px-2 text-center align-middle bg-slate-50/40 select-none border-b border-dashed border-slate-300" style={{ minHeight: '0.5cm', padding: '3pt 6px' }}>
+                  <span className="text-slate-300 font-mono text-xs tracking-widest select-none">...</span>
+                </td>
+              </tr>
               {items.map((item, idx) => {
                 const itemAllocations = (allocationsMap[item.id] || []).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0));
                 const totalItemAlloc = itemAllocations.reduce((s, a) => s + (Number(a.so_tien) || 0), 0);
@@ -2794,25 +3216,26 @@ export default function DnttTab({
 
                 return (
                   <React.Fragment key={item.id}>
-                    {/* DÒNG NỘI DUNG CHA (CÓ STT, IN ĐẬM, CÓ ĐƯỜNG KẺ BORDER TRÊN DƯỚI, CAO 0.5CM) */}
-                    <tr className="bg-white group" style={{ height: '0.5cm' }}>
-                      <td className="border border-black px-2 text-center font-bold font-mono align-middle" style={{ height: '0.5cm', padding: '3pt 6px' }}>
+                    {/* DÒNG NỘI DUNG CHA (CÓ STT, IN ĐẬM, CÓ ĐƯỜNG KẺ BORDER TRÊN DƯỚI, CAO TỐI THIỂU 0.5CM, TỰ CO GIÃN ĐA DÒNG) */}
+                    <tr className="bg-white group" style={{ minHeight: '0.5cm' }}>
+                      <td className="border border-black px-2 text-center font-bold font-mono align-middle" style={{ minHeight: '0.5cm', padding: '3pt 6px' }}>
                         {item.stt || idx + 1}
                       </td>
 
-                      <td className="border border-black px-2 align-middle" style={{ height: '0.5cm', padding: '3pt 6px' }}>
-                        <div className="flex items-center justify-between gap-2">
-                          <input
-                            type="text"
-                            required
-                            placeholder="Nhập nội dung thanh toán dòng này..."
-                            value={item.noi_dung || ''}
-                            onChange={(e) => handleUpdateItem(idx, 'noi_dung', e.target.value)}
-                            className="w-full bg-transparent font-bold text-black focus:outline-none focus:bg-blue-50/50 px-1 py-0.5"
-                          />
+                      <td className="border border-black px-2 align-middle" style={{ minHeight: '0.5cm', padding: '3pt 6px' }}>
+                        <div className="flex items-start justify-between gap-2 py-0.5">
+                          <div className="flex-1 min-w-0">
+                            <RichTextInput
+                              value={item.noi_dung || ''}
+                              onChange={(val) => handleUpdateItem(idx, 'noi_dung', val)}
+                              placeholder="Nhập nội dung thanh toán dòng này..."
+                              multiline={true}
+                              className="w-full bg-transparent font-bold text-black focus:outline-none focus:bg-blue-50/50 px-1 py-0.5 text-[12.5px] break-words leading-relaxed"
+                            />
+                          </div>
 
                           {/* Nút hành động nhanh: Phân bổ chi phí & Thêm/Xóa dòng */}
-                          <div className="flex items-center gap-1 shrink-0 font-sans">
+                          <div className="flex items-center gap-1 shrink-0 font-sans mt-0.5">
                             <button
                               type="button"
                               onClick={() => setAllocatingItem(item)}
@@ -2871,192 +3294,227 @@ export default function DnttTab({
               <tr style={{ height: '0.75cm' }}>
                 <td className="border border-black text-[12px] align-middle overflow-hidden" style={{ padding: '3pt 8px' }} colSpan={2}>
                   <div className="flex items-center justify-between w-full gap-2">
-                    <div className="flex items-center gap-2 sm:gap-2.5 flex-nowrap min-w-0">
+                    <div className={`flex items-center gap-2 sm:gap-2.5 flex-nowrap min-w-0 ${currentDntt.hien_thi_hoa_don === false ? 'opacity-40' : ''}`}>
                       <span className="font-bold underline text-black shrink-0">Thông tin hoá đơn:</span>
 
-                      {currentDntt.hien_thi_hoa_don !== false ? (
-                        <>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <span className="text-black font-semibold text-xs">Số HĐ:</span>
-                            <input
-                              type="text"
-                              placeholder="[Số HĐ...]"
-                              value={currentDntt.so_hoa_don || ''}
-                              onChange={(e) => setCurrentDntt(p => ({ ...p, so_hoa_don: e.target.value }))}
-                              className="w-20 sm:w-24 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent font-mono text-xs focus:outline-none focus:border-[#D97706]"
-                            />
-                          </div>
-                          <span className="text-gray-300 font-bold shrink-0">|</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <span className="text-black font-semibold text-xs">Ngày:</span>
-                            <input
-                              type="date"
-                              value={currentDntt.ngay_hoa_don || ''}
-                              onChange={(e) => setCurrentDntt(p => ({ ...p, ngay_hoa_don: e.target.value }))}
-                              className="border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent text-xs focus:outline-none focus:border-[#D97706]"
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <span className="italic text-gray-400 text-xs shrink-0 font-normal">
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-black font-semibold text-xs">Số HĐ:</span>
+                        <input
+                          type="text"
+                          placeholder="[Số HĐ...]"
+                          value={currentDntt.so_hoa_don || ''}
+                          onChange={(e) => setCurrentDntt(p => ({ ...p, so_hoa_don: e.target.value }))}
+                          className="w-20 sm:w-24 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent font-mono text-xs focus:outline-none focus:border-[#D97706]"
+                        />
+                      </div>
+                      <span className="text-gray-300 font-bold shrink-0">|</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-black font-semibold text-xs">Ngày:</span>
+                        <input
+                          type="date"
+                          value={currentDntt.ngay_hoa_don || ''}
+                          onChange={(e) => setCurrentDntt(p => ({ ...p, ngay_hoa_don: e.target.value }))}
+                          className="border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent text-xs focus:outline-none focus:border-[#D97706]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto justify-end">
+                      {currentDntt.hien_thi_hoa_don === false && (
+                        <span className="text-[11px] text-gray-400 italic font-normal text-right select-none whitespace-nowrap">
                           (Đang ẩn trên phiếu in)
                         </span>
                       )}
-                    </div>
-
-                    <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-600 hover:text-gray-900 cursor-pointer select-none shrink-0 ml-auto" title="Ẩn/hiện dòng thông tin hoá đơn trên phiếu và file in">
-                      <input
-                        type="checkbox"
-                        checked={currentDntt.hien_thi_hoa_don !== false}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setCurrentDntt(p => ({ ...p, hien_thi_hoa_don: val }));
-                          if (val) {
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = currentDntt.hien_thi_hoa_don === false;
+                          setCurrentDntt(p => ({ ...p, hien_thi_hoa_don: nextVal }));
+                          if (nextVal) {
                             toast.success('Đã bật hiển thị Thông tin hoá đơn');
                           } else {
                             toast.info('Đã ẩn dòng Thông tin hoá đơn trên phiếu in');
                           }
                         }}
-                        className="w-3.5 h-3.5 rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer accent-[#D97706]"
-                      />
-                      <span className="font-semibold text-gray-700">Ẩn/Hiện</span>
-                    </label>
+                        className={`p-1 rounded-md transition-colors cursor-pointer ${currentDntt.hien_thi_hoa_don === false
+                          ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700'
+                          : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-slate-700'
+                          }`}
+                        title={currentDntt.hien_thi_hoa_don === false ? "Đang ẩn trên phiếu in - Nhấn để hiển thị" : "Đang hiển thị trên phiếu in - Nhấn để ẩn"}
+                      >
+                        {currentDntt.hien_thi_hoa_don === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                 </td>
                 <td className="border border-black" style={{ height: '0.75cm' }}></td>
               </tr>
 
-              {/* DÒNG GHI CHÚ (NẰM TRÊN THÔNG TIN CHUYỂN KHOẢN, DƯỚI THÔNG TIN HOÁ ĐƠN - CÓ THỂ ẨN/HIỆN) */}
+              {/* DÒNG GHI CHÚ (NẰM DƯỚI THÔNG TIN HOÁ ĐƠN - CÓ THỂ ẨN/HIỆN) */}
               <tr style={{ height: '0.75cm' }}>
                 <td className="border border-black text-[12px] align-middle" style={{ padding: '3pt 8px' }} colSpan={2}>
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="font-bold underline text-black shrink-0">Ghi chú:</span>
-                      <input
-                        type="text"
-                        placeholder="[Nhập ghi chú thêm nếu cần...]"
-                        value={currentDntt.ghi_chu || ''}
-                        onChange={(e) => setCurrentDntt(p => ({ ...p, ghi_chu: e.target.value }))}
-                        className={`flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent text-xs focus:outline-none focus:border-[#D97706] transition-all ${currentDntt.hien_thi_ghi_chu === false ? 'opacity-40 line-through text-gray-400' : ''
-                          }`}
-                      />
+                      <div className="flex-1 min-w-0">
+                        <RichTextInput
+                          value={currentDntt.ghi_chu || ''}
+                          onChange={(val) => setCurrentDntt(p => ({ ...p, ghi_chu: val }))}
+                          placeholder="[Nội dung...]"
+                          className={`w-full border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent text-xs focus:outline-none focus:border-[#D97706] transition-all ${currentDntt.hien_thi_ghi_chu === false ? 'opacity-40 line-through text-gray-400' : ''
+                            }`}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto justify-end">
                       {currentDntt.hien_thi_ghi_chu === false && (
-                        <span className="italic text-gray-400 text-xs shrink-0 font-normal">
+                        <span className="text-[11px] text-gray-400 italic font-normal text-right select-none whitespace-nowrap">
                           (Đang ẩn trên phiếu in)
                         </span>
                       )}
-                    </div>
-
-                    <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-600 hover:text-gray-900 cursor-pointer select-none shrink-0 ml-auto" title="Ẩn/hiện dòng ghi chú trên phiếu và file in">
-                      <input
-                        type="checkbox"
-                        checked={currentDntt.hien_thi_ghi_chu !== false}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setCurrentDntt(p => ({ ...p, hien_thi_ghi_chu: val }));
-                          if (val) {
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = currentDntt.hien_thi_ghi_chu === false;
+                          setCurrentDntt(p => ({ ...p, hien_thi_ghi_chu: nextVal }));
+                          if (nextVal) {
                             toast.success('Đã bật hiển thị Ghi chú trên phiếu');
                           } else {
                             toast.info('Đã ẩn Ghi chú trên phiếu in');
                           }
                         }}
-                        className="w-3.5 h-3.5 rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer accent-[#D97706]"
-                      />
-                      <span className="font-semibold text-gray-700">Ẩn/Hiện</span>
-                    </label>
+                        className={`p-1 rounded-md transition-colors cursor-pointer ${currentDntt.hien_thi_ghi_chu === false
+                          ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700'
+                          : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-slate-700'
+                          }`}
+                        title={currentDntt.hien_thi_ghi_chu === false ? "Đang ẩn trên phiếu in - Nhấn để hiển thị" : "Đang hiển thị trên phiếu in - Nhấn để ẩn"}
+                      >
+                        {currentDntt.hien_thi_ghi_chu === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                 </td>
                 <td className="border border-black" style={{ height: '0.75cm' }}></td>
               </tr>
 
-              {/* KHỐI THÔNG TIN CHUYỂN KHOẢN / CẤN TRỪ CÔNG NỢ (KẺ KHUNG NHƯ HÌNH MẪU, CAO 2.5CM) */}
-              {(currentDntt.hinh_thuc_thanh_toan === 'Chuyển khoản' || currentDntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ') && (
-                <tr style={{ height: '2.5cm' }}>
-                  <td className="border border-black text-[12px] align-top" style={{ height: '2.5cm', padding: '4pt 8px' }} colSpan={2}>
-                    <div className="font-bold underline mb-1 flex items-center gap-1">
-                      <CreditCard size={13} className="text-[#D97706]" />
-                      <span>Thông tin tài khoản ngân hàng{currentDntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ' ? ' (Cấn trừ công nợ)' : ''}:</span>
+              {/* DÒNG HÌNH THỨC THANH TOÁN & THÔNG TIN NGÂN HÀNG (CÙNG TRONG 1 Ô DƯỚI DÒNG GHI CHÚ) */}
+              <tr>
+                <td className="border border-black text-[12px] align-top" style={{ padding: '6pt 8px' }} colSpan={2}>
+                  {/* Hàng chọn Hình thức thanh toán (4 hình thức) */}
+                  <div className="flex items-center gap-3 sm:gap-6 flex-wrap font-sans text-xs pb-1.5 border-b border-gray-100">
+                    <span className="font-bold underline text-black shrink-0 font-serif text-[12px]">Hình thức thanh toán:</span>
+                    <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+                      {(['Chuyển khoản', 'Tiền mặt', 'Cấn trừ công nợ', 'Ghi nhận chi phí'] as const).map(ht => (
+                        <label key={ht} className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="radio"
+                            name="form_hinh_thuc"
+                            value={ht}
+                            checked={currentDntt.hinh_thuc_thanh_toan === ht}
+                            onChange={() => setCurrentDntt(p => ({ ...p, hinh_thuc_thanh_toan: ht }))}
+                            className="text-[#D97706] focus:ring-[#D97706] cursor-pointer"
+                          />
+                          <span className={currentDntt.hinh_thuc_thanh_toan === ht ? 'font-bold text-[#D97706]' : 'text-gray-700'}>
+                            {ht}
+                          </span>
+                        </label>
+                      ))}
                     </div>
-                    <div className="space-y-0.5 pl-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-24 text-black text-xs font-bold">Tên tài khoản:</span>
-                        <input
-                          type="text"
-                          placeholder="[...]"
-                          value={currentDntt.ten_tai_khoan || ''}
-                          onChange={(e) => setCurrentDntt(p => ({ ...p, ten_tai_khoan: e.target.value }))}
-                          className="flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent uppercase font-bold focus:outline-none focus:border-blue-600"
-                        />
+                  </div>
+
+                  {/* Khi chọn Chuyển khoản hoặc Cấn trừ công nợ: Hiển thị ngay bên dưới trong cùng 1 ô này */}
+                  {(currentDntt.hinh_thuc_thanh_toan === 'Chuyển khoản' || currentDntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ') && (
+                    <div className="pt-2">
+                      <div className="font-bold underline mb-1.5 flex items-center gap-1 text-[12px]">
+                        <CreditCard size={13} className="text-[#D97706]" />
+                        <span>Thông tin tài khoản ngân hàng{currentDntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ' ? ' (Cấn trừ công nợ)' : ''}:</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-24 text-black text-xs font-bold">Số tài khoản:</span>
-                        <input
-                          type="text"
-                          placeholder="[...]"
-                          value={currentDntt.so_tai_khoan || ''}
-                          onChange={(e) => setCurrentDntt(p => ({ ...p, so_tai_khoan: e.target.value }))}
-                          className="flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent font-mono font-bold focus:outline-none focus:border-blue-600"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="w-24 text-black text-xs font-bold">Tại:</span>
-                        <input
-                          type="text"
-                          placeholder="[...]"
-                          value={currentDntt.ten_ngan_hang || ''}
-                          onChange={(e) => setCurrentDntt(p => ({ ...p, ten_ngan_hang: e.target.value }))}
-                          className="w-40 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent focus:outline-none focus:border-blue-600"
-                        />
-                        <span className="text-black text-xs font-bold">- Chi nhánh:</span>
-                        <input
-                          type="text"
-                          placeholder="[...]"
-                          value={currentDntt.chi_nhanh_ngan_hang || ''}
-                          onChange={(e) => setCurrentDntt(p => ({ ...p, chi_nhanh_ngan_hang: e.target.value }))}
-                          className="flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent focus:outline-none focus:border-blue-600"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between w-full gap-2 pt-0.5">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span className="w-24 text-black text-xs font-bold shrink-0">Nội dung:</span>
+                      <div className="space-y-1 pl-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-24 text-black text-xs font-bold">Tên tài khoản:</span>
                           <input
                             type="text"
-                            placeholder="[Nội dung chuyển khoản...]"
-                            value={currentDntt.noi_dung_chuyen_khoan || ''}
-                            onChange={(e) => setCurrentDntt(p => ({ ...p, noi_dung_chuyen_khoan: e.target.value }))}
-                            className={`flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent text-xs focus:outline-none focus:border-[#D97706] transition-all ${currentDntt.hien_thi_nd_ck === false ? 'opacity-40 line-through text-gray-400' : ''
-                              }`}
+                            placeholder="[...]"
+                            value={currentDntt.ten_tai_khoan || ''}
+                            onChange={(e) => setCurrentDntt(p => ({ ...p, ten_tai_khoan: e.target.value }))}
+                            className="flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent uppercase font-bold focus:outline-none focus:border-blue-600"
                           />
-                          {currentDntt.hien_thi_nd_ck === false && (
-                            <span className="italic text-gray-400 text-xs shrink-0 font-normal">
-                              (Đang ẩn trên phiếu in)
-                            </span>
-                          )}
                         </div>
-
-                        <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-600 hover:text-gray-900 cursor-pointer select-none shrink-0 ml-auto" title="Ẩn/hiện dòng nội dung chuyển khoản trên phiếu và file in">
+                        <div className="flex items-center gap-2">
+                          <span className="w-24 text-black text-xs font-bold">Số tài khoản:</span>
                           <input
-                            type="checkbox"
-                            checked={currentDntt.hien_thi_nd_ck !== false}
-                            onChange={(e) => {
-                              const val = e.target.checked;
-                              setCurrentDntt(p => ({ ...p, hien_thi_nd_ck: val }));
-                              if (val) {
-                                toast.success('Đã bật hiển thị Nội dung chuyển khoản trên phiếu');
-                              } else {
-                                toast.info('Đã ẩn Nội dung chuyển khoản trên phiếu in');
-                              }
-                            }}
-                            className="w-3.5 h-3.5 rounded text-[#D97706] focus:ring-[#D97706] cursor-pointer accent-[#D97706]"
+                            type="text"
+                            placeholder="[...]"
+                            value={currentDntt.so_tai_khoan || ''}
+                            onChange={(e) => setCurrentDntt(p => ({ ...p, so_tai_khoan: e.target.value }))}
+                            className="flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent font-mono font-bold focus:outline-none focus:border-blue-600"
                           />
-                          <span className="font-semibold text-gray-700">Ẩn/Hiện</span>
-                        </label>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="w-24 text-black text-xs font-bold">Tại:</span>
+                          <input
+                            type="text"
+                            placeholder="[...]"
+                            value={currentDntt.ten_ngan_hang || ''}
+                            onChange={(e) => setCurrentDntt(p => ({ ...p, ten_ngan_hang: e.target.value }))}
+                            className="w-40 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent focus:outline-none focus:border-blue-600"
+                          />
+                          <span className="text-black text-xs font-bold">- Chi nhánh:</span>
+                          <input
+                            type="text"
+                            placeholder="[...]"
+                            value={currentDntt.chi_nhanh_ngan_hang || ''}
+                            onChange={(e) => setCurrentDntt(p => ({ ...p, chi_nhanh_ngan_hang: e.target.value }))}
+                            className="flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent focus:outline-none focus:border-blue-600"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between w-full gap-2 pt-0.5">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <span className="w-24 text-black text-xs font-bold shrink-0">Nội dung:</span>
+                            <input
+                              type="text"
+                              placeholder="[Nội dung chuyển khoản...]"
+                              value={currentDntt.noi_dung_chuyen_khoan || ''}
+                              onChange={(e) => setCurrentDntt(p => ({ ...p, noi_dung_chuyen_khoan: e.target.value }))}
+                              className={`flex-1 border-b border-dotted border-gray-400 px-1 py-0.5 bg-transparent text-xs focus:outline-none focus:border-[#D97706] transition-all ${currentDntt.hien_thi_nd_ck === false ? 'opacity-40 line-through text-gray-400' : ''
+                                }`}
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0 ml-auto justify-end">
+                            {currentDntt.hien_thi_nd_ck === false && (
+                              <span className="text-[11px] text-gray-400 italic font-normal text-right select-none whitespace-nowrap">
+                                (Đang ẩn trên phiếu in)
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextVal = currentDntt.hien_thi_nd_ck === false;
+                                setCurrentDntt(p => ({ ...p, hien_thi_nd_ck: nextVal }));
+                                if (nextVal) {
+                                  toast.success('Đã bật hiển thị Nội dung chuyển khoản trên phiếu');
+                                } else {
+                                  toast.info('Đã ẩn Nội dung chuyển khoản trên phiếu in');
+                                }
+                              }}
+                              className={`p-1 rounded-md transition-colors cursor-pointer ${currentDntt.hien_thi_nd_ck === false
+                                ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-slate-700'
+                                }`}
+                              title={currentDntt.hien_thi_nd_ck === false ? "Đang ẩn trên phiếu in - Nhấn để hiển thị" : "Đang hiển thị trên phiếu in - Nhấn để ẩn"}
+                            >
+                              {currentDntt.hien_thi_nd_ck === false ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </td>
-                  <td className="border border-black" style={{ height: '2.5cm' }}></td>
-                </tr>
-              )}
+                  )}
+                </td>
+                <td className="border border-black"></td>
+              </tr>
 
               {/* DÒNG GIÁ TRỊ PHẢI THANH TOÁN (KẺ KHUNG - NHƯ HÌNH MẪU, CAO 0.5CM) */}
               <tr style={{ height: '0.5cm' }}>
@@ -3374,11 +3832,10 @@ export default function DnttTab({
                 type="button"
                 disabled={unlockSubmitting}
                 onClick={() => handleToggleMoKhoaDntt(unlockDnttModal.dntt, unlockDnttModal.action === 'unlock', unlockReason)}
-                className={`px-4 py-2 text-xs font-bold rounded-lg text-white cursor-pointer shadow-xs ${
-                  unlockDnttModal.action === 'unlock'
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : 'bg-amber-600 hover:bg-amber-700'
-                }`}
+                className={`px-4 py-2 text-xs font-bold rounded-lg text-white cursor-pointer shadow-xs ${unlockDnttModal.action === 'unlock'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-amber-600 hover:bg-amber-700'
+                  }`}
               >
                 {unlockSubmitting ? 'Đang xử lý...' : (unlockDnttModal.action === 'unlock' ? 'Xác nhận Mở khóa' : 'Khóa lại ngay')}
               </button>
@@ -3436,6 +3893,9 @@ export default function DnttTab({
           </div>
         </div>
       )}
+
+      {/* Modal Chuyển (Move) ĐNTT sang đơn vị khác */}
+      {renderMoveModal()}
 
     </div>
   );

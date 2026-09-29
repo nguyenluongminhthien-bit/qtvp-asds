@@ -4,7 +4,7 @@ import {
   Users, CheckCircle2, ChevronLeft, ClipboardPaste, RefreshCw, AlertTriangle,
   ExternalLink, CheckCircle, Info, BookOpen, UserCheck, Eye,
   Building2, FileText, ChevronRight, Activity, Heart, ShieldCheck, Download,
-  HelpCircle, CheckCheck
+  HelpCircle, CheckCheck, ArrowDown, ArrowUp
 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { toast } from '../../utils/toast';
@@ -52,6 +52,7 @@ export default function KhoaHocTab({
   const [selectedKhoaHoc, setSelectedKhoaHoc] = useState<KhoaHuanLuyen | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [hvSearchTerm, setHvSearchTerm] = useState('');
+  const [timeSortOrder, setTimeSortOrder] = useState<'desc' | 'asc'>('desc');
 
   // States mới cho Matrix & List View cá nhân
   const [localActiveSubTab, setLocalActiveSubTab] = useState<'khoahoc' | 'canhan'>('khoahoc');
@@ -68,7 +69,8 @@ export default function KhoaHocTab({
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
-  const [confirmType, setConfirmType] = useState<'KHOA_HOC' | 'HOC_VIEN' | null>(null);
+  const [selectedHvIds, setSelectedHvIds] = useState<string[]>([]);
+  const [confirmType, setConfirmType] = useState<'KHOA_HOC' | 'HOC_VIEN' | 'HOC_VIEN_BULK' | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // Load toàn bộ dữ liệu
@@ -100,6 +102,10 @@ export default function KhoaHocTab({
     loadData();
   }, []);
 
+  useEffect(() => {
+    setSelectedHvIds([]);
+  }, [selectedKhoaHoc?.id]);
+
   // Xác định phạm vi các đơn vị được phép hiển thị/so khớp
   const activeUnitSubordinates = useMemo(() => {
     if (!selectedUnitFilter) return allowedDonViIds;
@@ -113,24 +119,42 @@ export default function KhoaHocTab({
     return map;
   }, [donViList]);
 
-  // Bộ lọc danh sách khóa học
+  // Bộ lọc danh sách khóa học (sắp xếp theo cột Thời Gian từ gần đến xa)
   const filteredKhoaHoc = useMemo(() => {
-    return khoaHocList.filter(kh => {
-      const search = searchTerm.toLowerCase();
-      const matchesSearch = (
-        kh.ten_khoa_hoc.toLowerCase().includes(search) ||
-        (kh.don_vi_dao_tao || '').toLowerCase().includes(search) ||
-        (kh.dia_diem || '').toLowerCase().includes(search)
-      );
+    return khoaHocList
+      .filter(kh => {
+        const search = searchTerm.toLowerCase();
+        const matchesSearch = (
+          kh.ten_khoa_hoc.toLowerCase().includes(search) ||
+          (kh.don_vi_dao_tao || '').toLowerCase().includes(search) ||
+          (kh.dia_diem || '').toLowerCase().includes(search)
+        );
 
-      // Bộ lọc theo đơn vị đã chọn (hỗ trợ hiển thị dữ liệu cũ chưa có id_don_vi)
-      const matchesUnit = !selectedUnitFilter ||
-        !kh.id_don_vi ||
-        activeUnitSubordinates.includes(kh.id_don_vi);
+        // Bộ lọc theo đơn vị đã chọn (hỗ trợ hiển thị dữ liệu cũ chưa có id_don_vi)
+        const matchesUnit = !selectedUnitFilter ||
+          !kh.id_don_vi ||
+          activeUnitSubordinates.includes(kh.id_don_vi);
 
-      return matchesSearch && matchesUnit;
-    });
-  }, [khoaHocList, searchTerm, selectedUnitFilter, activeUnitSubordinates]);
+        return matchesSearch && matchesUnit;
+      })
+      .sort((a, b) => {
+        const timeA = a.ngay_bat_dau ? new Date(a.ngay_bat_dau).getTime() : (a.ngay_ket_thuc ? new Date(a.ngay_ket_thuc).getTime() : 0);
+        const timeB = b.ngay_bat_dau ? new Date(b.ngay_bat_dau).getTime() : (b.ngay_ket_thuc ? new Date(b.ngay_ket_thuc).getTime() : 0);
+
+        // Đẩy các mục chưa có ngày tháng xuống cuối
+        if (timeA === 0 && timeB === 0) return 0;
+        if (timeA === 0) return 1;
+        if (timeB === 0) return -1;
+
+        if (timeA !== timeB) {
+          return timeSortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+        }
+
+        const endA = a.ngay_ket_thuc ? new Date(a.ngay_ket_thuc).getTime() : 0;
+        const endB = b.ngay_ket_thuc ? new Date(b.ngay_ket_thuc).getTime() : 0;
+        return timeSortOrder === 'desc' ? endB - endA : endA - endB;
+      });
+  }, [khoaHocList, searchTerm, selectedUnitFilter, activeUnitSubordinates, timeSortOrder]);
 
   // Học viên thuộc khóa học hiện tại
   const currentHocVienList = useMemo(() => {
@@ -294,7 +318,7 @@ export default function KhoaHocTab({
   // 🟢 TÍNH TOÁN 4 THẺ CHỈ SỐ KPI THẺ ATVSLĐ
   const safetySummaryCounts = useMemo(() => {
     let chua_hoc = 0, qua_han = 0, sap_het_han = 0, an_toan = 0;
-    const targetNsList = personnelList.filter(ns => 
+    const targetNsList = personnelList.filter(ns =>
       ns.trang_thai !== 'Đã nghỉ việc' &&
       (!selectedUnitFilter || activeUnitSubordinates.includes(ns.id_don_vi))
     );
@@ -334,7 +358,7 @@ export default function KhoaHocTab({
 
   // Hàm xuất Excel đợt học tiếp theo chuẩn cấu trúc cột yêu cầu
   const handleExportNextCourse = () => {
-    const targetNsList = personnelList.filter(ns => 
+    const targetNsList = personnelList.filter(ns =>
       ns.trang_thai !== 'Đã nghỉ việc' &&
       (!selectedUnitFilter || activeUnitSubordinates.includes(ns.id_don_vi))
     );
@@ -369,10 +393,10 @@ export default function KhoaHocTab({
 
     let rowsHTML = '';
     exportData.forEach((ns, idx) => {
-      const status = !ns.cc_atvsld 
-        ? 'Chưa huấn luyện ATVSLĐ' 
+      const status = !ns.cc_atvsld
+        ? 'Chưa huấn luyện ATVSLĐ'
         : (ns.gia_tri_den && new Date(ns.gia_tri_den) <= new Date() ? `Hết hạn chứng chỉ (${ns.gia_tri_den})` : `Sắp hết hạn chứng chỉ (${ns.gia_tri_den})`);
-      
+
       const tenDV = donViMap[ns.id_don_vi] || ns.id_don_vi || '';
 
       rowsHTML += `<tr>
@@ -491,11 +515,15 @@ export default function KhoaHocTab({
   };
 
   const executeDelete = async () => {
-    if (!deleteTargetId || !confirmType) return;
+    if (!confirmType) return;
+    if (confirmType !== 'HOC_VIEN_BULK' && !deleteTargetId) return;
+    if (confirmType === 'HOC_VIEN_BULK' && selectedHvIds.length === 0) return;
+
+    setIsSubmitting(true);
     try {
       if (confirmType === 'KHOA_HOC') {
         const hvInCourse = hocVienList.filter(item => item.id_khoa_hoc === deleteTargetId);
-        await apiService.delete(deleteTargetId, 'hs_khoa_huan_luyen');
+        await apiService.delete(deleteTargetId!, 'hs_khoa_huan_luyen');
         setKhoaHocList(prev => prev.filter(item => item.id !== deleteTargetId));
         setHocVienList(prev => prev.filter(item => item.id_khoa_hoc !== deleteTargetId));
         if (selectedKhoaHoc?.id === deleteTargetId) {
@@ -508,8 +536,9 @@ export default function KhoaHocTab({
         onReloadData?.();
       } else if (confirmType === 'HOC_VIEN') {
         const hvToDelete = hocVienList.find(item => item.id === deleteTargetId);
-        await apiService.delete(deleteTargetId, 'hs_hoc_vien_khoa_huan_luyen');
+        await apiService.delete(deleteTargetId!, 'hs_hoc_vien_khoa_huan_luyen');
         setHocVienList(prev => prev.filter(item => item.id !== deleteTargetId));
+        setSelectedHvIds(prev => prev.filter(id => id !== deleteTargetId));
 
         // Giảm sĩ số thực tế
         if (selectedKhoaHoc) {
@@ -526,10 +555,39 @@ export default function KhoaHocTab({
         }
         toast.success('Đã xóa học viên khỏi khóa học!');
         onReloadData?.();
+      } else if (confirmType === 'HOC_VIEN_BULK') {
+        const idsToDelete = [...selectedHvIds];
+        const hvToDeleteList = hocVienList.filter(item => idsToDelete.includes(item.id));
+
+        for (const id of idsToDelete) {
+          await apiService.delete(id, 'hs_hoc_vien_khoa_huan_luyen');
+        }
+        setHocVienList(prev => prev.filter(item => !idsToDelete.includes(item.id)));
+
+        // Cập nhật sĩ số thực tế
+        if (selectedKhoaHoc) {
+          const remainingCount = Math.max(0, (selectedKhoaHoc.si_so_thuc_te || idsToDelete.length) - idsToDelete.length);
+          const updatedKhoa = {
+            ...selectedKhoaHoc,
+            si_so_thuc_te: remainingCount
+          };
+          await apiService.save(updatedKhoa, 'update', 'hs_khoa_huan_luyen');
+          setKhoaHocList(prev => prev.map(k => k.id === updatedKhoa.id ? updatedKhoa : k));
+          setSelectedKhoaHoc(updatedKhoa);
+        }
+
+        if (hvToDeleteList.length > 0) {
+          await recalculateOshForPersonnel(hvToDeleteList.map(hv => ({ msnv: hv.msnv, id_don_vi: hv.id_don_vi })));
+        }
+
+        setSelectedHvIds([]);
+        toast.success(`Đã xóa thành công ${idsToDelete.length} học viên khỏi khóa học!`);
+        onReloadData?.();
       }
     } catch (err) {
       toast.error('Lỗi khi xóa dữ liệu.');
     } finally {
+      setIsSubmitting(false);
       setConfirmType(null);
       setDeleteTargetId(null);
     }
@@ -829,7 +887,7 @@ export default function KhoaHocTab({
       const kqNormalized = String(hv.ket_qua || '').trim().toLowerCase().normalize('NFC');
       const isDat = kqNormalized === 'đạt' || kqNormalized === 'dat';
       const msnvKey = String(hv.msnv || '').trim().toLowerCase();
-      
+
       const matchingPersons = personnelList.filter(p => String(p.ma_so_nhan_vien || '').trim().toLowerCase() === msnvKey);
       if (!isDat || matchingPersons.length === 0) return false;
 
@@ -944,6 +1002,32 @@ export default function KhoaHocTab({
     setConfirmType('HOC_VIEN');
   };
 
+  const handleToggleSelectAllHv = () => {
+    if (filteredHocVien.length === 0) return;
+    const allFilteredSelected = filteredHocVien.every(hv => selectedHvIds.includes(hv.id));
+    if (allFilteredSelected) {
+      const filteredIds = new Set(filteredHocVien.map(hv => hv.id));
+      setSelectedHvIds(prev => prev.filter(id => !filteredIds.has(id)));
+    } else {
+      const newIds = new Set(selectedHvIds);
+      filteredHocVien.forEach(hv => newIds.add(hv.id));
+      setSelectedHvIds(Array.from(newIds));
+    }
+  };
+
+  const handleToggleSelectHv = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedHvIds(prev => [...prev, id]);
+    } else {
+      setSelectedHvIds(prev => prev.filter(item => item !== id));
+    }
+  };
+
+  const handleOpenBulkDeleteModal = () => {
+    if (selectedHvIds.length === 0) return;
+    setConfirmType('HOC_VIEN_BULK');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16 text-lime-700">
@@ -981,11 +1065,10 @@ export default function KhoaHocTab({
                 setActiveSubTab('khoahoc');
                 setSelectedKhoaHoc(null);
               }}
-              className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                activeSubTab === 'khoahoc'
-                  ? 'bg-lime-700 text-white shadow-sm ring-2 ring-lime-300'
-                  : 'text-lime-950 hover:bg-lime-100/60'
-              }`}
+              className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${activeSubTab === 'khoahoc'
+                ? 'bg-lime-700 text-white shadow-sm ring-2 ring-lime-300'
+                : 'text-lime-950 hover:bg-lime-100/60'
+                }`}
             >
               <Building2 className="w-3.5 h-3.5" />
               Khóa Đào tạo/Huấn luyện ({khoaHocList.length})
@@ -996,11 +1079,10 @@ export default function KhoaHocTab({
                 setActiveSubTab('canhan');
                 setSelectedKhoaHoc(null);
               }}
-              className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                activeSubTab === 'canhan'
-                  ? 'bg-lime-700 text-white shadow-sm ring-2 ring-lime-300'
-                  : 'text-lime-950 hover:bg-lime-100/60'
-              }`}
+              className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${activeSubTab === 'canhan'
+                ? 'bg-lime-700 text-white shadow-sm ring-2 ring-lime-300'
+                : 'text-lime-950 hover:bg-lime-100/60'
+                }`}
             >
               <Users className="w-3.5 h-3.5" />
               Lịch Sử Đào Tạo Cá Nhân ({groupedHocVienMatrix.length} nhân sự)
@@ -1092,7 +1174,22 @@ export default function KhoaHocTab({
                       <th className="p-3 w-10 text-center">STT</th>
                       <th className="p-3 w-75">Tên khóa huấn luyện</th>
                       <th className="p-3">Đơn vị đào tạo</th>
-                      <th className="p-3 text-center">Thời gian</th>
+                      <th
+                        className="p-3 text-center cursor-pointer hover:bg-lime-50/60 transition-colors select-none group"
+                        onClick={() => setTimeSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                        title={`Sắp xếp thời gian: ${timeSortOrder === 'desc' ? 'Gần đến xa (gần nhất trên cùng)' : 'Xa đến gần'}. Nhấn để đổi chiều.`}
+                      >
+                        <div className="inline-flex items-center justify-center gap-1.5 font-bold">
+                          <span>Thời gian</span>
+                          <span className="p-0.5 rounded bg-lime-100 text-lime-800 transition-transform group-hover:scale-110">
+                            {timeSortOrder === 'desc' ? (
+                              <ArrowDown size={13} className="stroke-[2.5]" />
+                            ) : (
+                              <ArrowUp size={13} className="stroke-[2.5]" />
+                            )}
+                          </span>
+                        </div>
+                      </th>
                       <th className="p-3">Địa điểm</th>
                       <th className="p-3 w-35 text-center">Sĩ số<br />(Dự kiến/Thực tế)</th>
                       <th className="p-3 text-center">Trạng thái</th>
@@ -1239,17 +1336,38 @@ export default function KhoaHocTab({
 
               {/* Bảng Học viên trong khóa */}
               <div className="bg-white rounded-2xl border border-lime-100 shadow-sm overflow-hidden flex flex-col flex-1 min-h-[350px]">
-                {/* Thanh Tìm kiếm Học viên */}
-                <div className="p-4 bg-gray-50/50 border-b border-lime-100 flex items-center justify-between shrink-0">
-                  <div className="relative w-full sm:w-72">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
-                    <input
-                      type="text"
-                      placeholder="Tìm học viên theo tên, MSNV, Đơn vị..."
-                      value={hvSearchTerm}
-                      onChange={e => setHvSearchTerm(e.target.value)}
-                      className="w-full pl-9 pr-4 py-1.5 border border-gray-200 rounded-xl outline-none text-xs font-medium focus:ring-2 focus:ring-lime-500 bg-white"
-                    />
+                {/* Thanh Tìm kiếm Học viên & Tác vụ hàng loạt */}
+                <div className="p-4 bg-gray-50/50 border-b border-lime-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                      <input
+                        type="text"
+                        placeholder="Tìm học viên theo tên, MSNV, Đơn vị..."
+                        value={hvSearchTerm}
+                        onChange={e => setHvSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-1.5 border border-gray-200 rounded-xl outline-none text-xs font-medium focus:ring-2 focus:ring-lime-500 bg-white"
+                      />
+                    </div>
+                    {(user?.quyen === 'ADMIN' || user?.quyen === 'USER') && selectedHvIds.length > 0 && (
+                      <div className="flex items-center gap-2 animate-in fade-in duration-200">
+                        <span className="text-xs font-bold text-gray-700 bg-lime-100 border border-lime-300 px-2.5 py-1 rounded-lg">
+                          Đã chọn {selectedHvIds.length} học viên
+                        </span>
+                        <button
+                          onClick={handleOpenBulkDeleteModal}
+                          className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} /> Xóa học viên đã chọn ({selectedHvIds.length})
+                        </button>
+                        <button
+                          onClick={() => setSelectedHvIds([])}
+                          className="text-xs font-semibold text-gray-500 hover:text-gray-800 hover:underline px-2 py-1 cursor-pointer"
+                        >
+                          Bỏ chọn
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <span className="text-xs text-gray-400 italic">Hiển thị {filteredHocVien.length} học viên</span>
                 </div>
@@ -1259,6 +1377,17 @@ export default function KhoaHocTab({
                   <table className="w-full text-left border-collapse text-xs min-w-[1150px]">
                     <thead className="bg-gray-50 border-b border-lime-100 font-bold text-gray-600 uppercase sticky top-0 z-10 shadow-2xs">
                       <tr>
+                        {(user?.quyen === 'ADMIN' || user?.quyen === 'USER') && (
+                          <th className="p-3 w-10 text-center">
+                            <input
+                              type="checkbox"
+                              checked={filteredHocVien.length > 0 && filteredHocVien.every(hv => selectedHvIds.includes(hv.id))}
+                              onChange={handleToggleSelectAllHv}
+                              className="w-4 h-4 rounded text-lime-600 focus:ring-lime-500 cursor-pointer"
+                              title="Chọn / Bỏ chọn tất cả học viên đang hiển thị"
+                            />
+                          </th>
+                        )}
                         <th className="p-3 w-12 text-center">STT</th>
                         <th className="p-3 w-20">Mã NV</th>
                         <th className="p-3 min-w-[200px] w-56">Họ và tên</th>
@@ -1275,7 +1404,7 @@ export default function KhoaHocTab({
                     <tbody className="divide-y divide-gray-100 bg-white">
                       {filteredHocVien.length === 0 ? (
                         <tr>
-                          <td colSpan={(user?.quyen === 'ADMIN' || user?.quyen === 'USER') ? 11 : 10} className="p-16 text-center text-gray-400 italic">
+                          <td colSpan={(user?.quyen === 'ADMIN' || user?.quyen === 'USER') ? 12 : 10} className="p-16 text-center text-gray-400 italic">
                             Chưa có dữ liệu học viên trong khóa học này. Bấm nút "Dán Excel Học viên" để nhập danh sách.
                           </td>
                         </tr>
@@ -1283,8 +1412,19 @@ export default function KhoaHocTab({
                         filteredHocVien.map((hv, idx) => {
                           const kqNormalized = String(hv.ket_qua || '').trim().toLowerCase().normalize('NFC');
                           const isDat = kqNormalized === 'đạt' || kqNormalized === 'dat';
+                          const isChecked = selectedHvIds.includes(hv.id);
                           return (
-                            <tr key={hv.id} className="hover:bg-lime-50/20 transition-colors">
+                            <tr key={hv.id} className={`transition-colors ${isChecked ? 'bg-lime-50/70' : 'hover:bg-lime-50/20'}`}>
+                              {(user?.quyen === 'ADMIN' || user?.quyen === 'USER') && (
+                                <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => handleToggleSelectHv(hv.id, e.target.checked)}
+                                    className="w-4 h-4 text-lime-600 focus:ring-lime-500 rounded cursor-pointer"
+                                  />
+                                </td>
+                              )}
                               <td className="p-3 text-center text-gray-450 font-semibold">{hv.stt || (idx + 1)}</td>
                               <td className="p-3 font-bold text-gray-700">{hv.msnv}</td>
                               <td className="p-3 font-bold text-lime-800 whitespace-nowrap">{hv.ho_ten}</td>
@@ -1301,7 +1441,7 @@ export default function KhoaHocTab({
                                   </p>
                                 )}
                               </td>
-                              <td className="p-3 text-gray-650">{hv.chuc_vu || '---'}</td>
+                              <td className="p-3 text-gray-655">{hv.chuc_vu || '---'}</td>
                               <td className="p-3 text-center font-bold text-lime-800 text-sm">
                                 {hv.nhom ? `Nhóm ${hv.nhom}` : '---'}
                               </td>
@@ -1360,16 +1500,15 @@ export default function KhoaHocTab({
            🟢 CHẾ ĐỘ XEM LỊCH SỬ ĐÀO TẠO CÁ NHÂN (MATRIX & LIST)
            ========================================== */
         <div className="flex-1 flex flex-col gap-4 w-full">
-          
+
           {/* 🟢 KHỐI 4 THẺ CHỈ SỐ KPI TÌNH TRẠNG THẺ ATVSLĐ (TÍCH HỢP VÀO BẢNG MA TRẬN) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
             <div
               onClick={() => setStatusMatrixFilter(prev => prev === 'CHUA_HOC' ? 'ALL' : 'CHUA_HOC')}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${
-                statusMatrixFilter === 'CHUA_HOC' 
-                  ? 'border-red-500 bg-red-50/40 ring-2 ring-red-300 shadow-md' 
-                  : 'border-red-200 bg-white hover:border-red-500 hover:shadow-md'
-              }`}
+              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${statusMatrixFilter === 'CHUA_HOC'
+                ? 'border-red-500 bg-red-50/40 ring-2 ring-red-300 shadow-md'
+                : 'border-red-200 bg-white hover:border-red-500 hover:shadow-md'
+                }`}
             >
               <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
                 <HelpCircle size={20} />
@@ -1382,11 +1521,10 @@ export default function KhoaHocTab({
 
             <div
               onClick={() => setStatusMatrixFilter(prev => prev === 'QUA_HAN' ? 'ALL' : 'QUA_HAN')}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${
-                statusMatrixFilter === 'QUA_HAN' 
-                  ? 'border-gray-800 bg-gray-100 ring-2 ring-gray-400 shadow-md' 
-                  : 'border-gray-300 bg-white hover:border-gray-800 hover:shadow-md'
-              }`}
+              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${statusMatrixFilter === 'QUA_HAN'
+                ? 'border-gray-800 bg-gray-100 ring-2 ring-gray-400 shadow-md'
+                : 'border-gray-300 bg-white hover:border-gray-800 hover:shadow-md'
+                }`}
             >
               <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-800 flex items-center justify-center shrink-0">
                 <AlertTriangle size={20} />
@@ -1399,11 +1537,10 @@ export default function KhoaHocTab({
 
             <div
               onClick={() => setStatusMatrixFilter(prev => prev === 'SAP_HET_HAN' ? 'ALL' : 'SAP_HET_HAN')}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${
-                statusMatrixFilter === 'SAP_HET_HAN' 
-                  ? 'border-orange-500 bg-orange-50/40 ring-2 ring-orange-300 shadow-md' 
-                  : 'border-orange-200 bg-white hover:border-orange-500 hover:shadow-md'
-              }`}
+              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${statusMatrixFilter === 'SAP_HET_HAN'
+                ? 'border-orange-500 bg-orange-50/40 ring-2 ring-orange-300 shadow-md'
+                : 'border-orange-200 bg-white hover:border-orange-500 hover:shadow-md'
+                }`}
             >
               <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
                 <AlertTriangle size={20} />
@@ -1416,11 +1553,10 @@ export default function KhoaHocTab({
 
             <div
               onClick={() => setStatusMatrixFilter(prev => prev === 'AN_TOAN' ? 'ALL' : 'AN_TOAN')}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${
-                statusMatrixFilter === 'AN_TOAN' 
-                  ? 'border-emerald-500 bg-emerald-50/40 ring-2 ring-emerald-300 shadow-md' 
-                  : 'border-emerald-200 bg-white hover:border-emerald-500 hover:shadow-md'
-              }`}
+              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3.5 ${statusMatrixFilter === 'AN_TOAN'
+                ? 'border-emerald-500 bg-emerald-50/40 ring-2 ring-emerald-300 shadow-md'
+                : 'border-emerald-200 bg-white hover:border-emerald-500 hover:shadow-md'
+                }`}
             >
               <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
                 <CheckCheck size={20} />
@@ -1502,7 +1638,7 @@ export default function KhoaHocTab({
                       <th className="px-3 min-w-[220px] border-b border-lime-800 whitespace-nowrap h-[40px] align-middle">Họ và Tên</th>
                       <th className="px-3 min-w-[220px] border-b border-lime-800 whitespace-nowrap h-[40px] align-middle">Đơn vị hiện tại</th>
                       <th className="px-3 min-w-[180px] border-b border-lime-800 whitespace-nowrap h-[40px] align-middle">Chức vụ</th>
-                      
+
                       {matrixYears.map(yr => (
                         <th key={yr} className="px-3 text-center min-w-[120px] border-b border-lime-800 border-l border-lime-800 bg-lime-900/60 whitespace-nowrap h-[40px] align-middle">
                           Năm {yr}
@@ -1524,7 +1660,7 @@ export default function KhoaHocTab({
                       filteredMatrixData.map((emp, idx) => {
                         const isExpanded = expandedMsnv === emp.msnv;
                         const matchedPerson = personnelList.find(p => p.ma_so_nhan_vien === emp.msnv);
-                        
+
                         let statusColor = 'bg-gray-100 text-gray-700 border-gray-200';
                         let statusText = 'Chưa huấn luyện';
                         const isCertActive = matchedPerson?.cc_atvsld === true || String(matchedPerson?.cc_atvsld).toLowerCase() === 'true';
@@ -1542,7 +1678,7 @@ export default function KhoaHocTab({
                               <td className="px-3 font-bold text-lime-900 whitespace-nowrap h-[40px] align-middle">{emp.ho_ten}</td>
                               <td className="px-3 text-gray-600 whitespace-nowrap h-[40px] align-middle">{donViMap[emp.id_don_vi] || emp.id_don_vi || '---'}</td>
                               <td className="px-3 text-gray-650 whitespace-nowrap h-[40px] align-middle">{matchedPerson?.chuc_vu || '---'}</td>
-                              
+
                               {matrixYears.map(yr => {
                                 const rec = emp.recordsByYear.get(yr);
                                 if (!rec) return <td key={yr} className="px-3 text-center text-gray-300 border-l border-gray-100 whitespace-nowrap h-[40px] align-middle">—</td>;
@@ -1883,24 +2019,33 @@ export default function KhoaHocTab({
           <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center animate-in zoom-in duration-200">
             <div className="w-16 h-16 rounded-full bg-red-50 text-red-550 flex items-center justify-center mx-auto mb-4 border-4 border-red-100"><AlertTriangle className="w-8 h-8" /></div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">
-              {confirmType === 'KHOA_HOC' ? 'Xóa khóa học?' : 'Xóa học viên?'}
+              {confirmType === 'KHOA_HOC'
+                ? 'Xóa khóa học?'
+                : confirmType === 'HOC_VIEN_BULK'
+                  ? `Xóa ${selectedHvIds.length} học viên?`
+                  : 'Xóa học viên?'}
             </h3>
             <p className="text-gray-500 text-sm mb-6">
               {confirmType === 'KHOA_HOC'
                 ? 'Bạn có chắc chắn muốn xóa khóa huấn luyện này? Tất cả học viên và kết quả thuộc khóa sẽ bị xóa vĩnh viễn.'
-                : 'Bạn có chắc chắn muốn xóa học viên này khỏi danh sách khóa huấn luyện?'}
+                : confirmType === 'HOC_VIEN_BULK'
+                  ? `Bạn có chắc chắn muốn xóa ${selectedHvIds.length} học viên đã chọn khỏi khóa huấn luyện này? Sĩ số khóa học và trạng thái ATVSLĐ của các nhân sự liên quan sẽ được tự động tính toán lại.`
+                  : 'Bạn có chắc chắn muốn xóa học viên này khỏi danh sách khóa huấn luyện?'}
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => { setConfirmType(null); setDeleteTargetId(null); }}
                 className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors"
+                disabled={isSubmitting}
               >
                 Hủy
               </button>
               <button
                 onClick={executeDelete}
-                className="flex-1 py-3 text-white bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
+                disabled={isSubmitting}
+                className="flex-1 py-3 text-white bg-red-600 hover:bg-red-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors disabled:opacity-50"
               >
+                {isSubmitting ? <RefreshCw className="animate-spin" size={16} /> : null}
                 Xóa
               </button>
             </div>

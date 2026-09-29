@@ -160,8 +160,11 @@ export default function PersonnelModal({
 
   const khoiOptions = useMemo(() => {
     const base = [
+      'KD Xe & SBH Xe DL',
+      'KD Xe & DV SBH Xe TM',
       'KD xe DL',
       'KD xe Thương mại & Xuất khẩu',
+      'Khối Bán lẻ',
       'KD DVPT',
       'NVQT Chuyên ngành',
       'NVQT Cơ bản',
@@ -321,18 +324,18 @@ export default function PersonnelModal({
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Chức danh</label>
                     <input
-                       type="text"
-                       name="chuc_danh"
-                       list="chuc-danh-suggestions"
-                       value={formData.chuc_danh || ''}
-                       onChange={handleInputChange}
-                       className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"
-                       placeholder="Nhập hoặc chọn chức danh..."
+                      type="text"
+                      name="chuc_danh"
+                      list="chuc-danh-suggestions"
+                      value={formData.chuc_danh || ''}
+                      onChange={handleInputChange}
+                      className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]"
+                      placeholder="Nhập hoặc chọn chức danh..."
                     />
                     <datalist id="chuc-danh-suggestions">
-                       {chucDanhSuggestions.map(opt => (
+                      {chucDanhSuggestions.map(opt => (
                         <option key={opt} value={opt} />
-                       ))}
+                      ))}
                     </datalist>
                   </div>
                   <div><label className="block text-xs font-bold text-gray-700 mb-1">Chức vụ *</label><input type="text" required name="chuc_vu" value={formData.chuc_vu || ''} onChange={handleInputChange} className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-[#05469B]" placeholder="Nhân viên, Kỹ thuật viên..." /></div>

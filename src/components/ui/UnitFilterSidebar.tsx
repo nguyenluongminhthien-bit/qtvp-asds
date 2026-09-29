@@ -17,6 +17,7 @@ interface UnitFilterSidebarProps {
   themeColor?: 'blue' | 'emerald' | 'red';
   allUnitsLabel?: string;
   searchPlaceholder?: string;
+  onDropDntt?: (dnttId: string, targetUnitId: string) => void;
 }
 
 export default function UnitFilterSidebar({
@@ -32,7 +33,8 @@ export default function UnitFilterSidebar({
   setIsListCollapsed,
   themeColor = 'blue',
   allUnitsLabel = 'Tất cả Đơn vị Toàn quốc',
-  searchPlaceholder = 'Tìm tên showroom...'
+  searchPlaceholder = 'Tìm tên showroom...',
+  onDropDntt
 }: UnitFilterSidebarProps) {
   
   // 🟢 HỆ THỐNG MÀU THEO CHỦ ĐỀ
@@ -104,6 +106,8 @@ export default function UnitFilterSidebar({
     return groupParentUnits(parentUnits);
   }, [parentUnits]);
 
+  const [dragOverUnitId, setDragOverUnitId] = React.useState<string | null>(null);
+
   const toggleParent = (parentId: string) => {
     setExpandedParents(prev => prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]);
   };
@@ -121,17 +125,55 @@ export default function UnitFilterSidebar({
             if (children.length > 0) toggleParent(parent.id);
             if (window.innerWidth < 1024) setIsListCollapsed(true);
           }}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            selectedUnitFilter === parent.id ? colors.bgActive : 'text-gray-700 hover:bg-gray-50'
+          onDragOver={(e) => {
+            if (onDropDntt) {
+              const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+              const isMatch = types.includes('application/dntt-id') || types.includes('text/plain');
+              if (isMatch) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverUnitId !== parent.id) {
+                  setDragOverUnitId(parent.id);
+                }
+              }
+            }
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              if (dragOverUnitId === parent.id) setDragOverUnitId(null);
+            }
+          }}
+          onDrop={(e) => {
+            if (onDropDntt) {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragOverUnitId(null);
+              const dnttId = e.dataTransfer.getData('application/dntt-id') || e.dataTransfer.getData('text/plain');
+              if (dnttId) {
+                onDropDntt(dnttId, parent.id);
+              }
+            }
+          }}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+            dragOverUnitId === parent.id
+              ? 'ring-2 ring-[#D97706] bg-amber-50 text-[#D97706] font-bold shadow-md scale-[1.02]'
+              : selectedUnitFilter === parent.id
+              ? colors.bgActive
+              : 'text-gray-700 hover:bg-gray-50'
           } ${isParentDimmed ? 'opacity-50' : ''}`}
         >
           {children.length > 0 ? (
-            isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />
+            isExpanded ? (
+              <ChevronDown size={16} className="text-gray-400 shrink-0 pointer-events-none" />
+            ) : (
+              <ChevronRight size={16} className="text-gray-400 shrink-0 pointer-events-none" />
+            )
           ) : (
-            <div className="w-4 shrink-0" />
+            <div className="w-4 shrink-0 pointer-events-none" />
           )}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh || (parent as any).phan_loai)}</span>
-          <span className="truncate text-left">{parent.ten_don_vi}</span>
+          <span className="shrink-0 pointer-events-none">{getUnitEmoji(parent.loai_hinh || (parent as any).phan_loai)}</span>
+          <span className="truncate text-left pointer-events-none">{parent.ten_don_vi}</span>
         </button>
         {isExpanded && children.length > 0 && (
           <div className={`mt-1 border-l-2 border-gray-100 pl-2 space-y-1 ${level === 1 ? 'ml-6' : 'ml-4'}`}>

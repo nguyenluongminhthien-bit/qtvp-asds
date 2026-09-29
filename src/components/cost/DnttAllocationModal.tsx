@@ -513,7 +513,7 @@ export default function DnttAllocationModal({
               </h3>
             </div>
             <p className="text-xs text-amber-100 mt-1 max-w-2xl truncate">
-              <strong>Nội dung:</strong> {parentItem.noi_dung}
+              <strong>Nội dung:</strong> {parentItem.noi_dung ? parentItem.noi_dung.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : ''}
             </p>
           </div>
           <button 

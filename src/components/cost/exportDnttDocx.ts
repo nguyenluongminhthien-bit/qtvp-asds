@@ -55,16 +55,17 @@ export function exportDnttToWord(data: ExportDnttData, fileName?: string) {
   details.forEach((item, index) => {
     const itemAllocations = (allocations[item.id] || []).sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0));
 
-    // 1. DÒNG NỘI DUNG CHA (Có STT, In đậm, có viền 1.0pt, cao 0.5cm, paragraph trước 3pt sau 3pt)
+    // 1. DÒNG NỘI DUNG CHA (Có STT, In đậm, có viền 1.0pt, cao tối thiểu 0.5cm, tự co giãn khi nhiều dòng)
+    const itemNoiDungHtml = (item.noi_dung || '').replace(/\r\n|\r|\n/g, '<br/>');
     tableRowsHtml += `
-      <tr style="height:0.5cm; mso-height-rule:exactly; mso-yfti-irow:${index * 30};">
-        <td style="border:1.0pt solid black; height:0.5cm; padding:0 4pt; text-align:center; font-weight:bold; font-size:11pt; width:1.2cm; vertical-align:middle;">
+      <tr style="min-height:0.5cm; mso-height-rule:at-least; mso-yfti-irow:${index * 30};">
+        <td style="border:1.0pt solid black; min-height:0.5cm; padding:0 4pt; text-align:center; font-weight:bold; font-size:11pt; width:1.2cm; vertical-align:middle;">
           <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; text-align:center; font-weight:bold;">${item.stt || (index + 1)}</p>
         </td>
-        <td style="border:1.0pt solid black; height:0.5cm; padding:0 6pt; font-weight:bold; font-size:11pt; width:12.0cm; vertical-align:middle;">
-          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; font-weight:bold;">${item.noi_dung}</p>
+        <td style="border:1.0pt solid black; min-height:0.5cm; padding:0 6pt; font-weight:bold; font-size:11pt; width:12.0cm; vertical-align:middle;">
+          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; font-weight:bold;">${itemNoiDungHtml}</p>
         </td>
-        <td style="border:1.0pt solid black; height:0.5cm; padding:0 4pt; text-align:right; font-weight:bold; font-size:11pt; width:3.8cm; white-space:nowrap; vertical-align:middle;">
+        <td style="border:1.0pt solid black; min-height:0.5cm; padding:0 4pt; text-align:right; font-weight:bold; font-size:11pt; width:3.8cm; white-space:nowrap; vertical-align:middle;">
           <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; text-align:right; font-weight:bold;">${formatMoney(Number(item.so_tien) || 0)}</p>
         </td>
       </tr>
@@ -100,21 +101,75 @@ export function exportDnttToWord(data: ExportDnttData, fileName?: string) {
     }
   });
 
-  // Thông tin chuyển khoản (nếu chọn chuyển khoản) - độ cao 2.5cm
-  let bankTransferHtml = '';
-  if (dntt.hinh_thuc_thanh_toan === 'Chuyển khoản') {
-    bankTransferHtml = `
-      <tr style="height:2.5cm; mso-height-rule:exactly;">
-        <td style="border:1.0pt solid black; height:2.5cm; padding:4pt 6pt; font-size:10.5pt; vertical-align:top;" colspan="2">
-          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal;"><u><strong>Thông tin chuyển khoản:</strong></u></p>
-          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal;">Tên tài khoản: ${dntt.ten_tai_khoan || '[...]'}</p>
-          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal;">Số tài khoản: ${dntt.so_tai_khoan || '[...]'}</p>
-          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal;">Tại: ${dntt.ten_ngan_hang || '[...]'} - Chi nhánh: ${dntt.chi_nhanh_ngan_hang || '[...]'}</p>
+  // Dòng Câu dẫn (nếu có và bật hiển thị)
+  let cauDanRowHtml = '';
+  if (dntt.hien_thi_cau_dan !== false && dntt.cau_dan && dntt.cau_dan.trim()) {
+    const cauDanHtml = dntt.cau_dan.replace(/\r\n|\r|\n/g, '<br/>');
+    cauDanRowHtml = `
+      <tr style="min-height:0.5cm; mso-height-rule:at-least;">
+        <td style="border:1.0pt solid black; min-height:0.5cm; padding:0 4pt; text-align:center; color:#94a3b8; font-size:10pt; width:1.2cm; vertical-align:middle;">
+          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; text-align:center;">-</p>
         </td>
-        <td style="border:1.0pt solid black; height:2.5cm; width:3.8cm; padding:0;"></td>
+        <td style="border:1.0pt solid black; min-height:0.5cm; padding:0 6pt; font-style:italic; font-size:10.5pt; width:12.0cm; vertical-align:middle;">
+          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; font-style:italic;">${cauDanHtml}</p>
+        </td>
+        <td style="border:1.0pt solid black; min-height:0.5cm; padding:0 4pt; text-align:center; color:#94a3b8; font-size:10pt; width:3.8cm; vertical-align:middle;">
+          <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; text-align:center;">...</p>
+        </td>
       </tr>
     `;
   }
+
+  // Thông tin hoá đơn (nếu có và bật hiển thị)
+  let invoiceRowHtml = '';
+  if (dntt.hien_thi_hoa_don !== false) {
+    const hasSoHoaDon = Boolean(dntt.so_hoa_don && dntt.so_hoa_don.trim());
+    const hasNgayHoaDon = Boolean(dntt.ngay_hoa_don && dntt.ngay_hoa_don.trim());
+    const formattedNgayHd = hasNgayHoaDon ? dntt.ngay_hoa_don : '.../.../......';
+    const formattedSoHd = hasSoHoaDon ? dntt.so_hoa_don : '..................';
+    invoiceRowHtml = `
+      <tr style="height:0.65cm; mso-height-rule:exactly;">
+        <td style="border:1.0pt solid black; padding:3pt 6pt; font-size:10.5pt; vertical-align:middle;" colspan="2">
+          <p style="margin-top:2.0pt; margin-bottom:2.0pt; line-height:normal;">
+            <u><strong>Thông tin hoá đơn:</strong></u>&nbsp;&nbsp;Số hoá đơn: <strong>${formattedSoHd}</strong>&nbsp;&nbsp;|&nbsp;&nbsp;Ngày: <strong>${formattedNgayHd}</strong>
+          </p>
+        </td>
+        <td style="border:1.0pt solid black; width:3.8cm; padding:0;"></td>
+      </tr>
+    `;
+  }
+
+  // Dòng Ghi chú (nếu có và bật hiển thị)
+  let noteRowHtml = '';
+  if (dntt.hien_thi_ghi_chu !== false && dntt.ghi_chu && dntt.ghi_chu.trim()) {
+    noteRowHtml = `
+      <tr style="height:0.65cm; mso-height-rule:exactly;">
+        <td style="border:1.0pt solid black; padding:3pt 6pt; font-size:10.5pt; vertical-align:middle;" colspan="2">
+          <p style="margin-top:2.0pt; margin-bottom:2.0pt; line-height:normal;"><u><strong>Ghi chú:</strong></u> ${dntt.ghi_chu}</p>
+        </td>
+        <td style="border:1.0pt solid black; width:3.8cm; padding:0;"></td>
+      </tr>
+    `;
+  }
+
+  // Khối Hình thức thanh toán & Thông tin ngân hàng (cùng 1 ô nằm dưới dòng Ghi chú)
+  const showBanking = dntt.hinh_thuc_thanh_toan === 'Chuyển khoản' || dntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ';
+  const showTransferMemo = dntt.hien_thi_nd_ck !== false && Boolean(dntt.noi_dung_chuyen_khoan && dntt.noi_dung_chuyen_khoan.trim());
+  const paymentMethodHtml = `
+    <tr style="height: auto; mso-height-rule:exactly;">
+      <td style="border:1.0pt solid black; padding:4pt 6pt; font-size:10.5pt; vertical-align:top;" colspan="2">
+        <p style="margin-top:2.0pt; margin-bottom:2.0pt; line-height:normal;"><u><strong>Hình thức thanh toán:</strong></u>&nbsp;&nbsp;<strong>${dntt.hinh_thuc_thanh_toan}</strong></p>
+        ${showBanking ? `
+          <p style="margin-top:3.0pt; margin-bottom:2.0pt; line-height:normal;"><u><strong>Thông tin tài khoản ngân hàng${dntt.hinh_thuc_thanh_toan === 'Cấn trừ công nợ' ? ' (Cấn trừ công nợ)' : ''}:</strong></u></p>
+          <p style="margin-top:1.0pt; margin-bottom:1.0pt; line-height:normal;">Tên tài khoản: <strong>${dntt.ten_tai_khoan || '[...]'}</strong></p>
+          <p style="margin-top:1.0pt; margin-bottom:1.0pt; line-height:normal;">Số tài khoản: <strong>${dntt.so_tai_khoan || '[...]'}</strong></p>
+          <p style="margin-top:1.0pt; margin-bottom:1.0pt; line-height:normal;">Tại: <strong>${dntt.ten_ngan_hang || '[...]'}</strong> - Chi nhánh: <strong>${dntt.chi_nhanh_ngan_hang || '[...]'}</strong></p>
+          ${showTransferMemo ? `<p style="margin-top:1.0pt; margin-bottom:1.0pt; line-height:normal;">Nội dung: ${dntt.noi_dung_chuyen_khoan}</p>` : ''}
+        ` : ''}
+      </td>
+      <td style="border:1.0pt solid black; width:3.8cm; padding:0;"></td>
+    </tr>
+  `;
 
   // Toàn bộ HTML tài liệu Word chuẩn Word ML
   const documentHtml = `
@@ -257,11 +312,6 @@ export function exportDnttToWord(data: ExportDnttData, fileName?: string) {
           <p style="margin-top:3.0pt; margin-bottom:3.0pt; margin-left:0; margin-right:0; line-height:normal; font-size:11pt; font-style:italic;">
             <em>Bằng chữ: ${soTienChu}</em>
           </p>
-
-          <!-- Dòng 6: Hình thức thanh toán -->
-          <p style="margin-top:3.0pt; margin-bottom:3.0pt; margin-left:0; margin-right:0; line-height:normal; font-size:11pt;">
-            <strong>Hình thức thanh toán:</strong>&nbsp;&nbsp;${dntt.hinh_thuc_thanh_toan}
-          </p>
         </div>
 
         <!-- 4. BẢNG CHI TIẾT NỘI DUNG THANH TOÁN (KẺ KHUNG TOÀN BỘ - RỘNG 17CM, CAO MỖI HÀNG 0.5CM, PARAGRAPH TRƯỚC 3PT SAU 3PT) -->
@@ -280,8 +330,11 @@ export function exportDnttToWord(data: ExportDnttData, fileName?: string) {
             </tr>
           </thead>
           <tbody>
+            ${cauDanRowHtml}
             ${tableRowsHtml}
-            ${bankTransferHtml}
+            ${invoiceRowHtml}
+            ${noteRowHtml}
+            ${paymentMethodHtml}
             <tr style="height:0.5cm; mso-height-rule:exactly;">
               <td style="border:1.0pt solid black; height:0.5cm; padding:0 6pt; font-weight:bold; font-size:11pt; text-align:center; vertical-align:middle;" colspan="2">
                 <p style="margin-top:2.0pt; margin-bottom:2.0pt; margin-left:0; margin-right:0; line-height:normal; text-align:center; font-weight:bold;">Giá trị phải thanh toán</p>
