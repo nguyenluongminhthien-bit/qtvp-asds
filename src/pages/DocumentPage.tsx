@@ -537,7 +537,7 @@ export default function DocumentPage() {
     return Array.from(new Set(personnelList.map(p => p.ho_ten).filter(Boolean)));
   }, [personnelList]);
 
-  const allowedDonViIds = useAllowedUnits(donViList);
+  const allowedDonViIds = useAllowedUnits(donViList, 'VanBan');
   const hasInitializedRef = useRef(false);
 
   useEffect(() => {

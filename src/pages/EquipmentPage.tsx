@@ -518,7 +518,7 @@ export default function EquipmentPage() {
     return map;
   }, [donViList]);
 
-  const allowedDonViIds = useAllowedUnits(donViList);
+  const allowedDonViIds = useAllowedUnits(donViList, 'ThietBi');
 
   const displayedNccList = useMemo(() => {
     if (showAllNccGroups || !tbFormData.nhom_thiet_bi) return nccList;

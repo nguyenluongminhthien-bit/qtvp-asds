@@ -10,6 +10,7 @@ export const getUnitEmoji = (loai_hinh?: string) => {
   if (lower.includes('quản trị')) return '🏪';
   if (lower.includes('showroom')) return '🏣';
   if (lower.includes('điểm kinh doanh')) return '📍';
+  if (lower.includes('đại lý')) return '🤝';
   if (lower.includes('kho')) return '🔩';
   if (lower.includes('xưởng dịch vụ')) return '🛠️';
   if (lower.includes('nhà máy')) return '🏭';
@@ -211,13 +212,41 @@ export const isUserAdminOrAllAccess = (user?: any): boolean => {
   );
 };
 
+// Bảng quy ước tiền tố Đơn vị phụ trách theo Phân hệ
+export const MODULE_UNIT_PREFIX_MAP: Record<string, string> = {
+  CongTy: 'COMPANY_VIEW_UNITS:',
+  NhanSu: 'NS_VIEW_UNITS:',
+  PCCC: 'PCCC_VIEW_UNITS:',
+  ATVSLD: 'ATVSLD_VIEW_UNITS:',
+  Xe: 'XE_VIEW_UNITS:',
+  ThietBi: 'TB_VIEW_UNITS:',
+  ChiPhi: 'CP_VIEW_UNITS:',
+  NhaCungCap: 'NCC_VIEW_UNITS:',
+  VanBan: 'VB_VIEW_UNITS:'
+};
+
 // 8. Lấy toàn bộ ID đơn vị thuộc phạm vi phân quyền của tài khoản:
-// Đối với tài khoản cấp đơn vị: trả về Set gồm Đơn vị mẹ quản lý + tất cả các đơn vị trực thuộc (Showroom con...)
-// Hỗ trợ trường hợp tài khoản được gán 2, 3, 4 đơn vị cùng lúc (phân tách bằng dấu phẩy)
+// Ưu tiên 1: Cấu hình Phạm vi Đơn vị phụ trách riêng của phân hệ (nếu truyền moduleId)
+// Ưu tiên 2: Đơn vị quản lý ở Phần 1 + tất cả các đơn vị trực thuộc (Showroom con...)
 // Đối với tài khoản Admin / Toàn quyền: trả về null (toàn quyền truy cập tất cả)
-export const getUserPermittedUnitIds = (user: any, donViList: DonVi[]): Set<string> | null => {
+export const getUserPermittedUnitIds = (user: any, donViList: DonVi[], moduleId?: string): Set<string> | null => {
   if (!user || isUserAdminOrAllAccess(user)) {
     return null;
+  }
+
+  // 1. Kiểm tra cấu hình Đơn vị phụ trách riêng của phân hệ
+  if (moduleId && user.quyen_chi_tiet) {
+    const prefix = MODULE_UNIT_PREFIX_MAP[moduleId];
+    if (prefix) {
+      const rules = String(user.quyen_chi_tiet).split(',').map(r => r.trim());
+      const rule = rules.find(r => r.startsWith(prefix));
+      if (rule) {
+        const customUnits = rule.substring(prefix.length).split('|').map(s => s.trim()).filter(Boolean);
+        if (customUnits.length > 0) {
+          return new Set<string>(customUnits);
+        }
+      }
+    }
   }
 
   const rawIdDonVi = String(user.id_don_vi || (user as any).idDonVi || '').trim();

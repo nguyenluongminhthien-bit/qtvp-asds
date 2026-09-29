@@ -298,8 +298,25 @@ export default function DepartmentPage() {
 
   const allowedDonViIds = useAllowedUnits(data);
 
+  // 🟢 Kiểm tra đặc quyền COMPANY_VIEW_UNITS:id1|id2|... trong quyen_chi_tiet của tài khoản
+  const customCompanyUnitIds = useMemo(() => {
+    if (!user?.quyen_chi_tiet) return null;
+    const rules = user.quyen_chi_tiet.split(',').map(r => r.trim());
+    const rule = rules.find(r => r.startsWith('COMPANY_VIEW_UNITS:'));
+    if (!rule) return null;
+    const ids = rule.substring('COMPANY_VIEW_UNITS:'.length).split('|').map(s => s.trim()).filter(Boolean);
+    return ids.length > 0 ? ids : null;
+  }, [user]);
+
+  const effectiveAllowedDonViIds = useMemo(() => {
+    if (customCompanyUnitIds) {
+      return customCompanyUnitIds;
+    }
+    return allowedDonViIds;
+  }, [customCompanyUnitIds, allowedDonViIds]);
+
   const filteredData = useMemo(() => {
-    let baseUnits = data.filter(item => allowedDonViIds.includes(item.id));
+    let baseUnits = data.filter(item => effectiveAllowedDonViIds.includes(item.id));
     if (!searchTerm) return baseUnits;
 
     const cleanSearch = stripAccents(searchTerm);
@@ -328,23 +345,28 @@ export default function DepartmentPage() {
 
     Array.from(matchedIds).forEach(id => addChildren(id));
     return baseUnits.filter(item => matchedIds.has(item.id));
-  }, [data, searchTerm, allowedDonViIds]);
+  }, [data, searchTerm, effectiveAllowedDonViIds]);
 
   const hasInitializedRef = useRef(false);
 
   useEffect(() => {
-    if (filteredData.length > 0 && !hasInitializedRef.current) {
-      const defId = getDefaultUnitId(user, data);
-      if (defId && filteredData.some(d => d.id === defId)) {
-        setSelectedUnitId(defId);
-      } else {
-        setSelectedUnitId(filteredData[0].id);
+    if (filteredData.length > 0) {
+      if (!selectedUnitId || !filteredData.some(d => d.id === selectedUnitId)) {
+        const defId = getDefaultUnitId(user, data);
+        if (defId && filteredData.some(d => d.id === defId)) {
+          setSelectedUnitId(defId);
+        } else {
+          setSelectedUnitId(filteredData[0].id);
+        }
+        hasInitializedRef.current = true;
       }
-      hasInitializedRef.current = true;
     }
-  }, [filteredData, user, data]);
+  }, [filteredData, user, data, selectedUnitId]);
 
-  const parentUnits = useMemo(() => filteredData.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly), [filteredData]);
+  const parentUnits = useMemo(() => {
+    const unitIdSet = new Set(filteredData.map(u => u.id));
+    return filteredData.filter(item => item.cap_quan_ly === 'HO' || !item.cap_quan_ly || !unitIdSet.has(item.cap_quan_ly));
+  }, [filteredData]);
 
   // 🟢 ĐÃ ÁP DỤNG HÀM SẮP XẾP CHUẨN (sortDonViByThuTu)
   const getChildUnits = (parentId: string) => sortDonViByThuTu(filteredData.filter(item => item.cap_quan_ly === parentId));
@@ -384,8 +406,12 @@ export default function DepartmentPage() {
   const selectedUnitSubordinates = useMemo(() => {
     if (!selectedUnitId) return [];
     const subIds = getAllSubordinateIds(selectedUnitId, data);
-    return [selectedUnitId, ...subIds];
-  }, [selectedUnitId, data]);
+    const allSubs = [selectedUnitId, ...subIds];
+    if (customCompanyUnitIds) {
+      return allSubs.filter(id => effectiveAllowedDonViIds.includes(id));
+    }
+    return allSubs;
+  }, [selectedUnitId, data, customCompanyUnitIds, effectiveAllowedDonViIds]);
 
   useEffect(() => {
     if (selectedUnit) {
@@ -2309,7 +2335,7 @@ export default function DepartmentPage() {
                 <div className="md:col-span-2"><label className="block text-xs font-bold mb-1 text-gray-600">Tên Đơn Vị *</label><input type="text" required name="ten_don_vi" value={formData.ten_don_vi || ''} onChange={(e) => setFormData({ ...formData, ten_don_vi: e.target.value })} className="w-full p-2.5 border rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-blue-500" /></div>
                 <div><label className="block text-xs font-bold mb-1 text-gray-600">Cấp Quản Lý (Mẹ) *</label><select required name="cap_quan_ly" value={formData.cap_quan_ly || ''} onChange={(e) => setFormData({ ...formData, cap_quan_ly: e.target.value })} className="w-full p-2.5 border rounded-lg bg-[#FFFFF0] font-bold text-[#05469B] outline-none focus:ring-2 focus:ring-blue-500"><option value="">-- Chọn Cấp QL --</option><option value="HO" className="text-red-600">🏢 Tổng Công Ty (HO)</option>{buildHierarchicalOptions(data.filter(d => d.id !== formData.id)).map(({ unit, prefix }) => (<option key={unit.id} value={unit.id}>{prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}</option>))}</select></div>
                 <div><label className="block text-xs font-bold mb-1 text-gray-600">Khu vực (Phía)</label><select name="phia" value={formData.phia || 'VPĐH'} onChange={(e) => setFormData({ ...formData, phia: e.target.value })} className="w-full p-2.5 border rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-blue-500"><option value="VPĐH">VPĐH</option><option value="CTTT Phía Nam">CTTT Phía Nam</option><option value="CTTT Phía Bắc">CTTT Phía Bắc</option></select></div>
-                <div><label className="block text-xs font-bold mb-1 text-gray-600">Loại hình</label><select name="loai_hinh" value={formData.loai_hinh || 'Showroom Quản trị'} onChange={(e) => setFormData({ ...formData, loai_hinh: e.target.value })} className="w-full p-2.5 border rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-blue-500"><option value="Tổng Công ty">Tổng Công ty</option><option value="Công ty Tỉnh thành">Công ty Tỉnh thành</option><option value="VP Công ty">Văn phòng Công ty</option><option value="Showroom Quản trị">Showroom Quản trị</option><option value="Showroom">Showroom</option><option value="Xưởng Dịch vụ">Xưởng Dịch vụ</option><option value="Điểm Kinh doanh">Điểm Kinh doanh</option><option value="Kho xe">Kho xe</option></select></div>
+                <div><label className="block text-xs font-bold mb-1 text-gray-600">Loại hình</label><select name="loai_hinh" value={formData.loai_hinh || 'Showroom Quản trị'} onChange={(e) => setFormData({ ...formData, loai_hinh: e.target.value })} className="w-full p-2.5 border rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-blue-500"><option value="Tổng Công ty">Tổng Công ty</option><option value="Công ty Tỉnh thành">Công ty Tỉnh thành</option><option value="VP Công ty">Văn phòng Công ty</option><option value="Showroom Quản trị">Showroom Quản trị</option><option value="Showroom">Showroom</option><option value="Xưởng Dịch vụ">Xưởng Dịch vụ</option><option value="Điểm Kinh doanh">Điểm Kinh doanh</option><option value="Đại lý">Đại lý</option><option value="Kho xe">Kho xe</option></select></div>
                 <div><label className="block text-xs font-bold mb-1 text-gray-600">Trạng thái</label><select name="trang_thai" value={formData.trang_thai || 'Hoạt động'} onChange={(e) => setFormData({ ...formData, trang_thai: e.target.value })} className="w-full p-2.5 border rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700"><option value="Hoạt động">Hoạt động</option><option value="Đại lý">Đại lý</option><option value="Đầu tư mới">Đầu tư mới</option><option value="Ngừng hoạt động">Ngừng hoạt động</option></select></div>
                 <div className="md:col-span-2"><label className="block text-xs font-bold mb-1 text-gray-600">Địa chỉ</label><input type="text" name="dia_chi" value={formData.dia_chi || ''} onChange={(e) => setFormData({ ...formData, dia_chi: e.target.value })} className="w-full p-2.5 border rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-blue-500" /></div>
                 <div className="md:col-span-3">

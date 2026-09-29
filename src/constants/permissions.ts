@@ -3,7 +3,7 @@
 export interface AdvancedRuleItem {
   id: string;
   label: string;
-  type?: 'checkbox' | 'type_select' | 'plate_select' | 'year_select';
+  type?: 'checkbox' | 'type_select' | 'plate_select' | 'year_select' | 'unit_select';
   prefix?: string;
   options?: string[];
   warning?: boolean;
@@ -29,6 +29,19 @@ export interface ModuleCrudState {
   u: boolean; // Sửa (Update)
   d: boolean; // Xóa (Delete)
 }
+
+// 🟢 BẢNG ÁNH XẠ TIỀN TỐ QUY TẮC GIỚI HẠN ĐƠN VỊ THEO PHÂN HỆ
+export const MODULE_UNIT_RULE_PREFIXES: Record<string, string> = {
+  CongTy: 'COMPANY_VIEW_UNITS:',
+  NhanSu: 'NS_VIEW_UNITS:',
+  PCCC: 'PCCC_VIEW_UNITS:',
+  ATVSLD: 'ATVSLD_VIEW_UNITS:',
+  Xe: 'XE_VIEW_UNITS:',
+  ThietBi: 'TB_VIEW_UNITS:',
+  ChiPhi: 'CP_VIEW_UNITS:',
+  NhaCungCap: 'NCC_VIEW_UNITS:',
+  VanBan: 'VB_VIEW_UNITS:',
+};
 
 // 🟢 1. DANH SÁCH 12 PHÂN HỆ NGHIỆP VỤ & ĐẶC QUYỀN TÍCH HỢP
 export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
@@ -58,6 +71,13 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
         type: 'checkbox',
         warning: true,
         description: 'Chốt an toàn bảo vệ cấu trúc tổ chức công ty. Chỉ bật nếu tài khoản phụ trách tổ chức lại đơn vị.'
+      },
+      {
+        id: 'COMPANY_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong Thông tin Công ty',
+        type: 'unit_select',
+        prefix: 'COMPANY_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác trong phân hệ Thông tin Công ty.'
       }
     ]
   },
@@ -82,6 +102,13 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
         label: 'Cấm xem Chi tiết Hồ sơ cá nhân',
         type: 'checkbox',
         description: 'Chỉ cho phép xem danh sách tóm tắt ngoài bảng, cấm mở popup chi tiết'
+      },
+      {
+        id: 'NS_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong Nhân sự',
+        type: 'unit_select',
+        prefix: 'NS_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác hồ sơ nhân sự.'
       }
     ]
   },
@@ -106,6 +133,13 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
         label: 'Giới hạn xe xem được theo Biển số (Bỏ trống = Xem tất cả xe thuộc ĐV)',
         type: 'plate_select',
         prefix: 'XE_LIMIT:'
+      },
+      {
+        id: 'XE_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong Quản lý Xe',
+        type: 'unit_select',
+        prefix: 'XE_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác thông tin phương tiện.'
       }
     ]
   },
@@ -124,6 +158,13 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
         label: 'Ẩn cột Nguyên giá tài sản',
         type: 'checkbox',
         description: 'Không hiển thị thông tin giá trị tài sản với tài khoản này'
+      },
+      {
+        id: 'TB_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong TTB VP',
+        type: 'unit_select',
+        prefix: 'TB_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác trang thiết bị văn phòng.'
       }
     ]
   },
@@ -149,6 +190,13 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
         label: 'Quyền Báo cáo tuỳ chỉnh (Pivot Table)',
         type: 'checkbox',
         description: 'Được phép tạo và lưu các mẫu bảng báo cáo phân tích chi phí đa chiều'
+      },
+      {
+        id: 'CP_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong Quản lý Chi phí',
+        type: 'unit_select',
+        prefix: 'CP_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác ĐNTT và số liệu chi phí.'
       }
     ]
   },
@@ -160,7 +208,16 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
     hasView: true,
     hasCreate: true,
     hasUpdate: true,
-    hasDelete: true
+    hasDelete: true,
+    advancedRules: [
+      {
+        id: 'NCC_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong Quản lý NCC',
+        type: 'unit_select',
+        prefix: 'NCC_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác danh sách nhà cung cấp.'
+      }
+    ]
   },
   {
     id: 'VanBan',
@@ -179,7 +236,14 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
       { id: 'VB_VIEW_CV_DI', label: 'Xem Công văn đi', type: 'checkbox' },
       { id: 'VB_VIEW_CV_DEN', label: 'Xem Công văn đến', type: 'checkbox' },
       { id: 'VB_HIDE_BTN', label: 'Ẩn nút Ban hành', type: 'checkbox', warning: true },
-      { id: 'VB_YEARS', label: 'Cho phép xem theo Năm', type: 'year_select', prefix: 'VB_YEARS:' }
+      { id: 'VB_YEARS', label: 'Cho phép xem theo Năm', type: 'year_select', prefix: 'VB_YEARS:' },
+      {
+        id: 'VB_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong Quản lý VTLT',
+        type: 'unit_select',
+        prefix: 'VB_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác văn thư lưu trữ, công văn, quyết định.'
+      }
     ]
   },
   {
@@ -221,7 +285,16 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
     hasView: true,
     hasCreate: true,
     hasUpdate: true,
-    hasDelete: true
+    hasDelete: true,
+    advancedRules: [
+      {
+        id: 'PCCC_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong PCCC',
+        type: 'unit_select',
+        prefix: 'PCCC_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác hồ sơ an toàn PCCC.'
+      }
+    ]
   },
   {
     id: 'ATVSLD',
@@ -231,7 +304,16 @@ export const MODULE_MATRIX_CONFIG: ModuleMatrixItem[] = [
     hasView: true,
     hasCreate: true,
     hasUpdate: true,
-    hasDelete: true
+    hasDelete: true,
+    advancedRules: [
+      {
+        id: 'ATVSLD_VIEW_UNITS',
+        label: '🏢 Phạm vi Đơn vị phụ trách trong ATLĐ',
+        type: 'unit_select',
+        prefix: 'ATVSLD_VIEW_UNITS:',
+        description: 'Chỉ định các Đơn vị cụ thể tài khoản được phép phụ trách thao tác hồ sơ an toàn vệ sinh lao động.'
+      }
+    ]
   },
   {
     id: 'BaoCao',

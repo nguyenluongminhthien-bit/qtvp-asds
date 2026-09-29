@@ -475,7 +475,7 @@ export default function VehiclePage() {
     return map;
   }, [donViList]);
 
-  const allowedDonViIds = useAllowedUnits(donViList);
+  const allowedDonViIds = useAllowedUnits(donViList, 'Xe');
 
   const limitPlates = useMemo(() => {
     if (!user?.quyen_chi_tiet) return null;

@@ -145,7 +145,7 @@ export default function FireSafetyPage() {
     }
   }, [isEmergencyContactOpen, selectedPcccForContact, donViMap]);
 
-  const allowedDonViIds = useAllowedUnits(donViList);
+  const allowedDonViIds = useAllowedUnits(donViList, 'PCCC');
 
   const hasInitializedRef = useRef(false);
 

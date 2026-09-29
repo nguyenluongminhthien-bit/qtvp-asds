@@ -760,6 +760,8 @@ export interface DNTT {
   don_vi_hien_thi?: string;
   bo_phan_hien_thi?: string;
   noi_dung_thanh_toan?: string;
+  cau_dan?: string;
+  hien_thi_cau_dan?: boolean;
   tong_so_tien: number;
   so_tien_bang_chu?: string;
   hinh_thuc_thanh_toan: HinhThucThanhToan;

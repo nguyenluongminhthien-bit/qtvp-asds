@@ -246,7 +246,7 @@ export default function SupplierPage() {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
 
-  const allowedDonViIds = useAllowedUnits(donViList);
+  const allowedDonViIds = useAllowedUnits(donViList, 'NhaCungCap');
   const hasInitializedRef = useRef(false);
 
   const donViLookupMap = useMemo(() => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-  FileText, BarChart3, BarChart2, Tag, Building2, PanelLeftOpen, 
+import {
+  FileText, BarChart3, BarChart2, Tag, Building2, PanelLeftOpen,
   Wallet, RefreshCw, Loader2, Search, RotateCcw, Sparkles, ChevronDown, PlusCircle, Layers, FileSpreadsheet, Lock, Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,8 +8,8 @@ import { apiService } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
-import { 
-  DonVi, PhapNhan, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2, 
+import {
+  DonVi, PhapNhan, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2,
   DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe, DmNhomChiPhi
 } from '../types';
 import DnttTab from '../components/cost/DnttTab';
@@ -37,6 +37,7 @@ export default function CostManagementPage() {
   const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
   const [dnttCreateTrigger, setDnttCreateTrigger] = useState<number>(0);
   const [chotKyTrigger, setChotKyTrigger] = useState<number>(0);
+  const [moveDnttRequest, setMoveDnttRequest] = useState<{ dnttId: string; targetUnitId?: string } | null>(null);
 
   const isLevel2Open = activeTab === 'admin' || activeTab === 'thong_ke';
 
@@ -68,22 +69,34 @@ export default function CostManagementPage() {
     return donViList.filter(isCostManagementUnit);
   }, [donViList]);
 
-  // Phân quyền đơn vị của người dùng: Đơn vị mẹ + các đơn vị trực thuộc
+  // Phân quyền đơn vị của người dùng (có hỗ trợ đặc quyền CP_VIEW_UNITS)
   const userPermittedUnitIds = useMemo(() => {
+    if (user?.quyen_chi_tiet) {
+      const rules = user.quyen_chi_tiet.split(',').map(r => r.trim());
+      const rule = rules.find(r => r.startsWith('CP_VIEW_UNITS:'));
+      if (rule) {
+        const ids = rule.substring('CP_VIEW_UNITS:'.length).split('|').map(s => s.trim()).filter(Boolean);
+        if (ids.length > 0) {
+          return new Set(ids);
+        }
+      }
+    }
     return getUserPermittedUnitIds(user, donViList);
   }, [user, donViList]);
 
   // Phân quyền đơn vị (áp dụng trên danh sách đơn vị quản trị chi phí)
   const allowedDonViIds = useMemo(() => {
     if (!userPermittedUnitIds) return costDonViList.map(dv => String(dv.id));
-    return costDonViList.filter(dv => userPermittedUnitIds.has(String(dv.id))).map(dv => String(dv.id));
-  }, [costDonViList, userPermittedUnitIds]);
+    const hasCustomCpRule = user?.quyen_chi_tiet?.includes('CP_VIEW_UNITS:');
+    const sourceList = hasCustomCpRule ? donViList : costDonViList;
+    return sourceList.filter(dv => userPermittedUnitIds.has(String(dv.id))).map(dv => String(dv.id));
+  }, [costDonViList, donViList, userPermittedUnitIds, user]);
 
   // Tìm đơn vị mẹ quản lý của tài khoản (dành cho tài khoản cấp đơn vị)
   const rootParentUnit = useMemo(() => {
     if (!userPermittedUnitIds) return null;
-    return donViList.find(d => 
-      userPermittedUnitIds.has(String(d.id)) && 
+    return donViList.find(d =>
+      userPermittedUnitIds.has(String(d.id)) &&
       (!d.cap_quan_ly || d.cap_quan_ly === 'HO' || d.cap_quan_ly === 'DV_HO')
     ) || null;
   }, [userPermittedUnitIds, donViList]);
@@ -260,7 +273,7 @@ export default function CostManagementPage() {
     }).length;
   }, [permittedDnttList, selectedUnitFilter, donViList]);
 
-  // Thông báo hạn chốt kỳ chi phí: "Chốt kỳ chi phí Tháng xx trước ngày 05/xx+1/Năm hiện tại"
+  // Thông báo hạn chốt kỳ chi phí: "Chốt kỳ chi phí Tháng xx trước ngày 10/xx+1/Năm hiện tại"
   const chotKyDeadlineNotice = useMemo(() => {
     const now = new Date();
     const day = now.getDate();
@@ -280,7 +293,7 @@ export default function CostManagementPage() {
     const targetMonthStr = String(targetMonth).padStart(2, '0');
     const deadlineMonthStr = String(deadlineMonth).padStart(2, '0');
 
-    return `Chốt kỳ chi phí Tháng ${targetMonthStr} trước ngày 05/${deadlineMonthStr}/${deadlineYear}`;
+    return `Chốt kỳ chi phí Tháng ${targetMonthStr} trước ngày 10/${deadlineMonthStr}/${deadlineYear}`;
   }, []);
 
   // Thiết lập danh sách Tab (4 tab cấp cao nhất)
@@ -311,7 +324,7 @@ export default function CostManagementPage() {
 
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] dark:bg-slate-900 overflow-hidden relative font-sans">
-      
+
       {/* Nút mở UnitFilterSidebar khi bị thu nhỏ */}
       {isListCollapsed && (
         <button
@@ -338,17 +351,21 @@ export default function CostManagementPage() {
         themeColor="blue"
         allUnitsLabel={allUnitsLabel}
         searchPlaceholder="Tìm đơn vị quản trị..."
+        onDropDntt={(dnttId, targetUnitId) => {
+          setActiveTab('dntt');
+          setMoveDnttRequest({ dnttId, targetUnitId });
+        }}
       />
 
       {/* 2. KHU VỰC NỘI DUNG CHÍNH */}
       <div className="flex-1 min-w-0 max-w-full overflow-hidden p-3 sm:p-5 relative transition-all duration-300 w-full flex flex-col">
-        
+
         {/* Header Module Chuẩn 3 Dòng */}
         <div className="shrink-0 z-20 flex flex-col mb-4">
-          
+
           {/* DÒNG 1 & DÒNG 2 */}
           <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-3 gap-3 transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
-            
+
             {/* Cột trái: Dòng 1 (Tiêu đề) & Dòng 2 (Đang xem) */}
             <div className="flex items-center gap-2.5">
               {isListCollapsed && (
@@ -373,157 +390,156 @@ export default function CostManagementPage() {
             {/* Cột phải: Cụm controls chuẩn + Nhãn chốt kỳ chi phí */}
             <div className="flex flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto relative z-30">
               <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
-              
-              {/* 1. Ô tìm kiếm: 256 x 32 px, nền #FFFFF0 */}
-              <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                <input
-                  type="text"
-                  placeholder="Tìm theo số phiếu, người đề nghị, nội dung..."
-                  className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[#D97706] focus:border-[#D97706] outline-none shadow-xs text-xs font-medium transition-all"
-                  value={costSearchTerm}
-                  onChange={(e) => setCostSearchTerm(e.target.value)}
-                />
-              </div>
 
-              {/* 2. Nút Đồng bộ dữ liệu (24 x 24 px) */}
-              <button
-                type="button"
-                onClick={() => {
-                  loadAllData(true);
-                  toast.success('Đang đồng bộ dữ liệu Chi phí mới nhất từ Supabase...');
-                }}
-                title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
-                disabled={loading}
-                className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-[#D97706] rounded-md border border-gray-200 dark:border-slate-700 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
-              >
-                <RotateCcw size={13} className={loading ? 'animate-spin text-[#D97706]' : ''} />
-              </button>
+                {/* 1. Ô tìm kiếm: 256 x 32 px, nền #FFFFF0 */}
+                <div className="relative w-full sm:w-[256px] h-[32px] shrink-0">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Tìm theo số phiếu, người đề nghị, nội dung..."
+                    className="w-full sm:w-[256px] h-[32px] pl-8 pr-3 bg-[#FFFFF0] border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[#D97706] focus:border-[#D97706] outline-none shadow-xs text-xs font-medium transition-all"
+                    value={costSearchTerm}
+                    onChange={(e) => setCostSearchTerm(e.target.value)}
+                  />
+                </div>
 
-              {/* 3. Nút Tính năng (119 x 32 px) - Màu Amber vàng đồng */}
-              <div className="relative z-50">
+                {/* 2. Nút Đồng bộ dữ liệu (24 x 24 px) */}
                 <button
                   type="button"
-                  onClick={() => setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen)}
-                  className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${
-                    isFeaturesDropdownOpen
-                      ? 'bg-gradient-to-r from-[#D97706] to-[#b45309] text-white border-[#D97706] shadow-sm'
-                      : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-slate-700 hover:bg-gray-50 hover:text-[#D97706]'
-                  }`}
+                  onClick={() => {
+                    loadAllData(true);
+                    toast.success('Đang đồng bộ dữ liệu Chi phí mới nhất từ Supabase...');
+                  }}
+                  title="Đồng bộ / Tải lại dữ liệu mới nhất từ Supabase"
+                  disabled={loading}
+                  className="w-[24px] h-[24px] min-w-[24px] p-0 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-[#D97706] rounded-md border border-gray-200 dark:border-slate-700 transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 shrink-0"
                 >
-                  <Sparkles size={14} className={isFeaturesDropdownOpen ? 'text-amber-200 animate-pulse' : 'text-[#D97706]'} />
-                  <span>Tính năng</span>
-                  <ChevronDown size={12} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                  <RotateCcw size={13} className={loading ? 'animate-spin text-[#D97706]' : ''} />
                 </button>
 
-                {isFeaturesDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[40]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
-                    <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 p-2 z-[50] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('dntt');
-                          setDnttCreateTrigger(Date.now());
-                          setIsFeaturesDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-amber-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-[#D97706] cursor-pointer"
-                      >
-                        <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-slate-700 text-[#D97706]">
-                          <PlusCircle size={15} />
-                        </div>
-                        <div>
-                          <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Lập ĐNTT mới</div>
-                          <div className="text-[10px] text-gray-400 font-normal">Tạo phiếu đề nghị thanh toán</div>
-                        </div>
-                      </button>
+                {/* 3. Nút Tính năng (119 x 32 px) - Màu Amber vàng đồng */}
+                <div className="relative z-50">
+                  <button
+                    type="button"
+                    onClick={() => setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen)}
+                    className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${isFeaturesDropdownOpen
+                      ? 'bg-gradient-to-r from-[#D97706] to-[#b45309] text-white border-[#D97706] shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 border-gray-200 dark:border-slate-700 hover:bg-gray-50 hover:text-[#D97706]'
+                      }`}
+                  >
+                    <Sparkles size={14} className={isFeaturesDropdownOpen ? 'text-amber-200 animate-pulse' : 'text-[#D97706]'} />
+                    <span>Tính năng</span>
+                    <ChevronDown size={12} className={`transition-transform duration-200 ${isFeaturesDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('thong_ke');
-                          setActiveThongKeSubTab('dashboard');
-                          setIsFeaturesDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-blue-600 cursor-pointer"
-                      >
-                        <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-slate-700 text-blue-600">
-                          <BarChart3 size={15} />
-                        </div>
-                        <div>
-                          <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Dashboard phân tích</div>
-                          <div className="text-[10px] text-gray-400 font-normal">Xem cơ cấu và biểu đồ chi phí</div>
-                        </div>
-                      </button>
+                  {isFeaturesDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[40]" onClick={() => setIsFeaturesDropdownOpen(false)}></div>
+                      <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700 p-2 z-[50] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('dntt');
+                            setDnttCreateTrigger(Date.now());
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-amber-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-[#D97706] cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-slate-700 text-[#D97706]">
+                            <PlusCircle size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Lập ĐNTT mới</div>
+                            <div className="text-[10px] text-gray-400 font-normal">Tạo phiếu đề nghị thanh toán</div>
+                          </div>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('kmp');
-                          setIsFeaturesDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-emerald-600 cursor-pointer"
-                      >
-                        <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-slate-700 text-emerald-600">
-                          <Tag size={15} />
-                        </div>
-                        <div>
-                          <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Danh mục KMP</div>
-                          <div className="text-[10px] text-gray-400 font-normal">Cấu hình mã B7, B10, Trọng yếu</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('admin');
-                          setIsFeaturesDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-purple-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-purple-600 cursor-pointer"
-                      >
-                        <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-slate-700 text-purple-600">
-                          <Building2 size={15} />
-                        </div>
-                        <div>
-                          <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Quản trị Khối &amp; Bộ phận</div>
-                          <div className="text-[10px] text-gray-400 font-normal">Khối/Nghiệp vụ - Thương hiệu/Bộ phận</div>
-                        </div>
-                      </button>
-
-                      {/* Mục Quản lý Chốt kỳ Chi phí - Dành cho Admin hoặc tài khoản có quyền CAN_LOCK_PERIOD */}
-                      {canLock && (
                         <button
                           type="button"
                           onClick={() => {
                             setActiveTab('thong_ke');
-                            setActiveThongKeSubTab('bao_cao');
-                            setChotKyTrigger(Date.now());
+                            setActiveThongKeSubTab('dashboard');
                             setIsFeaturesDropdownOpen(false);
                           }}
-                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-amber-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-amber-600 cursor-pointer border-t border-gray-100 dark:border-slate-700 pt-2.5"
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-blue-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-blue-600 cursor-pointer"
                         >
-                          <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-slate-700 text-[#D97706]">
-                            <Lock size={15} />
+                          <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-slate-700 text-blue-600">
+                            <BarChart3 size={15} />
                           </div>
                           <div>
-                            <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Quản lý Chốt kỳ Chi phí</div>
-                            <div className="text-[10px] text-gray-400 font-normal">Đóng băng số liệu kỳ kế toán</div>
+                            <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Dashboard phân tích</div>
+                            <div className="text-[10px] text-gray-400 font-normal">Xem cơ cấu và biểu đồ chi phí</div>
                           </div>
                         </button>
-                      )}
-                    </div>
-                  </>
-                )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('kmp');
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-emerald-600 cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-slate-700 text-emerald-600">
+                            <Tag size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Danh mục KMP</div>
+                            <div className="text-[10px] text-gray-400 font-normal">Cấu hình mã B7, B10, Trọng yếu</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('admin');
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-purple-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-purple-600 cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-lg bg-purple-50 dark:bg-slate-700 text-purple-600">
+                            <Building2 size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Quản trị Khối &amp; Bộ phận</div>
+                            <div className="text-[10px] text-gray-400 font-normal">Khối/Nghiệp vụ - Thương hiệu/Bộ phận</div>
+                          </div>
+                        </button>
+
+                        {/* Mục Quản lý Chốt kỳ Chi phí - Dành cho Admin hoặc tài khoản có quyền CAN_LOCK_PERIOD */}
+                        {canLock && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('thong_ke');
+                              setActiveThongKeSubTab('bao_cao');
+                              setChotKyTrigger(Date.now());
+                              setIsFeaturesDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-amber-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-amber-600 cursor-pointer border-t border-gray-100 dark:border-slate-700 pt-2.5"
+                          >
+                            <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-slate-700 text-[#D97706]">
+                              <Lock size={15} />
+                            </div>
+                            <div>
+                              <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Quản lý Chốt kỳ Chi phí</div>
+                              <div className="text-[10px] text-gray-400 font-normal">Đóng băng số liệu kỳ kế toán</div>
+                            </div>
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Nhãn thông báo Chốt kỳ chi phí: Vừa vặn, thanh thoát, không làm giãn khoảng cách với Tabs */}
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 rounded-md text-[#B45309] dark:text-amber-300 text-[11px] font-semibold shadow-2xs leading-tight">
+                <Calendar size={12} className="text-[#D97706] dark:text-amber-400 shrink-0" />
+                <span>{chotKyDeadlineNotice}</span>
               </div>
             </div>
-
-            {/* Nhãn thông báo Chốt kỳ chi phí: Vừa vặn, thanh thoát, không làm giãn khoảng cách với Tabs */}
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 rounded-md text-[#B45309] dark:text-amber-300 text-[11px] font-semibold shadow-2xs leading-tight">
-              <Calendar size={12} className="text-[#D97706] dark:text-amber-400 shrink-0" />
-              <span>{chotKyDeadlineNotice}</span>
-            </div>
           </div>
-        </div>
 
           {/* DÒNG 3: KHU VỰC TABS PHÂN CẤP LIỀN KHỐI (NESTED CONNECTED TABS) */}
           <div className={`w-full flex flex-col select-none shrink-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
@@ -536,11 +552,10 @@ export default function CostManagementPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${
-                      isActive
-                        ? `text-white font-black z-10 ${isLevel2Open ? 'pb-2.5 sm:pb-3' : ''}`
-                        : 'text-gray-500 hover:text-[#D97706] dark:hover:text-amber-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
-                    }`}
+                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${isActive
+                      ? `text-white font-black z-10 ${isLevel2Open ? 'pb-2.5 sm:pb-3' : ''}`
+                      : 'text-gray-500 hover:text-[#D97706] dark:hover:text-amber-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
+                      }`}
                   >
                     {isActive && (
                       <motion.div
@@ -585,11 +600,10 @@ export default function CostManagementPage() {
                             key={st.id}
                             type="button"
                             onClick={() => setActiveThongKeSubTab(st.id as any)}
-                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                              isSubActive
-                                ? 'text-white font-black'
-                                : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive
+                              ? 'text-white font-black'
+                              : 'text-white/80 hover:text-white hover:bg-white/10'
+                              }`}
                           >
                             {isSubActive && (
                               <motion.div
@@ -620,11 +634,10 @@ export default function CostManagementPage() {
                             key={st.id}
                             type="button"
                             onClick={() => setActiveAdminSubTab(st.id as any)}
-                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                              isSubActive
-                                ? 'text-white font-black'
-                                : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive
+                              ? 'text-white font-black'
+                              : 'text-white/80 hover:text-white hover:bg-white/10'
+                              }`}
                           >
                             {isSubActive && (
                               <motion.div
@@ -679,6 +692,9 @@ export default function CostManagementPage() {
                   loading={loading}
                   externalSearchTerm={costSearchTerm}
                   createTrigger={dnttCreateTrigger}
+                  allowedDonViIds={allowedDonViIds}
+                  moveDnttRequest={moveDnttRequest}
+                  onClearMoveDnttRequest={() => setMoveDnttRequest(null)}
                 />
               )}
 

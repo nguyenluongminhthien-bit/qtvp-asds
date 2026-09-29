@@ -137,6 +137,15 @@ function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false, t
   if (tableName !== 'dntt_chi_tiet') {
     uiOnlyKeys.add('stt');
   }
+  if (tableName === 'ns_dich_vu') {
+    uiOnlyKeys.add('ten_don_vi');
+    uiOnlyKeys.add('ten_phap_nhan');
+    uiOnlyKeys.add('id_phap_nhan');
+    uiOnlyKeys.add('ngay_sinh');
+    uiOnlyKeys.add('email_ca_nhan');
+    uiOnlyKeys.add('ngay_nhan_viec');
+    uiOnlyKeys.add('phan_loai');
+  }
 
   Object.keys(item || {}).forEach(key => {
     // Loại bỏ các trường nội bộ bắt đầu bằng _ hoặc trường UI-only
@@ -205,6 +214,22 @@ function extractRecordSummary(data: any, tableName: string): string {
   return parts.join(' | ');
 }
 
+// Helper suy luận phân hệ nghiệp vụ từ tên bảng
+function getModuleIdFromTable(tableName: string): string | undefined {
+  const t = tableName.toLowerCase();
+  if (t.includes('ns_') || t.includes('nhan_su')) return 'NhanSu';
+  if (t.includes('pccc')) return 'PCCC';
+  if (t.includes('an_toan') || t.includes('atvsld') || t.includes('kham_suc_khoe') || t.includes('tbnn') || t.includes('huan_luyen')) return 'ATVSLD';
+  if (t.includes('xe')) return 'Xe';
+  if (t.includes('thiet_bi') || t.includes('tai_san')) return 'ThietBi';
+  if (t.includes('dntt') || t.includes('chi_phi') || t.includes('cp_') || t.includes('kmp') || t.includes('bo_phan')) return 'ChiPhi';
+  if (t.includes('ncc') || t.includes('nha_cung_cap')) return 'NhaCungCap';
+  if (t.includes('van_ban') || t.includes('vb_')) return 'VanBan';
+  if (t.includes('don_vi') || t.includes('phong_ban') || t.includes('phong_hop') || t.includes('phap_nhan') || t.includes('an_ninh') || t.includes('pvhc')) return 'CongTy';
+  if (t.includes('quy_dinh')) return 'QuyDinh';
+  return undefined;
+}
+
 // Helper kiểm tra phạm vi ghi (chặn thật việc ghi dữ liệu ngoài phạm vi đơn vị)
 async function checkUnitPermission(item: any, tableName: string) {
   if (!currentUser || isUserAdminOrAllAccess(currentUser)) return;
@@ -214,7 +239,8 @@ async function checkUnitPermission(item: any, tableName: string) {
 
   const strTargetId = String(targetIdDonVi).trim();
   const allUnits = await getDonVi();
-  const permittedSet = getUserPermittedUnitIds(currentUser, allUnits);
+  const moduleId = getModuleIdFromTable(tableName);
+  const permittedSet = getUserPermittedUnitIds(currentUser, allUnits, moduleId);
 
   // Nếu là tài khoản toàn quyền thì cho phép
   if (!permittedSet) return;
@@ -281,6 +307,12 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
     const cleanedData = sanitizePayload(data, action === 'update', realTableName);
     if (realTableName === 'ns_dich_vu') {
       delete cleanedData.phan_loai;
+      delete cleanedData.ten_don_vi;
+      delete cleanedData.ten_phap_nhan;
+      delete cleanedData.id_phap_nhan;
+      delete cleanedData.ngay_sinh;
+      delete cleanedData.email_ca_nhan;
+      delete cleanedData.ngay_nhan_viec;
     }
 
     if (action === 'create' && !cleanedData.id) {

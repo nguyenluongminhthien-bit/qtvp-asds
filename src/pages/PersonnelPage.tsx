@@ -5,7 +5,7 @@ import {
   Dumbbell, Car, Utensils, Coffee, Languages, Monitor, Copy, Eye, EyeOff, User as UserIcon,
   Building2, Phone, Mail, Info, MapPin, ChevronDown, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, CheckCheck, Briefcase,
   LogOut, AlertTriangle, Image as ImageIcon, RotateCcw, Download, FileSpreadsheet, ClipboardPaste,
-  BarChart3, PieChart as PieChartIcon, TrendingUp, Cake, Filter, Layers, Tag, Sparkles, Wrench, Settings2, UserPlus, UserCheck
+  BarChart3, PieChart as PieChartIcon, TrendingUp, Cake, Filter, Layers, Tag, Sparkles, Wrench, Settings2, UserPlus, UserCheck, ArrowRightLeft
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Personnel, DonVi, ThietBi } from '../types';
@@ -127,7 +127,7 @@ const PersonnelDesktopRow = React.memo(({ item, props }: any) => {
             <>
               <button onClick={() => handleDuplicate(item)} className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors" title="Nhân bản (Tạo hồ sơ kiêm nhiệm)"><Copy className="w-3.5 h-3.5" /></button>
               <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-md transition-colors" title="Sửa"><Edit className="w-3.5 h-3.5" /></button>
-              <button onClick={() => handleOffboardClick(item)} className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-md transition-colors border border-transparent hover:border-orange-200" title="Điều chuyển / Nghỉ việc"><LogOut className="w-3.5 h-3.5" /></button>
+              <button onClick={() => handleOffboardClick(item)} className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-md transition-colors border border-transparent hover:border-orange-200" title="Điều chuyển / Nghỉ việc"><ArrowRightLeft className="w-3.5 h-3.5" /></button>
             </>
           )}
           {(item.trang_thai === 'Đã nghỉ việc' || item.trang_thai === 'Đã điều chuyển') && (
@@ -243,7 +243,7 @@ const PersonnelMobileCard = React.memo(({ item, props }: any) => {
           <>
             <button onClick={() => handleDuplicate(item)} className="p-1.5 text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Kiêm nhiệm"><Copy className="w-3.5 h-3.5" /> Kiêm nhiệm</button>
             <button onClick={() => openModal('update', item)} className="p-1.5 text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Sửa"><Edit className="w-3.5 h-3.5" /> Sửa</button>
-            <button onClick={() => handleOffboardClick(item)} className="p-1.5 text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Điều chuyển / Nghỉ việc"><LogOut className="w-3.5 h-3.5" /> Chuyển/Nghỉ</button>
+            <button onClick={() => handleOffboardClick(item)} className="p-1.5 text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-2xs" title="Điều chuyển / Nghỉ việc"><ArrowRightLeft className="w-3.5 h-3.5" /> Chuyển/Nghỉ</button>
           </>
         )}
         {(item.trang_thai === 'Đã nghỉ việc' || item.trang_thai === 'Đã điều chuyển') && (
@@ -332,9 +332,37 @@ export default function PersonnelPage() {
   const [checkingAssets, setCheckingAssets] = useState(false);
 
   // Thêm state cho Điều chuyển / Nghỉ việc
-  const [transferType, setTransferType] = useState<'INTERNAL' | 'EXTERNAL' | 'OFFBOARD'>('OFFBOARD');
+  const [transferType, setTransferType] = useState<'INTERNAL' | 'EXTERNAL' | 'OFFBOARD'>('INTERNAL');
   const [transferInternalUnitId, setTransferInternalUnitId] = useState('');
   const [transferExternalUnitName, setTransferExternalUnitName] = useState('');
+  const [transferDiaDiem, setTransferDiaDiem] = useState('');
+  const [transferKhoi, setTransferKhoi] = useState('');
+  const [transferPhongBan, setTransferPhongBan] = useState('');
+  const [transferChucDanh, setTransferChucDanh] = useState('');
+  const [transferChucVu, setTransferChucVu] = useState('');
+
+  const [transferSimAction, setTransferSimAction] = useState<'TRANSFER' | 'REVOKE'>('TRANSFER');
+  const [personnelThueBao, setPersonnelThueBao] = useState<any | null>(null);
+  const [transferAssetActions, setTransferAssetActions] = useState<Record<string, 'TRANSFER' | 'REVOKE'>>({});
+
+  const khoiOptions = useMemo(() => {
+    const base = [
+      'KD Xe & SBH Xe DL',
+      'KD Xe & DV SBH Xe TM',
+      'KD xe DL',
+      'KD xe Thương mại & Xuất khẩu',
+      'Khối Bán lẻ',
+      'KD DVPT',
+      'NVQT Chuyên ngành',
+      'NVQT Cơ bản',
+      'Nghiệp vụ'
+    ];
+    data.forEach(p => {
+      const k = String(p.khoi || '').trim();
+      if (k && !base.includes(k)) base.push(k);
+    });
+    return base;
+  }, [data]);
 
   const [isRehireModalOpen, setIsRehireModalOpen] = useState(false);
   const [personnelToRehire, setPersonnelToRehire] = useState<any | null>(null);
@@ -430,7 +458,7 @@ export default function PersonnelPage() {
     };
   }, [donViLookupMap]);
 
-  const allowedDonViIds = useAllowedUnits(donViList);
+  const allowedDonViIds = useAllowedUnits(donViList, 'NhanSu');
 
   const hasInitializedRef = useRef(false);
 
@@ -1473,7 +1501,23 @@ export default function PersonnelPage() {
 
       // 3. Điều chuyển / Nghỉ việc dôi dư
       for (const [msnv, offboardInfo] of pendingOffboards.entries()) {
-        await apiService.save(offboardInfo.updatedData, 'update', 'ns_dich_vu');
+        const fieldsToExclude = ['ngay_sinh', 'email_ca_nhan', 'id_phap_nhan', 'ten_phap_nhan', 'ten_don_vi', 'ngay_nhan_viec', 'phan_loai'];
+        const cleanDataToSave = { ...offboardInfo.updatedData };
+        fieldsToExclude.forEach(f => { delete (cleanDataToSave as any)[f]; });
+        await apiService.save(cleanDataToSave, 'update', 'ns_dich_vu');
+        if (offboardInfo.simPayload) {
+          await apiService.save(offboardInfo.simPayload, 'update', 'dm_thue_bao');
+        }
+        if (offboardInfo.assetTasks && Array.isArray(offboardInfo.assetTasks)) {
+          for (const task of offboardInfo.assetTasks) {
+            if (task.deviceUpdate) {
+              await apiService.save(task.deviceUpdate, 'update', 'ts_thiet_bi');
+            }
+            if (task.nkPayload) {
+              await apiService.save(task.nkPayload, 'create', 'nk_thiet_bi');
+            }
+          }
+        }
         offboardCount++;
       }
 
@@ -1534,10 +1578,61 @@ export default function PersonnelPage() {
   };
 
   const handleOffboardClick = async (item: any) => {
-    setPersonnelToOffboard(item); setCheckingAssets(true); setForceOffboard(false); setIsOffboardOpen(true); setUnreturnedAssets([]);
+    setPersonnelToOffboard(item);
+    setCheckingAssets(true);
+    setForceOffboard(false);
+    setIsOffboardOpen(true);
+    setUnreturnedAssets([]);
+    setPersonnelThueBao(null);
+    setTransferSimAction('TRANSFER');
+    setTransferAssetActions({});
+
+    // Kiểm tra xem nhân sự này đã có cấu hình trong đợt bulk import dôi dư chưa
+    const existingPending = pendingOffboards.get(item.ma_so_nhan_vien);
+    if (existingPending) {
+      setTransferType(existingPending.transferType || 'INTERNAL');
+      setTransferInternalUnitId(existingPending.transferInternalUnitId || '');
+      setTransferDiaDiem(existingPending.transferDiaDiem !== undefined ? existingPending.transferDiaDiem : (item.dia_diem_lam_viec || ''));
+      setTransferKhoi(existingPending.transferKhoi !== undefined ? existingPending.transferKhoi : (item.khoi || ''));
+      setTransferPhongBan(existingPending.transferPhongBan !== undefined ? existingPending.transferPhongBan : (item.phong_ban || ''));
+      setTransferChucDanh(existingPending.transferChucDanh !== undefined ? existingPending.transferChucDanh : (item.chuc_danh || ''));
+      setTransferChucVu(existingPending.transferChucVu !== undefined ? existingPending.transferChucVu : (item.chuc_vu || ''));
+      setTransferExternalUnitName(existingPending.transferExternalUnitName || '');
+      if (existingPending.transferSimAction) setTransferSimAction(existingPending.transferSimAction);
+      if (existingPending.transferAssetActions) setTransferAssetActions(existingPending.transferAssetActions);
+    } else {
+      setTransferType('INTERNAL');
+      setTransferInternalUnitId('');
+      setTransferDiaDiem(item.dia_diem_lam_viec || '');
+      setTransferKhoi(item.khoi || '');
+      setTransferPhongBan(item.phong_ban || '');
+      setTransferChucDanh(item.chuc_danh || '');
+      setTransferChucVu(item.chuc_vu || '');
+      setTransferExternalUnitName('');
+    }
+
     try {
-      const [thietBiRaw, nhatKyRaw] = await Promise.all([apiService.getThietBi(), apiService.getNhatKyThietBi()]);
-      const thietBiList: ThietBi[] = thietBiRaw || []; const nhatKyList: any[] = nhatKyRaw || [];
+      const [thietBiRaw, nhatKyRaw, thueBaoRaw] = await Promise.all([
+        apiService.getThietBi(),
+        apiService.getNhatKyThietBi(),
+        apiService.getThueBao ? apiService.getThueBao() : Promise.resolve([])
+      ]);
+      const thietBiList: ThietBi[] = thietBiRaw || [];
+      const nhatKyList: any[] = nhatKyRaw || [];
+      const thueBaoList: any[] = thueBaoRaw || [];
+
+      // 1. Quét tìm thông tin Thuê bao SIM công ty của nhân sự
+      const cleanPhone = (item.sdt_cong_ty || '').replace(/\D/g, '');
+      const cleanPhoneWithZero = cleanPhone.length === 9 ? '0' + cleanPhone : cleanPhone;
+      const matchedTb = thueBaoList.find((tb: any) => {
+        const tbPhone = (tb.so_dien_thoai || '').replace(/\D/g, '');
+        const tbPhoneWithZero = tbPhone.length === 9 ? '0' + tbPhone : tbPhone;
+        return (item.id && String(tb.id_nhan_su) === String(item.id)) ||
+               (cleanPhoneWithZero && tbPhoneWithZero === cleanPhoneWithZero);
+      });
+      setPersonnelThueBao(matchedTb || null);
+
+      // 2. Quét tìm danh sách Trang thiết bị nhân sự đang nắm giữ
       const latestLogsMap: Record<string, any> = {};
       nhatKyList.forEach(log => {
         const ttbId = log.id_ts_thiet_bi;
@@ -1546,45 +1641,298 @@ export default function PersonnelPage() {
         }
       });
       const foundAssets: any[] = [];
+      const initialAssetActions: Record<string, 'TRANSFER' | 'REVOKE'> = {};
       Object.values(latestLogsMap).forEach(log => {
-        if (log.msnv_nguoi_dung === item.ma_so_nhan_vien && log.loai_nhat_ky !== 'Báo hỏng') {
+        if (
+          log.msnv_nguoi_dung === item.ma_so_nhan_vien &&
+          log.loai_nhat_ky !== 'Báo hỏng' &&
+          log.loai_nhat_ky !== 'Thu hồi lưu kho' &&
+          log.loai_nhat_ky !== 'Thu hồi'
+        ) {
           const assetInfo = thietBiList.find(tb => tb.id === log.id_ts_thiet_bi);
-          if (assetInfo) foundAssets.push({ id: assetInfo.ma_tai_san || assetInfo.id, name: assetInfo.ten_thiet_bi, group: assetInfo.nhom_thiet_bi, sn: assetInfo.so_seri || '-', date: new Date(log.ngay_ghi_nhan).toLocaleDateString('vi-VN') });
+          if (assetInfo) {
+            const rawId = assetInfo.id;
+            foundAssets.push({
+              id: assetInfo.ma_tai_san || assetInfo.id,
+              rawId,
+              rawDevice: assetInfo,
+              name: assetInfo.ten_thiet_bi,
+              group: assetInfo.nhom_thiet_bi,
+              sn: assetInfo.so_seri || '-',
+              date: new Date(log.ngay_ghi_nhan).toLocaleDateString('vi-VN')
+            });
+            initialAssetActions[rawId] = existingPending?.transferAssetActions?.[rawId] || 'TRANSFER';
+          }
         }
       });
       setUnreturnedAssets(foundAssets);
-    } catch (err) { alert("Cảnh báo: Không thể kiểm tra CSDL Tài sản."); setIsOffboardOpen(false); }
-    finally { setCheckingAssets(false); }
+      setTransferAssetActions(initialAssetActions);
+    } catch (err) {
+      console.error("Lỗi quét tài sản/SIM:", err);
+      toast.error("Cảnh báo: Không thể kiểm tra CSDL Tài sản & Thuê bao.");
+      setIsOffboardOpen(false);
+    } finally {
+      setCheckingAssets(false);
+    }
   };
 
   const confirmOffboard = async () => {
     if (!personnelToOffboard) return;
-    if (unreturnedAssets.length > 0 && !forceOffboard) { alert("Vui lòng xử lý tài sản!"); return; }
+    if (transferType !== 'INTERNAL' && unreturnedAssets.length > 0 && !forceOffboard) {
+      toast.warning("Vui lòng xử lý tài sản hoặc tick xác nhận!");
+      return;
+    }
 
     if (transferType === 'INTERNAL' && !transferInternalUnitId) {
-      alert("Vui lòng chọn đơn vị đích nội bộ!");
+      toast.warning("Vui lòng chọn Đơn vị đích nội bộ!");
       return;
     }
     if (transferType === 'EXTERNAL' && !transferExternalUnitName.trim()) {
-      alert("Vui lòng nhập tên đơn vị / công ty ngoài!");
+      toast.warning("Vui lòng nhập tên đơn vị / công ty ngoài!");
       return;
     }
 
     setSubmitting(true);
     try {
       let updatedData: any = { ...personnelToOffboard };
+      const today = new Date().toISOString().split('T')[0];
+      let simUpdated = false;
+      let assetTransferCount = 0;
+      let assetRevokeCount = 0;
+
+      let simPayload: any = null;
+      const assetTasks: any[] = [];
 
       if (transferType === 'OFFBOARD') {
         updatedData.trang_thai = 'Đã nghỉ việc';
-        updatedData.ngay_nghi_viec = new Date().toISOString().split('T')[0];
+        updatedData.ngay_nghi_viec = today;
+
+        // Tự động thu hồi SIM nếu có
+        if (personnelThueBao) {
+          let historyList: any[] = [];
+          try {
+            historyList = typeof personnelThueBao.lich_su_nsd === 'string'
+              ? JSON.parse(personnelThueBao.lich_su_nsd)
+              : (personnelThueBao.lich_su_nsd || []);
+          } catch { historyList = []; }
+          const openEntry = historyList.find((e: any) => !e.den_ngay);
+          if (openEntry) openEntry.den_ngay = today;
+          historyList.push({
+            ho_ten: personnelToOffboard.ho_ten,
+            ma_so_nv: personnelToOffboard.ma_so_nhan_vien,
+            tu_ngay: today,
+            den_ngay: today,
+            ly_do: 'Thu hồi SIM do nhân sự nghỉ việc',
+            nguoi_ghi: user?.ho_ten || 'Hệ thống'
+          });
+          simPayload = {
+            ...personnelThueBao,
+            trang_thai: 'Đã thu hồi - Chờ tái cấp',
+            id_nhan_su: null,
+            ma_so_nv: '',
+            ho_ten_nv: '',
+            lich_su_nsd: historyList,
+            updated_at: new Date().toISOString()
+          };
+          updatedData.sdt_cong_ty = '';
+        }
+
+        // Tự động ghi log Thu hồi lưu kho cho thiết bị nếu tick forceOffboard
+        for (const asset of unreturnedAssets) {
+          assetTasks.push({
+            nkPayload: {
+              id: `NK-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              id_ts_thiet_bi: asset.rawId,
+              id_don_vi: personnelToOffboard.id_don_vi,
+              ngay_ghi_nhan: today,
+              loai_nhat_ky: 'Thu hồi lưu kho',
+              chi_phi: '',
+              msnv_nguoi_dung: '',
+              ho_ten_nguoi_dung: '',
+              bp_quan_ly_su_dung: '',
+              tinh_trang_ghi_nhan_thiet_bi: 'Bình thường',
+              ghi_chu_sua_chua_nang_cap: `Thu hồi lưu kho do nhân sự ${personnelToOffboard.ho_ten} nghỉ việc`
+            }
+          });
+        }
       } else if (transferType === 'EXTERNAL') {
         updatedData.trang_thai = 'Đã điều chuyển';
-        updatedData.ngay_nghi_viec = new Date().toISOString().split('T')[0];
-        updatedData.ghi_chu = `[Đã điều chuyển ra ngoài: ${transferExternalUnitName}] ` + (updatedData.ghi_chu || '');
+        updatedData.ngay_nghi_viec = today;
+        updatedData.ghi_chu = `[Đã điều chuyển ra ngoài: ${transferExternalUnitName.trim()}] ` + (updatedData.ghi_chu || '');
+
+        // Tự động thu hồi SIM nếu có
+        if (personnelThueBao) {
+          let historyList: any[] = [];
+          try {
+            historyList = typeof personnelThueBao.lich_su_nsd === 'string'
+              ? JSON.parse(personnelThueBao.lich_su_nsd)
+              : (personnelThueBao.lich_su_nsd || []);
+          } catch { historyList = []; }
+          const openEntry = historyList.find((e: any) => !e.den_ngay);
+          if (openEntry) openEntry.den_ngay = today;
+          historyList.push({
+            ho_ten: personnelToOffboard.ho_ten,
+            ma_so_nv: personnelToOffboard.ma_so_nhan_vien,
+            tu_ngay: today,
+            den_ngay: today,
+            ly_do: `Thu hồi SIM do điều chuyển ra ngoài (${transferExternalUnitName.trim()})`,
+            nguoi_ghi: user?.ho_ten || 'Hệ thống'
+          });
+          simPayload = {
+            ...personnelThueBao,
+            trang_thai: 'Đã thu hồi - Chờ tái cấp',
+            id_nhan_su: null,
+            ma_so_nv: '',
+            ho_ten_nv: '',
+            lich_su_nsd: historyList,
+            updated_at: new Date().toISOString()
+          };
+          updatedData.sdt_cong_ty = '';
+        }
+
+        // Tự động ghi log Thu hồi lưu kho cho thiết bị nếu tick forceOffboard
+        for (const asset of unreturnedAssets) {
+          assetTasks.push({
+            nkPayload: {
+              id: `NK-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              id_ts_thiet_bi: asset.rawId,
+              id_don_vi: personnelToOffboard.id_don_vi,
+              ngay_ghi_nhan: today,
+              loai_nhat_ky: 'Thu hồi lưu kho',
+              chi_phi: '',
+              msnv_nguoi_dung: '',
+              ho_ten_nguoi_dung: '',
+              bp_quan_ly_su_dung: '',
+              tinh_trang_ghi_nhan_thiet_bi: 'Bình thường',
+              ghi_chu_sua_chua_nang_cap: `Thu hồi lưu kho do nhân sự ${personnelToOffboard.ho_ten} điều chuyển ra ngoài`
+            }
+          });
+        }
       } else if (transferType === 'INTERNAL') {
+        const targetUnit = donViList.find(d => String(d.id) === String(transferInternalUnitId));
+        const targetUnitName = targetUnit?.ten_don_vi || donViMap[transferInternalUnitId] || 'đơn vị mới';
+        const targetPn = phapNhanList.find(p => String(p.id) === String(targetUnit?.id_phap_nhan));
+
         updatedData.id_don_vi = transferInternalUnitId;
+        updatedData.ten_don_vi = targetUnitName;
+        updatedData.dia_diem_lam_viec = transferDiaDiem.trim();
+        updatedData.khoi = transferKhoi.trim();
+        updatedData.phong_ban = transferPhongBan.trim();
+        updatedData.chuc_danh = transferChucDanh.trim();
+        updatedData.chuc_vu = transferChucVu.trim();
+        if (!updatedData.trang_thai || updatedData.trang_thai === 'Đã nghỉ việc' || updatedData.trang_thai === 'Đã điều chuyển') {
+          updatedData.trang_thai = 'Đang làm việc';
+        }
+        if (updatedData.ghi_chu) {
+          updatedData.ghi_chu = updatedData.ghi_chu.replace(/^\[Đã điều chuyển ra ngoài:[^\]]*\]\s*/, '');
+        }
+
+        // 1. XỬ LÝ SIM CÔNG TY
+        if (personnelThueBao) {
+          let historyList: any[] = [];
+          try {
+            historyList = typeof personnelThueBao.lich_su_nsd === 'string'
+              ? JSON.parse(personnelThueBao.lich_su_nsd)
+              : (personnelThueBao.lich_su_nsd || []);
+          } catch { historyList = []; }
+
+          const openEntry = historyList.find((e: any) => !e.den_ngay);
+
+          if (transferSimAction === 'REVOKE') {
+            // Đơn vị cũ thu hồi lại SIM
+            if (openEntry) openEntry.den_ngay = today;
+            historyList.push({
+              ho_ten: personnelToOffboard.ho_ten,
+              ma_so_nv: personnelToOffboard.ma_so_nhan_vien,
+              tu_ngay: today,
+              den_ngay: today,
+              ly_do: `Thu hồi SIM khi nhân sự điều chuyển sang ${targetUnitName}`,
+              nguoi_ghi: user?.ho_ten || 'Hệ thống'
+            });
+
+            simPayload = {
+              ...personnelThueBao,
+              trang_thai: 'Đã thu hồi - Chờ tái cấp',
+              id_nhan_su: null,
+              ma_so_nv: '',
+              ho_ten_nv: '',
+              lich_su_nsd: historyList,
+              updated_at: new Date().toISOString()
+            };
+            updatedData.sdt_cong_ty = '';
+            simUpdated = true;
+          } else {
+            // Điều chuyển SIM sang đơn vị mới cùng nhân sự
+            if (openEntry) openEntry.den_ngay = today;
+            historyList.push({
+              ho_ten: personnelToOffboard.ho_ten,
+              ma_so_nv: personnelToOffboard.ma_so_nhan_vien,
+              tu_ngay: today,
+              den_ngay: '',
+              ly_do: `Điều chuyển nội bộ cùng nhân sự sang ${targetUnitName}`,
+              nguoi_ghi: user?.ho_ten || 'Hệ thống'
+            });
+
+            simPayload = {
+              ...personnelThueBao,
+              id_don_vi: transferInternalUnitId,
+              id_phap_nhan: targetUnit?.id_phap_nhan || personnelThueBao.id_phap_nhan || '',
+              ten_phap_nhan: targetPn?.ten_cong_ty || targetPn?.ten_phap_nhan || personnelThueBao.ten_phap_nhan || '',
+              ten_bo_phan: transferPhongBan || personnelThueBao.ten_bo_phan || '',
+              lich_su_nsd: historyList,
+              updated_at: new Date().toISOString()
+            };
+            simUpdated = true;
+          }
+        }
+
+        // 2. XỬ LÝ TRANG THIẾT BỊ
+        for (const asset of unreturnedAssets) {
+          const action = transferAssetActions[asset.rawId] || 'TRANSFER';
+          if (action === 'TRANSFER') {
+            assetTasks.push({
+              deviceUpdate: {
+                ...asset.rawDevice,
+                id_don_vi: transferInternalUnitId
+              },
+              nkPayload: {
+                id: `NK-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                id_ts_thiet_bi: asset.rawId,
+                id_don_vi: transferInternalUnitId,
+                id_don_vi_nhan: transferInternalUnitId,
+                ngay_ghi_nhan: today,
+                loai_nhat_ky: 'Điều chuyển đơn vị',
+                chi_phi: '',
+                msnv_nguoi_dung: personnelToOffboard.ma_so_nhan_vien,
+                ho_ten_nguoi_dung: personnelToOffboard.ho_ten,
+                bp_quan_ly_su_dung: transferPhongBan || '',
+                tinh_trang_ghi_nhan_thiet_bi: 'Bình thường',
+                ghi_chu_sua_chua_nang_cap: `Điều chuyển cùng nhân sự ${personnelToOffboard.ho_ten} sang ${targetUnitName}`
+              }
+            });
+            assetTransferCount++;
+          } else {
+            assetTasks.push({
+              nkPayload: {
+                id: `NK-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                id_ts_thiet_bi: asset.rawId,
+                id_don_vi: personnelToOffboard.id_don_vi,
+                ngay_ghi_nhan: today,
+                loai_nhat_ky: 'Thu hồi lưu kho',
+                chi_phi: '',
+                msnv_nguoi_dung: '',
+                ho_ten_nguoi_dung: '',
+                bp_quan_ly_su_dung: '',
+                tinh_trang_ghi_nhan_thiet_bi: 'Bình thường',
+                ghi_chu_sua_chua_nang_cap: `Thu hồi lưu kho khi nhân sự ${personnelToOffboard.ho_ten} điều chuyển sang ${targetUnitName}`
+              }
+            });
+            assetRevokeCount++;
+          }
+        }
       }
 
+      // 3. LƯU CẬP NHẬT HỒ SƠ NHÂN SỰ
       if (isBulkImportOpen) {
         setPendingOffboards(prev => {
           const next = new Map(prev);
@@ -1592,19 +1940,65 @@ export default function PersonnelPage() {
             updatedData,
             transferType,
             transferInternalUnitId,
-            transferExternalUnitName
+            transferExternalUnitName,
+            transferDiaDiem,
+            transferKhoi,
+            transferPhongBan,
+            transferChucDanh,
+            transferChucVu,
+            transferSimAction,
+            transferAssetActions,
+            simPayload,
+            assetTasks
           });
           return next;
         });
         setIsOffboardOpen(false);
         setPersonnelToOffboard(null);
       } else {
-        await apiService.save(updatedData, "update", "ns_dich_vu");
+        // Thực hiện lưu trực tiếp cho trường hợp thao tác đơn lẻ trên danh sách
+        if (simPayload) {
+          await apiService.save(simPayload, 'update', 'dm_thue_bao');
+        }
+        for (const task of assetTasks) {
+          if (task.deviceUpdate) {
+            await apiService.save(task.deviceUpdate, 'update', 'ts_thiet_bi');
+          }
+          if (task.nkPayload) {
+            await apiService.save(task.nkPayload, 'create', 'nk_thiet_bi');
+          }
+        }
+        const fieldsToExclude = ['ngay_sinh', 'email_ca_nhan', 'id_phap_nhan', 'ten_phap_nhan', 'ten_don_vi', 'ngay_nhan_viec', 'phan_loai'];
+        const cleanDataToSave = { ...updatedData };
+        fieldsToExclude.forEach(f => { delete (cleanDataToSave as any)[f]; });
+        await apiService.save(cleanDataToSave, "update", "ns_dich_vu");
         setData(prev => prev.map(item => item.id === personnelToOffboard.id ? updatedData : item));
         setIsOffboardOpen(false);
         setPersonnelToOffboard(null);
+
+        if (transferType === 'INTERNAL') {
+          const targetUnitName = donViMap[transferInternalUnitId] || 'đơn vị mới';
+          const details: string[] = [];
+          if (personnelThueBao) {
+            details.push(transferSimAction === 'TRANSFER' ? 'chuyển 1 SIM' : 'thu hồi 1 SIM');
+          }
+          if (assetTransferCount > 0) details.push(`chuyển ${assetTransferCount} thiết bị`);
+          if (assetRevokeCount > 0) details.push(`thu hồi ${assetRevokeCount} thiết bị`);
+          const detailMsg = details.length > 0 ? ` (${details.join(', ')})` : '';
+
+          toast.success(`Đã điều chuyển nội bộ nhân sự ${personnelToOffboard.ho_ten} sang ${targetUnitName}${detailMsg} thành công!`);
+        } else if (transferType === 'EXTERNAL') {
+          toast.success(`Đã xác nhận điều chuyển ra ngoài cho nhân sự ${personnelToOffboard.ho_ten}!`);
+        } else {
+          toast.success(`Đã xác nhận nghỉ việc cho nhân sự ${personnelToOffboard.ho_ten}!`);
+        }
       }
-    } catch (err: any) { alert("Lỗi: " + err.message); } finally { setSubmitting(false); }
+    } catch (err: any) {
+      console.error("Lỗi lưu dữ liệu điều chuyển:", err);
+      toast.error("Lỗi: " + (err.message || 'Không thể lưu thông tin'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleExportExcel = () => {
@@ -3036,41 +3430,130 @@ export default function PersonnelPage() {
 
       {isOffboardOpen && personnelToOffboard && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-in zoom-in duration-200 overflow-hidden">
-            <div className="bg-orange-500 text-white p-5 flex items-start justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] animate-in zoom-in duration-200 overflow-hidden">
+            <div className={`text-white p-5 flex items-start justify-between transition-colors ${transferType === 'INTERNAL' ? 'bg-[#00539c]' : transferType === 'EXTERNAL' ? 'bg-indigo-600' : 'bg-orange-500'}`}>
               <div className="flex gap-4 items-center">
-                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0 border border-white/40"><LogOut size={24} /></div>
-                <div><h3 className="text-xl font-black mb-1">Điều chuyển / Nghỉ việc</h3><p className="text-orange-100 text-sm font-medium">{personnelToOffboard.ho_ten} - {personnelToOffboard.ma_so_nhan_vien}</p></div>
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center shrink-0 border border-white/40">
+                  {transferType === 'INTERNAL' || transferType === 'EXTERNAL' ? <Building2 size={24} /> : <LogOut size={24} />}
+                </div>
+                <div>
+                  <h3 className="text-xl font-black mb-1">
+                    {transferType === 'INTERNAL' ? 'Điều chuyển Nội bộ' : transferType === 'EXTERNAL' ? 'Điều chuyển Ra ngoài' : 'Thủ tục Nghỉ việc'}
+                  </h3>
+                  <p className="text-white/85 text-sm font-medium">{personnelToOffboard.ho_ten} - {personnelToOffboard.ma_so_nhan_vien}</p>
+                </div>
               </div>
-              <button onClick={() => setIsOffboardOpen(false)} className="text-orange-100 hover:text-white p-1 rounded-full"><X size={24} /></button>
+              <button onClick={() => setIsOffboardOpen(false)} className="text-white/80 hover:text-white p-1 rounded-full"><X size={24} /></button>
             </div>
             <div className="p-6 overflow-y-auto custom-scrollbar">
               <div className="mb-6 flex flex-col sm:flex-row gap-3">
-                <label className={`flex-1 border p-3 rounded-xl cursor-pointer font-bold flex flex-col items-center gap-2 transition-all ${transferType === 'INTERNAL' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
+                <label className={`flex-1 border p-3 rounded-xl cursor-pointer font-bold flex flex-col items-center gap-2 transition-all ${transferType === 'INTERNAL' ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-2xs' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
                   <input type="radio" name="transferType" value="INTERNAL" checked={transferType === 'INTERNAL'} onChange={() => setTransferType('INTERNAL')} className="hidden" />
                   <Building2 size={20} /> Nội bộ
                 </label>
-                <label className={`flex-1 border p-3 rounded-xl cursor-pointer font-bold flex flex-col items-center gap-2 transition-all ${transferType === 'EXTERNAL' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
+                <label className={`flex-1 border p-3 rounded-xl cursor-pointer font-bold flex flex-col items-center gap-2 transition-all ${transferType === 'EXTERNAL' ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-2xs' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
                   <input type="radio" name="transferType" value="EXTERNAL" checked={transferType === 'EXTERNAL'} onChange={() => setTransferType('EXTERNAL')} className="hidden" />
                   <Building2 size={20} /> Ra ngoài
                 </label>
-                <label className={`flex-1 border p-3 rounded-xl cursor-pointer font-bold flex flex-col items-center gap-2 transition-all ${transferType === 'OFFBOARD' ? 'bg-orange-50 border-orange-500 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
+                <label className={`flex-1 border p-3 rounded-xl cursor-pointer font-bold flex flex-col items-center gap-2 transition-all ${transferType === 'OFFBOARD' ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-2xs' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}>
                   <input type="radio" name="transferType" value="OFFBOARD" checked={transferType === 'OFFBOARD'} onChange={() => setTransferType('OFFBOARD')} className="hidden" />
                   <LogOut size={20} /> Nghỉ việc
                 </label>
               </div>
 
               {transferType === 'INTERNAL' && (
-                <div className="mb-6">
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Chọn Đơn vị mới *</label>
-                  <select value={transferInternalUnitId} onChange={e => setTransferInternalUnitId(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm font-medium" style={{ fontFamily: 'monospace, sans-serif' }}>
-                    <option value="">-- Chọn đơn vị đích --</option>
-                    {buildHierarchicalOptions(donViList).map(({ unit, prefix }) => (
-                      <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
-                        {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi}
-                      </option>
-                    ))}
-                  </select>
+                <div className="mb-6 p-4 bg-blue-50/50 rounded-2xl border border-blue-200/80 space-y-4 shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase text-blue-900 tracking-wider">
+                    <Building2 size={16} className="text-blue-600" /> Thông tin điều chuyển nội bộ mới
+                  </div>
+
+                  {/* Dòng 1: Chọn Đơn vị mới | Địa điểm làm việc */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
+                    <div className="md:col-span-7">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Chọn Đơn vị mới <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={transferInternalUnitId}
+                        onChange={e => setTransferInternalUnitId(e.target.value)}
+                        className="w-full p-2.5 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-xs font-medium text-xs sm:text-sm text-gray-800"
+                        style={{ fontFamily: 'monospace, sans-serif' }}
+                      >
+                        <option value="">-- Chọn đơn vị đích --</option>
+                        {buildHierarchicalOptions(donViList).map(({ unit, prefix }) => {
+                          const isCurrent = personnelToOffboard && String(unit.id) === String(personnelToOffboard.id_don_vi);
+                          return (
+                            <option key={unit.id} value={unit.id} className="font-normal text-gray-700">
+                              {prefix}{getUnitEmoji(unit.loai_hinh)} {unit.ten_don_vi} {isCurrent ? ' (Đang công tác)' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <div className="md:col-span-5">
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm làm việc</label>
+                      <input
+                        type="text"
+                        value={transferDiaDiem}
+                        onChange={e => setTransferDiaDiem(e.target.value)}
+                        placeholder="VD: Showroom Bình Dương, Xưởng..."
+                        className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-xs text-xs sm:text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dòng 2: Khối trực thuộc | Bộ phận làm việc | Chức danh | Chức vụ */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Khối trực thuộc</label>
+                      <select
+                        value={transferKhoi}
+                        onChange={e => setTransferKhoi(e.target.value)}
+                        className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-xs text-xs sm:text-sm"
+                      >
+                        <option value="">-- Chọn Khối --</option>
+                        {khoiOptions.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Bộ phận làm việc</label>
+                      <input
+                        type="text"
+                        value={transferPhongBan}
+                        onChange={e => setTransferPhongBan(e.target.value)}
+                        placeholder="VD: Hành chính, Kỹ thuật..."
+                        className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-xs text-xs sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Chức danh</label>
+                      <input
+                        type="text"
+                        list="transfer-chuc-danh-suggestions"
+                        value={transferChucDanh}
+                        onChange={e => setTransferChucDanh(e.target.value)}
+                        placeholder="Nhập hoặc chọn chức danh..."
+                        className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-xs text-xs sm:text-sm"
+                      />
+                      <datalist id="transfer-chuc-danh-suggestions">
+                        {chucDanhSuggestions.map(opt => (
+                          <option key={opt} value={opt} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Chức vụ</label>
+                      <input
+                        type="text"
+                        value={transferChucVu}
+                        onChange={e => setTransferChucVu(e.target.value)}
+                        placeholder="VD: Nhân viên, KTV..."
+                        className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-xs text-xs sm:text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -3081,49 +3564,256 @@ export default function PersonnelPage() {
                 </div>
               )}
 
-              {personnelToOffboard.sdt_cong_ty && (
-                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex gap-3 mb-4">
-                  <Phone className="text-yellow-600 shrink-0 w-6 h-6" />
-                  <div><h4 className="font-black text-yellow-800 mb-1">CẢNH BÁO: Thu hồi SIM Công ty!</h4><p className="text-sm text-yellow-700 font-medium">Nhân sự này đang được cấp số điện thoại: <span className="font-black text-yellow-900">{formatPhoneNumber(personnelToOffboard.sdt_cong_ty)}</span>. Vui lòng yêu cầu bàn giao lại SIM công ty trước khi hoàn tất thủ tục nghỉ việc.</p></div>
-                </div>
-              )}
-              {checkingAssets ? (
-                <div className="flex flex-col items-center justify-center py-12 border border-gray-100 rounded-xl"><Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" /><p className="text-gray-600 font-bold">Đang quét hệ thống Tài sản & Nhật ký...</p></div>
-              ) : unreturnedAssets.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex gap-3">
-                    <AlertTriangle className="text-red-500 shrink-0 w-6 h-6" />
-                    <div>
-                      <h4 className="font-black text-red-700 mb-1">CẢNH BÁO: Nhân sự đang giữ Tài sản!</h4>
-                      <p className="text-sm text-red-600 font-medium mb-3">Hệ thống phát hiện nhân sự này đang là người nhận cuối cùng của các tài sản dưới đây. Vui lòng thu hồi hoặc bàn giao trước khi cho nghỉ.</p>
-                      <div className="bg-white rounded-lg border border-red-100 overflow-hidden">
-                        <table className="w-full text-left text-sm">
-                          <thead className="bg-red-50/50"><tr className="text-red-800 font-bold"><th className="p-2 border-b border-red-100">Mã / Tên Tài sản</th><th className="p-2 border-b border-red-100">S/N</th><th className="p-2 border-b border-red-100 text-right">Ngày nhận</th></tr></thead>
-                          <tbody className="divide-y divide-red-50">
-                            {unreturnedAssets.map((asset, idx) => (
-                              <tr key={idx} className="border-b border-red-50 last:border-0 hover:bg-red-50/30">
-                                <td className="p-2"><p className="font-bold text-gray-800">{asset.name}</p><p className="text-[10px] text-gray-500">{asset.id} • {asset.group}</p></td>
-                                <td className="p-2 font-mono text-xs text-gray-600">{asset.sn}</td>
-                                <td className="p-2 text-right font-medium text-red-600">{asset.date}</td>
-                              </tr>
-                            ))}
+              {/* 🟢 KHỐI DÀNH RIÊNG CHO ĐIỀU CHUYỂN NỘI BỘ: XỬ LÝ SIM VÀ TRANG THIẾT BỊ */}
+              {transferType === 'INTERNAL' ? (
+                <div className="space-y-5">
+                  {/* 1. XỬ LÝ SIM / SĐT CÔNG TY */}
+                  {(personnelToOffboard.sdt_cong_ty || personnelThueBao) && (
+                    <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 shadow-2xs space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-2 text-xs font-black uppercase text-amber-900 tracking-wider">
+                          <Phone size={16} className="text-amber-600 shrink-0" />
+                          <span>Phương án SIM & Cước ĐTDĐ Công ty</span>
+                        </div>
+                        <span className="font-mono font-bold text-xs bg-white text-amber-900 px-2.5 py-1 rounded-lg border border-amber-300 shadow-2xs w-fit">
+                          {formatPhoneNumber(personnelToOffboard.sdt_cong_ty || personnelThueBao?.so_dien_thoai)}
+                          {personnelThueBao?.nha_mang ? ` (${personnelThueBao.nha_mang})` : ''}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${
+                          transferSimAction === 'TRANSFER'
+                            ? 'border-blue-500 bg-white text-blue-900 shadow-xs ring-2 ring-blue-400/20'
+                            : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="transferSimAction"
+                              value="TRANSFER"
+                              checked={transferSimAction === 'TRANSFER'}
+                              onChange={() => setTransferSimAction('TRANSFER')}
+                              className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <span className="font-bold text-xs text-blue-800">🔄 Điều chuyển SIM sang Đơn vị mới</span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 pl-6 leading-relaxed">
+                            SIM đi cùng nhân sự sang đơn vị đích. Pháp nhân đơn vị mới tiếp tục chi trả cước.
+                          </p>
+                        </label>
+
+                        <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${
+                          transferSimAction === 'REVOKE'
+                            ? 'border-amber-500 bg-white text-amber-900 shadow-xs ring-2 ring-amber-400/20'
+                            : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name="transferSimAction"
+                              value="REVOKE"
+                              checked={transferSimAction === 'REVOKE'}
+                              onChange={() => setTransferSimAction('REVOKE')}
+                              className="w-4 h-4 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                            />
+                            <span className="font-bold text-xs text-amber-800">📥 Đơn vị cũ thu hồi lại SIM</span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 pl-6 leading-relaxed">
+                            Gỡ số khỏi nhân sự, chuyển về kho của đơn vị hiện tại để cấp cho người khác.
+                          </p>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. XỬ LÝ TRANG THIẾT BỊ / TÀI SẢN */}
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-800 tracking-wider">
+                        <Monitor size={16} className="text-[#05469B] shrink-0" />
+                        <span>Trang thiết bị đang giữ ({unreturnedAssets.length} thiết bị)</span>
+                      </div>
+                      {unreturnedAssets.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allTransfer: Record<string, 'TRANSFER' | 'REVOKE'> = {};
+                              unreturnedAssets.forEach(a => { allTransfer[a.rawId] = 'TRANSFER'; });
+                              setTransferAssetActions(allTransfer);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors cursor-pointer"
+                          >
+                            ⚡ Chuyển tất cả sang ĐV mới
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allRevoke: Record<string, 'TRANSFER' | 'REVOKE'> = {};
+                              unreturnedAssets.forEach(a => { allRevoke[a.rawId] = 'REVOKE'; });
+                              setTransferAssetActions(allRevoke);
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors cursor-pointer"
+                          >
+                            ⚡ Thu hồi tất cả về ĐV cũ
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {checkingAssets ? (
+                      <div className="flex flex-col items-center justify-center py-8 border border-gray-100 rounded-xl bg-gray-50/50">
+                        <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+                        <p className="text-gray-600 text-xs font-bold">Đang quét hệ thống Tài sản & Thuê bao...</p>
+                      </div>
+                    ) : unreturnedAssets.length === 0 ? (
+                      <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-100 text-emerald-800">
+                        <CheckCheck className="w-6 h-6 text-emerald-600 shrink-0" />
+                        <div className="text-xs">
+                          <p className="font-bold text-emerald-900">An toàn điều chuyển</p>
+                          <p className="text-emerald-700 mt-0.5">Nhân sự hiện không giữ thiết bị phần cứng nào thuộc đơn vị cũ.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200">
+                            <tr>
+                              <th className="p-2.5 border-r border-gray-200">Tên Thiết bị / Mã tài sản</th>
+                              <th className="p-2.5 w-32 border-r border-gray-200">Số Seri (S/N)</th>
+                              <th className="p-2.5 w-24 border-r border-gray-200 text-center">Ngày nhận</th>
+                              <th className="p-2.5 w-60 text-center">Phương án xử lý</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {unreturnedAssets.map((asset, idx) => {
+                              const currentAction = transferAssetActions[asset.rawId] || 'TRANSFER';
+                              return (
+                                <tr key={idx} className="hover:bg-blue-50/20 transition-colors">
+                                  <td className="p-2.5 border-r border-gray-100">
+                                    <p className="font-bold text-gray-800">{asset.name}</p>
+                                    <p className="text-[10px] text-gray-500 font-mono mt-0.5">{asset.id} • {asset.group}</p>
+                                  </td>
+                                  <td className="p-2.5 font-mono text-xs text-gray-600 border-r border-gray-100">{asset.sn}</td>
+                                  <td className="p-2.5 text-center text-gray-500 border-r border-gray-100">{asset.date}</td>
+                                  <td className="p-2 text-center">
+                                    <div className="inline-flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                                      <button
+                                        type="button"
+                                        onClick={() => setTransferAssetActions(prev => ({ ...prev, [asset.rawId]: 'TRANSFER' }))}
+                                        className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+                                          currentAction === 'TRANSFER'
+                                            ? 'bg-blue-600 text-white shadow-xs'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                      >
+                                        🔄 Chuyển sang ĐV mới
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setTransferAssetActions(prev => ({ ...prev, [asset.rawId]: 'REVOKE' }))}
+                                        className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+                                          currentAction === 'REVOKE'
+                                            ? 'bg-amber-600 text-white shadow-xs'
+                                            : 'text-gray-600 hover:text-gray-900'
+                                        }`}
+                                      >
+                                        📥 Thu hồi về ĐV cũ
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
-                    </div>
+                    )}
                   </div>
-                  <label className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
-                    <input type="checkbox" checked={forceOffboard} onChange={(e) => setForceOffboard(e.target.checked)} className="mt-1 w-5 h-5 rounded text-orange-500 focus:ring-orange-500 border-gray-300" />
-                    <span className="text-sm font-semibold text-gray-700">Tôi xác nhận đã thu hồi các tài sản/SIM này ngoài hệ thống, hoặc vẫn muốn chốt nghỉ việc ngay lập tức.</span>
-                  </label>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-8 bg-emerald-50 rounded-xl border border-emerald-100"><CheckCheck className="w-16 h-16 text-emerald-500 mb-3" /><h4 className="font-black text-emerald-700 text-lg mb-1">An toàn chốt nghỉ việc</h4><p className="text-emerald-600 font-medium text-sm text-center px-4">Hệ thống không ghi nhận thiết bị phần cứng nào đang được giao cho nhân sự này.</p></div>
+                /* 🔴 KHỐI DÀNH CHO NGHỈ VIỆC & RA NGOÀI (GIỮ NGUYÊN QUY TRÌNH KIỂM TRA TÀI SẢN & SIM) */
+                <div className="space-y-4">
+                  {personnelToOffboard.sdt_cong_ty && (
+                    <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl flex gap-3">
+                      <Phone className="text-yellow-600 shrink-0 w-6 h-6" />
+                      <div>
+                        <h4 className="font-black text-yellow-800 mb-1">CẢNH BÁO: Thu hồi SIM Công ty!</h4>
+                        <p className="text-sm text-yellow-700 font-medium">Nhân sự này đang được cấp số điện thoại: <span className="font-black text-yellow-900">{formatPhoneNumber(personnelToOffboard.sdt_cong_ty)}</span>. Hệ thống sẽ tự động chuyển SIM này về trạng thái "Đã thu hồi - Chờ tái cấp" của đơn vị.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {checkingAssets ? (
+                    <div className="flex flex-col items-center justify-center py-12 border border-gray-100 rounded-xl"><Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" /><p className="text-gray-600 font-bold">Đang quét hệ thống Tài sản & Nhật ký...</p></div>
+                  ) : unreturnedAssets.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex gap-3">
+                        <AlertTriangle className="text-red-500 shrink-0 w-6 h-6" />
+                        <div>
+                          <h4 className="font-black text-red-700 mb-1">CẢNH BÁO: Nhân sự đang giữ Tài sản!</h4>
+                          <p className="text-sm text-red-600 font-medium mb-3">Hệ thống phát hiện nhân sự này đang là người nhận cuối cùng của các tài sản dưới đây. Vui lòng thu hồi hoặc bàn giao trước khi cho nghỉ.</p>
+                          <div className="bg-white rounded-lg border border-red-100 overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                              <thead className="bg-red-50/50"><tr className="text-red-800 font-bold"><th className="p-2 border-b border-red-100">Mã / Tên Tài sản</th><th className="p-2 border-b border-red-100">S/N</th><th className="p-2 border-b border-red-100 text-right">Ngày nhận</th></tr></thead>
+                              <tbody className="divide-y divide-red-50">
+                                {unreturnedAssets.map((asset, idx) => (
+                                  <tr key={idx} className="border-b border-red-50 last:border-0 hover:bg-red-50/30">
+                                    <td className="p-2"><p className="font-bold text-gray-800">{asset.name}</p><p className="text-[10px] text-gray-500">{asset.id} • {asset.group}</p></td>
+                                    <td className="p-2 font-mono text-xs text-gray-600">{asset.sn}</td>
+                                    <td className="p-2 text-right font-medium text-red-600">{asset.date}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                      <label className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors">
+                        <input type="checkbox" checked={forceOffboard} onChange={(e) => setForceOffboard(e.target.checked)} className="mt-1 w-5 h-5 rounded text-orange-500 focus:ring-orange-500 border-gray-300" />
+                        <span className="text-sm font-semibold text-gray-700">
+                          Tôi xác nhận đã thu hồi các tài sản/SIM này ngoài hệ thống và đồng ý ghi log thu hồi lưu kho tự động.
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 bg-emerald-50 rounded-xl border border-emerald-100">
+                      <CheckCheck className="w-16 h-16 text-emerald-500 mb-3" />
+                      <h4 className="font-black text-emerald-700 text-lg mb-1">An toàn chốt nghỉ việc</h4>
+                      <p className="text-emerald-600 font-medium text-sm text-center px-4">Hệ thống không ghi nhận thiết bị phần cứng nào đang được giao cho nhân sự này.</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
             <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 shrink-0">
               <button onClick={() => setIsOffboardOpen(false)} className="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition-colors">Hủy bỏ</button>
-              <button onClick={confirmOffboard} disabled={submitting || (unreturnedAssets.length > 0 && !forceOffboard)} className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold flex items-center gap-2 hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />} Xác nhận thực hiện</button>
+              <button
+                onClick={confirmOffboard}
+                disabled={
+                  submitting ||
+                  (transferType === 'INTERNAL'
+                    ? !transferInternalUnitId
+                    : (unreturnedAssets.length > 0 && !forceOffboard) ||
+                      (transferType === 'EXTERNAL' && !transferExternalUnitName.trim()))
+                }
+                className={`px-6 py-2.5 text-white rounded-xl font-bold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md ${
+                  transferType === 'INTERNAL'
+                    ? 'bg-[#00539c] hover:bg-[#004077]'
+                    : transferType === 'EXTERNAL'
+                    ? 'bg-indigo-600 hover:bg-indigo-700'
+                    : 'bg-orange-500 hover:bg-orange-600'
+                }`}
+              >
+                {submitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : transferType === 'INTERNAL' || transferType === 'EXTERNAL' ? (
+                  <Building2 className="w-5 h-5" />
+                ) : (
+                  <LogOut className="w-5 h-5" />
+                )}
+                {transferType === 'INTERNAL' || transferType === 'EXTERNAL' ? 'Xác nhận điều chuyển' : 'Xác nhận nghỉ việc'}
+              </button>
             </div>
           </div>
         </div>
@@ -3873,8 +4563,8 @@ export default function PersonnelPage() {
                                 } else if (offboardInfo.transferType === 'INTERNAL') {
                                   const targetUnitName = donViMap[offboardInfo.transferInternalUnitId] || offboardInfo.transferInternalUnitId;
                                   statusBadge = (
-                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1" title={targetUnitName}>
-                                      🔄 Chuyển nội bộ
+                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1" title={`Chuyển đến: ${targetUnitName || 'Đơn vị mới'}`}>
+                                      🔄 Chuyển nội bộ{targetUnitName ? `: ${targetUnitName}` : ''}
                                     </span>
                                   );
                                 }

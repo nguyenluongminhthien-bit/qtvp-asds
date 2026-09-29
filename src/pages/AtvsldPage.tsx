@@ -126,7 +126,7 @@ export default function AtvsldPage() {
     return map;
   }, [donViData]);
 
-  const allowedDonViIds = useAllowedUnits(donViData);
+  const allowedDonViIds = useAllowedUnits(donViData, 'ATVSLD');
 
   const hasInitializedRef = useRef(false);
 
@@ -771,27 +771,7 @@ export default function AtvsldPage() {
           </div>
 
 
-          {/* 3. Thẻ Thống kê Tổng quan (khi ở Tab 1 - Hồ sơ) */}
-          {activeTab === 'hoso' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full mt-4">
-              <div className="bg-white p-3.5 rounded-xl border border-emerald-200 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md hover:border-emerald-500">
-                <div className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100"><Building2 size={20} /></div>
-                <div><p className="text-[10px] font-bold text-gray-500 uppercase">Cơ sở khai báo</p><p className="text-xl font-black text-emerald-700">{filteredData.length}</p></div>
-              </div>
-              <div className="bg-white p-3.5 rounded-xl border border-emerald-200 shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md hover:border-emerald-500">
-                <div className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100"><ShieldCheck size={20} /></div>
-                <div><p className="text-[10px] font-bold text-gray-500 uppercase">Nhân sự Huấn Luyện</p><p className="text-xl font-black text-emerald-700">{stats.totalNhanSuHL}</p></div>
-              </div>
-              <div className={`p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md cursor-pointer ${stats.totalLoi > 0 ? 'border-orange-200 bg-orange-50/10 hover:border-orange-500 animate-pulse' : 'border-gray-300 bg-white hover:border-gray-500'}`} onClick={() => setActiveTab('thietbi')}>
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalLoi > 0 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}><AlertCircle size={20} /></div>
-                <div><p className={`text-[10px] font-bold uppercase ${stats.totalLoi > 0 ? 'text-orange-600' : 'text-gray-500'}`}>TB Nghiêm ngặt (Quá hạn)</p><p className={`text-xl font-black ${stats.totalLoi > 0 ? 'text-orange-700' : 'text-gray-700'}`}>{stats.totalThietBi} <span className="text-xs text-red-500 font-bold">{stats.totalLoi > 0 ? `(${stats.totalLoi} Lỗi)` : ''}</span></p></div>
-              </div>
-              <div className={`p-3.5 rounded-xl border shadow-xs flex items-center gap-3.5 transition-all hover:shadow-md ${stats.totalTaiNan > 0 ? 'border-red-200 bg-red-50/10 hover:border-red-500' : 'border-gray-300 bg-white hover:border-gray-500'}`}>
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${stats.totalTaiNan > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}><HardHat size={20} /></div>
-                <div><p className={`text-[10px] font-bold uppercase ${stats.totalTaiNan > 0 ? 'text-red-600' : 'text-gray-500'}`}>Tai nạn LĐ (Năm)</p><p className={`text-xl font-black ${stats.totalTaiNan > 0 ? 'text-red-700' : 'text-gray-700'}`}>{stats.totalTaiNan} Vụ</p></div>
-              </div>
-            </div>
-          )}
+
 
         </div>
 
@@ -809,6 +789,11 @@ export default function AtvsldPage() {
             thietBiList={thietBiData}
             kiemDinhList={kiemDinhData}
             onNavigateToStrictDevices={() => setActiveTab('thietbi')} // truyền callback drill-down
+            donViList={donViData}
+            personnelList={personnelData}
+            selectedUnitFilter={selectedUnitFilter}
+            onNavigateToTraining={() => setActiveTab('daotao')}
+            onNavigateToHealth={() => setActiveTab('khamsuckhoe')}
           />
         )}
 

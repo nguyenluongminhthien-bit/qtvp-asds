@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 import { User } from '../types';
 import { parseModuleCrud, ALL_MODULE_IDS_SET } from '../constants/permissions';
+import { MODULE_UNIT_PREFIX_MAP } from '../utils/hierarchy';
 
 interface AppUser {
   id: string;
@@ -307,14 +308,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { unitId: arg2 };
   };
 
-  const isUnitAuthorized = (targetUnitId?: string): boolean => {
+  const isUnitAuthorized = (targetUnitId?: string, moduleId?: string): boolean => {
     if (!user) return false;
     if (String(user.quyen || '').toUpperCase() === 'ADMIN') return true;
     if (!targetUnitId || targetUnitId === 'ALL') return true;
+
+    // 1. Kiểm tra cấu hình Phạm vi Đơn vị phụ trách riêng của phân hệ (*_VIEW_UNITS)
+    if (moduleId && user.quyen_chi_tiet) {
+      const prefix = MODULE_UNIT_PREFIX_MAP[moduleId];
+      if (prefix) {
+        const rules = String(user.quyen_chi_tiet).split(',').map(r => r.trim());
+        const rule = rules.find(r => r.startsWith(prefix));
+        if (rule) {
+          const customUnits = rule.substring(prefix.length).split('|').map(s => s.trim()).filter(Boolean);
+          if (customUnits.length > 0) {
+            const targets = String(targetUnitId).split(',').map(s => s.trim()).filter(Boolean);
+            return targets.some(t => customUnits.includes(t));
+          }
+        }
+      }
+    }
+
+    // 2. Mặc định: kiểm tra theo Đơn vị quản lý ở Phần 1 (user.id_don_vi)
     const userDonVi = String(user.id_don_vi || '').trim();
     if (userDonVi === 'ALL' || userDonVi === 'HO') return true;
     const assignedUnits = userDonVi.split(',').map(s => s.trim()).filter(Boolean);
-    return assignedUnits.includes(targetUnitId);
+    const targets = String(targetUnitId).split(',').map(s => s.trim()).filter(Boolean);
+    return targets.some(t => assignedUnits.includes(t));
   };
 
   // 🟢 CÁC HELPER KIỂM TRA QUYỀN THAO TÁC (CRUD THEO PHÂN HỆ VÀ ĐƠN VỊ)
@@ -322,7 +342,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) return false;
     if (String(user.quyen || '').toUpperCase() === 'ADMIN') return true;
     const { moduleId, unitId } = parsePermissionArgs(arg1, arg2);
-    if (unitId && !isUnitAuthorized(unitId)) return false;
+    if (unitId && !isUnitAuthorized(unitId, moduleId)) return false;
     if (moduleId) {
       const crud = parseModuleCrud(user.quyen_chi_tiet, moduleId);
       if (crud !== null) return crud.v;
@@ -335,7 +355,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) return false;
     if (String(user.quyen || '').toUpperCase() === 'ADMIN') return true;
     const { moduleId, unitId } = parsePermissionArgs(arg1, arg2);
-    if (unitId && !isUnitAuthorized(unitId)) return false;
+    if (unitId && !isUnitAuthorized(unitId, moduleId)) return false;
     if (moduleId) {
       const crud = parseModuleCrud(user.quyen_chi_tiet, moduleId);
       if (crud !== null) return crud.c;
@@ -348,7 +368,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) return false;
     if (String(user.quyen || '').toUpperCase() === 'ADMIN') return true;
     const { moduleId, unitId } = parsePermissionArgs(arg1, arg2);
-    if (unitId && !isUnitAuthorized(unitId)) return false;
+    if (unitId && !isUnitAuthorized(unitId, moduleId)) return false;
     if (moduleId) {
       const crud = parseModuleCrud(user.quyen_chi_tiet, moduleId);
       if (crud !== null) return crud.u;
@@ -361,7 +381,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) return false;
     if (String(user.quyen || '').toUpperCase() === 'ADMIN') return true;
     const { moduleId, unitId } = parsePermissionArgs(arg1, arg2);
-    if (unitId && !isUnitAuthorized(unitId)) return false;
+    if (unitId && !isUnitAuthorized(unitId, moduleId)) return false;
     if (moduleId) {
       const crud = parseModuleCrud(user.quyen_chi_tiet, moduleId);
       if (crud !== null) return crud.d;
