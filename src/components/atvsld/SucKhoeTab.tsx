@@ -7,7 +7,7 @@ import {
 import { DonVi, KhamSucKhoeRecord, KhamSucKhoeCaNhanRecord, DynamicGoiKhamItem } from '../../types';
 import { getKhamSucKhoeCampaigns, saveKhamSucKhoeCampaign, deleteKhamSucKhoeCampaign, getKhamSucKhoeCaNhan, saveKhamSucKhoeCaNhanBatch, deleteKhamSucKhoeCaNhan, getPersonnel, getNhaCungCap, save } from '../../services/api/modules';
 import { formatCurrency, formatCurrencySpace } from '../../utils/formatters';
-import { getAllSubordinateIds } from '../../utils/hierarchy';
+import { getAllSubordinateIds, groupParentUnits, getUnitEmoji } from '../../utils/hierarchy';
 import { toast } from '../../utils/toast';
 import PasteImportModal, { ColumnMapItem } from '../ui/PasteImportModal';
 import { EXCEL_TEMPLATES } from '../../utils/excelTemplates';
@@ -71,11 +71,15 @@ export default function SucKhoeTab({
 
   // State dynamic gói khám trong form modal đợt khám
   const [formGoiKhamSchema, setFormGoiKhamSchema] = useState<DynamicGoiKhamItem[]>(DEFAULT_GOI_KHAM_PRESETS);
+  const [formGoiKhamBnnSchema, setFormGoiKhamBnnSchema] = useState<DynamicGoiKhamItem[]>([]);
   const [newPackageCode, setNewPackageCode] = useState<string>('');
   const [newPackageLabel, setNewPackageLabel] = useState<string>('');
+  const [newBnnPackageCode, setNewBnnPackageCode] = useState<string>('');
+  const [newBnnPackageLabel, setNewBnnPackageLabel] = useState<string>('');
 
   // State modal Dán Excel cá nhân
   const [isPasteModalOpen, setIsPasteModalOpen] = useState<boolean>(false);
+  const [targetCampaignForPaste, setTargetCampaignForPaste] = useState<KhamSucKhoeRecord | null>(null);
 
   // State modal Thêm mới NCC Nhanh
   const [isQuickAddNccOpen, setIsQuickAddNccOpen] = useState<boolean>(false);
@@ -356,6 +360,7 @@ export default function SucKhoeTab({
     let totalLoai3 = 0;
     let totalLoai4 = 0;
     let totalLoai5 = 0;
+    let totalBnnKham = 0;
     let totalBnnMac = 0;
     let totalBnnNguyCo = 0;
 
@@ -374,6 +379,7 @@ export default function SucKhoeTab({
 
       const bnn1 = c.bnn_lan_1_json || {};
       const bnn2 = c.bnn_lan_2_json || {};
+      totalBnnKham += Number(bnn1.sl_kham || 0) + Number(bnn2.sl_kham || 0);
       totalBnnMac += Number(bnn1.sl_mac_bnn || 0) + Number(bnn2.sl_mac_bnn || 0);
       totalBnnNguyCo += Number(bnn1.sl_nguy_co || 0) + Number(bnn2.sl_nguy_co || 0);
     });
@@ -395,6 +401,7 @@ export default function SucKhoeTab({
       totalLoai3,
       totalLoai4,
       totalLoai5,
+      totalBnnKham,
       totalBnnMac,
       totalBnnNguyCo
     };
@@ -448,6 +455,7 @@ export default function SucKhoeTab({
     if (item) {
       setEditingCampaign({ ...item });
       setFormGoiKhamSchema(item.goi_kham_schema && item.goi_kham_schema.length > 0 ? item.goi_kham_schema : DEFAULT_GOI_KHAM_PRESETS);
+      setFormGoiKhamBnnSchema(item.goi_kham_bnn_schema && item.goi_kham_bnn_schema.length > 0 ? item.goi_kham_bnn_schema : []);
     } else {
       const defaultUnit = selectedUnitFilter !== 'ALL' && selectedUnitFilter !== 'HO' ? selectedUnitFilter : (allowedDonViIds[0] || donViList[0]?.id || '');
       setEditingCampaign({
@@ -466,6 +474,8 @@ export default function SucKhoeTab({
         tong_chi_phi: 0,
         goi_kham_schema: DEFAULT_GOI_KHAM_PRESETS,
         goi_kham_values: {},
+        goi_kham_bnn_schema: [],
+        goi_kham_bnn_values: {},
         ket_qua_ksk_json: { loai_1: 0, loai_2: 0, loai_3: 0, loai_4: 0, loai_5: 0, khong_phan_loai: 0 },
         bnn_lan_1_json: { sl_kham: 0, sl_mac_bnn: 0, sl_nguy_co: 0 },
         bnn_lan_2_json: { sl_kham: 0, sl_mac_bnn: 0, sl_nguy_co: 0 },
@@ -474,6 +484,7 @@ export default function SucKhoeTab({
         ghi_chu: ''
       });
       setFormGoiKhamSchema(DEFAULT_GOI_KHAM_PRESETS);
+      setFormGoiKhamBnnSchema([]);
     }
     setIsCampaignModalOpen(true);
   };
@@ -496,6 +507,23 @@ export default function SucKhoeTab({
     setNewPackageLabel('');
   };
 
+  const handleAddBnnDynamicPackage = () => {
+    if (!newBnnPackageCode.trim() || !newBnnPackageLabel.trim()) {
+      toast.error("Vui lòng nhập đầy đủ Mã gói và Tên gói khám BNN");
+      return;
+    }
+    const cleanCode = newBnnPackageCode.trim().toUpperCase().replace(/\s+/g, '_');
+    if (formGoiKhamBnnSchema.some(p => p.code === cleanCode)) {
+      toast.error("Mã gói khám BNN này đã tồn tại");
+      return;
+    }
+
+    const updated = [...formGoiKhamBnnSchema, { code: cleanCode, label: newBnnPackageLabel.trim() }];
+    setFormGoiKhamBnnSchema(updated);
+    setNewBnnPackageCode('');
+    setNewBnnPackageLabel('');
+  };
+
   // Xóa Gói khám động trong Modal
   const handleRemoveDynamicPackage = (code: string) => {
     setFormGoiKhamSchema(prev => prev.filter(p => p.code !== code));
@@ -504,6 +532,74 @@ export default function SucKhoeTab({
       delete newVals[code];
       setEditingCampaign({ ...editingCampaign, goi_kham_values: newVals });
     }
+  };
+
+  const handleRemoveBnnDynamicPackage = (code: string) => {
+    setFormGoiKhamBnnSchema(prev => prev.filter(p => p.code !== code));
+    if (editingCampaign) {
+      const newVals = { ...editingCampaign.goi_kham_bnn_values };
+      delete newVals[code];
+      setEditingCampaign({ ...editingCampaign, goi_kham_bnn_values: newVals });
+    }
+  };
+
+  const handleAutoCalculateCost = () => {
+    if (!editingCampaign) return;
+    let totalCost = 0;
+    
+    // Tìm các hồ sơ cá nhân thuộc đợt khám này
+    const campaignRecords = caNhanList.filter(r => r.id_dot_ksk === editingCampaign.id);
+
+    if (campaignRecords.length === 0) {
+      toast.info("Chưa có danh sách (từ Excel). Tính theo Giá chung nhân với Số lượng.");
+      
+      // Tính chi phí KSK (Dựa trên số lượng nhập & giá chung)
+      if (editingCampaign.ten_dot_kham?.includes('Khám sức khỏe định kỳ')) {
+        formGoiKhamSchema.forEach(gk => {
+          const qty = editingCampaign.goi_kham_values?.[gk.code] || 0;
+          const price = gk.price || gk.price_nam || 0;
+          totalCost += (qty * price);
+        });
+      }
+
+      // Tính chi phí BNN
+      if (editingCampaign.ten_dot_kham?.includes('Khám Bệnh nghề nghiệp')) {
+        formGoiKhamBnnSchema.forEach(gk => {
+          const qty = editingCampaign.goi_kham_bnn_values?.[gk.code] || 0;
+          const price = gk.price || gk.price_nam || 0;
+          totalCost += (qty * price);
+        });
+      }
+    } else {
+      // Đã có danh sách Excel -> Quét và áp giá chính xác theo Giới tính/Hôn nhân
+      campaignRecords.forEach(r => {
+        const isNam = r.gioi_tinh?.toLowerCase() === 'nam';
+        const honNhan = r.hon_nhan?.toLowerCase() || '';
+        const isNuDt = !isNam && (honNhan.includes('độc thân') || honNhan.includes('chưa'));
+        const isNuCgd = !isNam && !isNuDt;
+
+        if (editingCampaign.ten_dot_kham?.includes('Khám sức khỏe định kỳ') && r.ma_goi_kham) {
+          const gk = formGoiKhamSchema.find(g => g.code === r.ma_goi_kham);
+          if (gk) {
+            if (isNam) totalCost += (gk.price_nam || gk.price || 0);
+            else if (isNuDt) totalCost += (gk.price_nu_dt || gk.price || 0);
+            else totalCost += (gk.price_nu_cgd || gk.price || 0);
+          }
+        }
+      });
+
+      // BNN thì không thường phân biệt nam nữ, nhưng nếu có vẫn quét chung (Ở đây quét fallback)
+      if (editingCampaign.ten_dot_kham?.includes('Khám Bệnh nghề nghiệp')) {
+        formGoiKhamBnnSchema.forEach(gk => {
+          const qty = editingCampaign.goi_kham_bnn_values?.[gk.code] || 0;
+          const price = gk.price || gk.price_nam || 0;
+          totalCost += (qty * price);
+        });
+      }
+    }
+
+    setEditingCampaign({ ...editingCampaign, tong_chi_phi: totalCost });
+    toast.success("Đã tự động tính Tổng chi phí!");
   };
 
   // Lưu Đợt khám tổng hợp
@@ -521,6 +617,7 @@ export default function SucKhoeTab({
       const payload: KhamSucKhoeRecord = {
         ...editingCampaign,
         goi_kham_schema: formGoiKhamSchema,
+        goi_kham_bnn_schema: formGoiKhamBnnSchema,
         sl_khong_kham: Math.max(0, Number(editingCampaign.sl_dang_ky || 0) - Number(editingCampaign.sl_thuc_te || 0))
       };
 
@@ -586,6 +683,11 @@ export default function SucKhoeTab({
     { label: 'Số TT', key: 'stt', type: 'number' },
     { label: 'MSNV *', key: 'msnv', type: 'text', required: true },
     { label: 'Họ và tên *', key: 'ho_ten', type: 'text', required: true },
+    { label: 'Năm sinh', key: 'nam_sinh', type: 'number' },
+    { label: 'Giới tính', key: 'gioi_tinh', type: 'text' },
+    { label: 'Tình trạng hôn nhân', key: 'hon_nhan', type: 'text' },
+    { label: 'Chiều cao', key: 'chieu_cao', type: 'number' },
+    { label: 'Cân nặng', key: 'can_nang', type: 'number' },
     { label: 'Năm KSK *', key: 'nam_kham', type: 'number', required: true },
     { label: 'Mã Gói khám', key: 'ma_goi_kham', type: 'text' },
     { label: 'Phân loại SK', key: 'loai_suc_khoe', type: 'select' },
@@ -609,20 +711,109 @@ export default function SucKhoeTab({
       const nsMap = new Map<string, any>();
       personnelList.forEach(ns => nsMap.set(String(ns.ma_so_nhan_vien || '').trim().toLowerCase(), ns));
 
+      const personnelUpdates: Promise<any>[] = [];
+
       rows.forEach(r => {
         const msnvClean = String(r.msnv || '').trim();
         if (!msnvClean) return;
 
         const matchedNs = nsMap.get(msnvClean.toLowerCase());
-        const uId = (selectedUnitFilter && selectedUnitFilter !== 'ALL' && selectedUnitFilter !== 'HO')
+
+        if (matchedNs) {
+          const excelHoTen = String(r.ho_ten || '').trim();
+          const nsHoTen = String(matchedNs.ho_ten || '').trim();
+          const excelNamSinh = String(r.nam_sinh || '').trim();
+          const nsYear = String(matchedNs.nam_sinh || '').split('-')[0];
+          const newHonNhan = String(r.hon_nhan || '').trim();
+
+          // Xác nhận đúng người: Khớp MSNV (đã kiểm tra qua nsMap), Họ tên và Năm sinh
+          // Bỏ qua khoảng trắng và không phân biệt hoa thường khi so sánh Họ tên
+          const isMatchHoTen = !excelHoTen || excelHoTen.toLowerCase() === nsHoTen.toLowerCase();
+          const isMatchNamSinh = !excelNamSinh || excelNamSinh === nsYear;
+
+          if (!isMatchHoTen || !isMatchNamSinh) {
+            toast.warning(`MSNV ${msnvClean} có Họ tên hoặc Năm sinh không khớp hồ sơ gốc.`);
+          }
+
+          // CHỈ cập nhật vào ns_dich_vu nếu CÓ khớp Họ tên và Năm sinh
+          if (isMatchHoTen && isMatchNamSinh) {
+            const updateFields: any = {};
+
+            if (newHonNhan) {
+              const currentHonNhan = String(matchedNs.hon_nhan || '').trim();
+              if (currentHonNhan !== newHonNhan) {
+                updateFields.hon_nhan = newHonNhan;
+              }
+            }
+
+            const excelChieuCao = String(r.chieu_cao || '').trim();
+            const excelCanNang = String(r.can_nang || '').trim();
+
+            if (excelChieuCao || excelCanNang) {
+              let bmiStr = '';
+              const h = Number(excelChieuCao);
+              const w = Number(excelCanNang);
+              if (h > 0 && w > 0) {
+                const h_m = h / 100;
+                const bmi = (w / (h_m * h_m)).toFixed(1);
+                bmiStr = ` - BMI: ${bmi}`;
+              }
+              const newNgoaiHinh = `Chiều cao: ${excelChieuCao || '---'} cm - Cân nặng: ${excelCanNang || '---'} kg${bmiStr}`;
+              const currentNgoaiHinh = String(matchedNs.mo_to_ngoai_hinh || '').trim();
+
+              if (currentNgoaiHinh !== newNgoaiHinh) {
+                updateFields.mo_to_ngoai_hinh = newNgoaiHinh;
+                // Chuyển nội dung ngoại hình cũ sang ghi_chu nếu nó không phải là định dạng chiều cao cân nặng
+                if (currentNgoaiHinh && !currentNgoaiHinh.startsWith('Chiều cao:')) {
+                  const currentGhiChu = String(matchedNs.ghi_chu || '').trim();
+                  updateFields.ghi_chu = currentGhiChu ? `${currentGhiChu}\n${currentNgoaiHinh}` : currentNgoaiHinh;
+                }
+              }
+            }
+
+            if (Object.keys(updateFields).length > 0) {
+              Object.assign(matchedNs, updateFields); // Cập nhật local để UI render
+              updateFields.id = matchedNs.id;
+
+              personnelUpdates.push(
+                save(updateFields, 'update', 'ns_dich_vu').catch((e: any) => {
+                  console.error(`Lỗi cập nhật hồ sơ cho ${msnvClean}:`, e);
+                  toast.error(`Lỗi cập nhật hồ sơ cho ${msnvClean}: ${e.message}`);
+                })
+              );
+            }
+          }
+        }
+
+        let namKhamExcel = Number(r.nam_kham) || new Date().getFullYear();
+        let uId = (selectedUnitFilter && selectedUnitFilter !== 'ALL' && selectedUnitFilter !== 'HO')
           ? selectedUnitFilter
           : (matchedNs?.id_don_vi || allowedDonViIds[0] || 'HO');
 
+        // Nếu người dùng chọn Dán Excel trực tiếp cho một Đợt Khám cụ thể, ép buộc sử dụng Năm và Đơn vị của đợt khám đó
+        if (targetCampaignForPaste) {
+          namKhamExcel = Number(targetCampaignForPaste.nam_kham);
+          uId = targetCampaignForPaste.id_don_vi;
+        }
+
+        // Ngăn chặn tạo trùng lặp: Nếu NV đã có kết quả khám của năm này rồi thì ghi đè (Cập nhật)
+        const existingCaNhanRecord = caNhanList.find(c =>
+          String(c.ma_so_nhan_vien).toLowerCase() === msnvClean.toLowerCase() &&
+          Number(c.nam_kham) === namKhamExcel
+        );
+
         recordsToSave.push({
+          id: existingCaNhanRecord ? existingCaNhanRecord.id : undefined,
           ma_so_nhan_vien: msnvClean,
           ho_ten: capitalizeName(r.ho_ten || matchedNs?.ho_ten || 'CB-NV'),
+          nam_sinh: Number(r.nam_sinh) || null,
+          gioi_tinh: String(r.gioi_tinh || '').trim(),
+          hon_nhan: String(r.hon_nhan || '').trim(),
+          chieu_cao: r.chieu_cao ? Number(r.chieu_cao) : null,
+          can_nang: r.can_nang ? Number(r.can_nang) : null,
           id_don_vi: uId,
-          nam_kham: Number(r.nam_kham) || new Date().getFullYear(),
+          nam_kham: namKhamExcel,
+          id_dot_ksk: targetCampaignForPaste ? targetCampaignForPaste.id : undefined,
           ma_goi_kham: r.ma_goi_kham || 'GK 1',
           ten_goi_kham: r.ma_goi_kham || 'Gói KSK',
           loai_suc_khoe: r.loai_suc_khoe || 'Loại I',
@@ -632,21 +823,23 @@ export default function SucKhoeTab({
         });
       });
 
+      if (personnelUpdates.length > 0) {
+        Promise.allSettled(personnelUpdates).catch(err => console.error("Lỗi cập nhật nhân sự:", err));
+      }
+
       if (recordsToSave.length === 0) {
         toast.error("Không có bản ghi hợp lệ để lưu");
         return;
       }
 
-      const saved = await saveKhamSucKhoeCaNhanBatch(recordsToSave);
-      const updatedCaNhanList = [...saved, ...caNhanList];
-      setCaNhanList(updatedCaNhanList);
-      toast.success(`Đã lưu thành công ${saved.length} hồ sơ KSK cá nhân!`);
+      // 🟢 TỰ ĐỘNG TÍNH TOÁN, TỔNG HỢP VÀ LẤY ID ĐỢT KSK TRƯỚC KHI LƯU CÁ NHÂN
+      // Tất cả hồ sơ paste vào sẽ được quy về Đợt khám của Đơn vị đang được chọn (mặc định là HO)
+      const campaignUnitId = (selectedUnitFilter && selectedUnitFilter !== 'ALL') ? selectedUnitFilter : 'HO';
 
-      // 🟢 TỰ ĐỘNG TÍNH TOÁN & TỔNG HỢP ĐỢT KSK CẤP ĐƠN VỊ
       const unitYearKeys = new Set<string>();
-      saved.forEach(r => {
-        if (r.id_don_vi && r.nam_kham) {
-          unitYearKeys.add(`${r.id_don_vi}_${r.nam_kham}`);
+      recordsToSave.forEach(r => {
+        if (r.nam_kham) {
+          unitYearKeys.add(`${campaignUnitId}_${r.nam_kham}`);
         }
       });
 
@@ -656,15 +849,30 @@ export default function SucKhoeTab({
         const [unitId, yearStr] = key.split('_');
         const year = Number(yearStr);
 
-        // Lấy tất cả hồ sơ cá nhân của đơn vị và năm này
-        const unitYearRecords = updatedCaNhanList.filter(
-          r => r.id_don_vi === unitId && Number(r.nam_kham) === year
-        );
-
         // Kiểm tra xem đã có đợt khám tổng hợp chưa
         const existingCampaign = campaigns.find(
           c => c.id_don_vi === unitId && Number(c.nam_kham) === year
         );
+
+        // Merge dữ liệu cũ và mới để thống kê chính xác
+        // Dữ liệu cũ: là những hồ sơ ĐÃ thuộc về đợt khám này
+        const oldRecords = existingCampaign
+          ? caNhanList.filter(r => r.id_dot_ksk === existingCampaign.id)
+          : [];
+
+        // Dữ liệu mới: là toàn bộ hồ sơ đang paste vào cho năm này
+        const newRecords = recordsToSave.filter(r => Number(r.nam_kham) === year);
+
+        const mergedRecordsForStats = [...oldRecords];
+        newRecords.forEach(s => {
+          const idx = mergedRecordsForStats.findIndex(x => x.id && x.id === s.id);
+          if (idx !== -1) mergedRecordsForStats[idx] = s;
+          else mergedRecordsForStats.push(s);
+        });
+
+        const unitYearRecords = mergedRecordsForStats;
+
+
 
         // Tính toán các chỉ số
         const sl_thuc_te = unitYearRecords.length;
@@ -672,12 +880,27 @@ export default function SucKhoeTab({
         const sl_khong_kham = Math.max(0, sl_dang_ky - sl_thuc_te);
 
         // Đếm phân loại sức khỏe
-        const loai_1 = unitYearRecords.filter(r => String(r.loai_suc_khoe || '').trim().toLowerCase() === 'loại i').length;
-        const loai_2 = unitYearRecords.filter(r => String(r.loai_suc_khoe || '').trim().toLowerCase() === 'loại ii').length;
-        const loai_3 = unitYearRecords.filter(r => String(r.loai_suc_khoe || '').trim().toLowerCase() === 'loại iii').length;
-        const loai_4 = unitYearRecords.filter(r => String(r.loai_suc_khoe || '').trim().toLowerCase() === 'loại iv').length;
-        const loai_5 = unitYearRecords.filter(r => String(r.loai_suc_khoe || '').trim().toLowerCase() === 'loại v').length;
-        const khong_phan_loai = unitYearRecords.filter(r => !r.loai_suc_khoe || String(r.loai_suc_khoe).trim() === '' || String(r.loai_suc_khoe).trim() === '—').length;
+        const loai_1 = unitYearRecords.filter(r => {
+          const val = String(r.loai_suc_khoe || '').trim().toLowerCase();
+          return val === 'loại i' || val === 'loại 1' || val === 'i' || val === '1';
+        }).length;
+        const loai_2 = unitYearRecords.filter(r => {
+          const val = String(r.loai_suc_khoe || '').trim().toLowerCase();
+          return val === 'loại ii' || val === 'loại 2' || val === 'ii' || val === '2';
+        }).length;
+        const loai_3 = unitYearRecords.filter(r => {
+          const val = String(r.loai_suc_khoe || '').trim().toLowerCase();
+          return val === 'loại iii' || val === 'loại 3' || val === 'iii' || val === '3';
+        }).length;
+        const loai_4 = unitYearRecords.filter(r => {
+          const val = String(r.loai_suc_khoe || '').trim().toLowerCase();
+          return val === 'loại iv' || val === 'loại 4' || val === 'iv' || val === '4';
+        }).length;
+        const loai_5 = unitYearRecords.filter(r => {
+          const val = String(r.loai_suc_khoe || '').trim().toLowerCase();
+          return val === 'loại v' || val === 'loại 5' || val === 'v' || val === '5';
+        }).length;
+        const khong_phan_loai = unitYearRecords.length - (loai_1 + loai_2 + loai_3 + loai_4 + loai_5);
 
         // Đếm gói khám
         const goiKhamVals: Record<string, number> = {};
@@ -689,13 +912,14 @@ export default function SucKhoeTab({
         });
 
         // Tổng hợp BNN
-        const bnnRecords = unitYearRecords.filter(r => r.ket_luan_bnn && r.ket_luan_bnn !== 'Bình thường');
-        const sl_mac_bnn = bnnRecords.filter(r => String(r.ket_luan_bnn || '').toLowerCase().includes('mắc')).length;
-        const sl_nguy_co = bnnRecords.filter(r => String(r.ket_luan_bnn || '').toLowerCase().includes('nguy cơ')).length;
-        const sl_kham = bnnRecords.length;
+        const bnnExaminedRecords = unitYearRecords.filter(r => r.ket_luan_bnn && String(r.ket_luan_bnn).trim() !== '');
+        const sl_kham = bnnExaminedRecords.length;
+        const sl_mac_bnn = bnnExaminedRecords.filter(r => String(r.ket_luan_bnn || '').toLowerCase().includes('mắc')).length;
+        const sl_nguy_co = bnnExaminedRecords.filter(r => String(r.ket_luan_bnn || '').toLowerCase().includes('nguy cơ')).length;
 
         // Chuẩn bị payload đợt khám
-        const campaignPayload: any = existingCampaign ? { ...existingCampaign } : {
+        const baseCampaign = targetCampaignForPaste || existingCampaign;
+        const campaignPayload: any = baseCampaign ? { ...baseCampaign } : {
           id: '',
           id_don_vi: unitId,
           nam_kham: year,
@@ -731,10 +955,30 @@ export default function SucKhoeTab({
         });
         campaignPayload.goi_kham_schema = newSchema;
 
-        // Gọi API lưu đợt khám tổng hợp
-        const savedCampaign = await saveKhamSucKhoeCampaign(campaignPayload, existingCampaign?.id ? 'update' : 'create');
+        // Gọi API lưu đợt khám tổng hợp để sinh ID
+        const savedCampaign = await saveKhamSucKhoeCampaign(campaignPayload, baseCampaign?.id ? 'update' : 'create');
         campaignsToUpdate.push(savedCampaign);
+
+        // Gắn id_dot_ksk vào danh sách hồ sơ cá nhân sẽ lưu
+        recordsToSave.forEach(r => {
+          if (Number(r.nam_kham) === year) {
+            r.id_dot_ksk = savedCampaign.id;
+          }
+        });
       }
+
+      // 🟢 SAU KHI ĐÃ GẮN id_dot_ksk, TIẾN HÀNH LƯU CÁ NHÂN
+      const saved = await saveKhamSucKhoeCaNhanBatch(recordsToSave);
+
+      const updatedCaNhanList = [...caNhanList];
+      saved.forEach(s => {
+        const idx = updatedCaNhanList.findIndex(x => x.id === s.id);
+        if (idx !== -1) updatedCaNhanList[idx] = s;
+        else updatedCaNhanList.push(s);
+      });
+
+      setCaNhanList(updatedCaNhanList);
+      toast.success(`Đã lưu thành công ${saved.length} hồ sơ KSK cá nhân!`);
 
       // Cập nhật state campaigns để giao diện cập nhật ngay lập tức
       setCampaigns(prev => {
@@ -751,9 +995,11 @@ export default function SucKhoeTab({
       });
 
       setIsPasteModalOpen(false);
+      setTargetCampaignForPaste(null);
     } catch (err: any) {
       console.error("🔴 Lỗi lưu dán Excel:", err);
       toast.error(`Lỗi lưu dữ liệu: ${err.message || 'Hệ thống gián đoạn'}`);
+      setTargetCampaignForPaste(null);
     }
   };
 
@@ -780,7 +1026,7 @@ export default function SucKhoeTab({
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-800">Quản Lý Khám Sức Khỏe & Bệnh Nghề Nghiệp</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Theo dõi lịch sử KSK định kỳ, gói khám linh hoạt và bệnh nghề nghiệp qua các năm</p>
+              <p className="text-xs text-gray-500 mt-0.5">Theo dõi lịch sử khám định kỳ, gói khám linh hoạt và bệnh nghề nghiệp qua các năm</p>
             </div>
           </div>
 
@@ -819,60 +1065,83 @@ export default function SucKhoeTab({
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-lime-600 hover:bg-lime-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
             >
               <Plus className="w-4 h-4" />
-              Thêm Đợt KSK
+              Thêm Đợt Khám
             </button>
           </div>
         </div>
 
-        {/* Hàng 2: Grid 4 Thẻ Thống kê KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-gray-100">
+        {/* Hàng 2: Grid Thẻ Thống kê KPI */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2 border-t border-gray-100">
 
+          {/* Card 1: Tỷ lệ khám (col-span-1) */}
           <div className="bg-gradient-to-br from-lime-50 to-emerald-50/50 p-4 rounded-xl border border-lime-100">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-lime-800">Tỷ lệ Tham gia KSK</span>
+              <span className="text-xs font-medium text-lime-800">Tham gia Khám</span>
               <Users className="w-4 h-4 text-lime-600" />
             </div>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black text-lime-900">{kpiStats.completionRate}%</span>
-              <span className="text-xs text-lime-700 font-medium">({kpiStats.totalThucTe}/{kpiStats.totalDangKy} NS)</span>
+              <span className="text-[10px] text-lime-700 font-medium">({kpiStats.totalThucTe}/{kpiStats.totalDangKy})</span>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">Số vắng: <strong className="text-amber-600">{kpiStats.totalKhongKham}</strong> nhân sự</p>
+            <p className="text-[10px] text-gray-500 mt-1">Số vắng: <strong className="text-amber-600">{kpiStats.totalKhongKham}</strong> nhân sự</p>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 p-4 rounded-xl border border-emerald-100">
+          {/* Card 2: Phân loại SK (col-span-2) */}
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 p-4 rounded-xl border border-emerald-100 md:col-span-2">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-emerald-800">Sức Khỏe Tốt (Loại I - II)</span>
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs font-medium text-emerald-800">Phân loại Sức khỏe</span>
+              <Activity className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="flex items-center justify-between gap-1 mt-3">
+              {[
+                { label: 'Loại I', val: kpiStats.totalLoai1, color: 'text-emerald-700', bg: 'bg-emerald-100' },
+                { label: 'Loại II', val: kpiStats.totalLoai2, color: 'text-green-700', bg: 'bg-green-100' },
+                { label: 'Loại III', val: kpiStats.totalLoai3, color: 'text-blue-700', bg: 'bg-blue-100' },
+                { label: 'Loại IV', val: kpiStats.totalLoai4, color: 'text-amber-700', bg: 'bg-amber-100' },
+                { label: 'Loại V', val: kpiStats.totalLoai5, color: 'text-red-700', bg: 'bg-red-100' }
+              ].map(t => {
+                const pct = kpiStats.totalThucTe > 0 ? ((t.val / kpiStats.totalThucTe) * 100).toFixed(1) : '0';
+                return (
+                  <div key={t.label} className="flex-1 text-center bg-white/50 rounded-lg p-1.5 shadow-xs border border-white/60">
+                    <div className={`text-[10px] font-bold ${t.color} ${t.bg} py-0.5 rounded mx-0.5 mb-1`}>{t.label}</div>
+                    <div className="text-lg font-black text-gray-800 leading-tight">{t.val}</div>
+                    <div className="text-[9px] text-gray-500">{pct}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Card 3: Bệnh Nghề Nghiệp (col-span-1) */}
+          <div className="bg-gradient-to-br from-rose-50 to-orange-50/50 p-4 rounded-xl border border-rose-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-rose-800">Bệnh Nghề Nghiệp</span>
+              <Stethoscope className="w-4 h-4 text-rose-600" />
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-emerald-900">{kpiStats.goodHealthRate}%</span>
-              <span className="text-xs text-emerald-700 font-medium">({kpiStats.totalLoai1 + kpiStats.totalLoai2} NS)</span>
+              <span className="text-2xl font-black text-rose-900">{kpiStats.totalBnnMac}</span>
+              <span className="text-[10px] text-rose-700 font-medium">ca mắc</span>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">Loại I: {kpiStats.totalLoai1} | Loại II: {kpiStats.totalLoai2}</p>
+            <div className="flex items-center justify-between mt-1 pt-1 border-t border-rose-100 text-[10px]">
+              <span className="text-gray-600">Đã khám BNN: <strong className="text-gray-800">{kpiStats.totalBnnKham}</strong></span>
+              {kpiStats.totalBnnKham > 0 && (
+                <span className="text-rose-600 font-bold">({((kpiStats.totalBnnMac / kpiStats.totalBnnKham) * 100).toFixed(1)}%)</span>
+              )}
+            </div>
+            <p className="text-[10px] text-amber-600 mt-1">Nguy cơ cao: <strong>{kpiStats.totalBnnNguyCo}</strong> ca</p>
           </div>
 
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50/50 p-4 rounded-xl border border-amber-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-amber-800">SK Cần Theo Dõi & BNN</span>
-              <ShieldAlert className="w-4 h-4 text-amber-600" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-amber-900">{kpiStats.weakHealthRate}%</span>
-              <span className="text-xs text-amber-700 font-medium">({kpiStats.totalLoai4 + kpiStats.totalLoai5} SK yếu)</span>
-            </div>
-            <p className="text-[11px] text-gray-500 mt-1">
-              Ca BNN mắc: <strong className="text-red-600">{kpiStats.totalBnnMac}</strong> | Nguy cơ: <strong className="text-amber-600">{kpiStats.totalBnnNguyCo}</strong>
-            </p>
-          </div>
-
+          {/* Card 4: Chi Phí (col-span-1) */}
           <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 p-4 rounded-xl border border-blue-100">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-blue-800">Tổng Chi Phí KSK</span>
-              <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">VNĐ</span>
+              <span className="text-xs font-medium text-blue-800">Tổng Chi Phí</span>
+              <span className="text-[9px] font-black bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">VNĐ</span>
             </div>
-            <div className="text-2xl font-black text-blue-900">{Number(kpiStats.totalChiPhi || 0).toLocaleString('vi-VN')}</div>
-            <p className="text-[11px] text-gray-500 mt-1">
-              BQ/lượt: <strong className="text-blue-700">{kpiStats.totalThucTe > 0 ? Number(Math.round(kpiStats.totalChiPhi / kpiStats.totalThucTe)).toLocaleString('vi-VN') : '0'}</strong>
+            <div className="text-xl font-black text-blue-900 truncate" title={Number(kpiStats.totalChiPhi || 0).toLocaleString('vi-VN')}>
+              {Number(kpiStats.totalChiPhi || 0).toLocaleString('vi-VN')}
+            </div>
+            <p className="text-[10px] text-gray-500 mt-1">
+              BQ: <strong className="text-blue-700">{kpiStats.totalThucTe > 0 ? Number(Math.round(kpiStats.totalChiPhi / kpiStats.totalThucTe)).toLocaleString('vi-VN') : '0'}</strong>
             </p>
           </div>
 
@@ -940,14 +1209,14 @@ export default function SucKhoeTab({
             className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeSubTab === 'tonghop' ? 'bg-lime-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}
           >
             <Building2 className="w-4 h-4" />
-            Đợt KSK Tổng Hợp Cấp Đơn Vị ({filteredCampaigns.length})
+            Đợt Khám ({filteredCampaigns.length})
           </button>
           <button
             onClick={() => setActiveSubTab('canhan')}
             className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeSubTab === 'canhan' ? 'bg-lime-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}
           >
             <Users className="w-4 h-4" />
-            Lịch Sử KSK Chi Tiết Nhân Sự ({filteredCaNhanList.length})
+            Lịch Sử Khám ({filteredCaNhanList.length})
           </button>
         </div>
       )}
@@ -980,13 +1249,13 @@ export default function SucKhoeTab({
                 <thead>
                   <tr className="bg-[#386641] text-white font-bold">
                     <th className="p-3 border-b border-lime-800 text-center w-12">STT</th>
-                    <th className="p-3 border-b border-lime-800 min-w-[160px]">Đơn Vị Thực Hiện</th>
+                    <th className="p-3 border-b border-lime-800 min-w-[160px]">Đơn Vị</th>
                     <th className="p-3 border-b border-lime-800 min-w-[200px]">Đợt Khám & NCC</th>
-                    <th className="p-3 border-b border-lime-800 text-center min-w-[140px]">Mốc Thời Gian (2 Ngày)</th>
+                    <th className="p-3 border-b border-lime-800 text-center min-w-[140px]">Mốc Thời Gian</th>
                     <th className="p-3 border-b border-lime-800 text-center min-w-[130px]">SL Đăng Ký / Thực Tế</th>
-                    <th className="p-3 border-b border-lime-800 min-w-[150px]">Cơ Cấu Gói Khám</th>
-                    <th className="p-3 border-b border-lime-800 min-w-[160px]">Phân Loại SK (Loại I - V)</th>
-                    <th className="p-3 border-b border-lime-800 text-center min-w-[130px]">BNN (Lần 1 & 2)</th>
+                    <th className="p-3 border-b border-lime-800 min-w-[150px]">Các Gói Khám</th>
+                    <th className="p-3 border-b border-lime-800 min-w-[160px]">Phân Loại Sức khoẻ</th>
+                    <th className="p-3 border-b border-lime-800 text-center min-w-[130px]">Bệnh Nghề nghiệp</th>
                     <th className="p-3 border-b border-lime-800 text-right min-w-[120px]">Tổng Chi Phí</th>
                     <th className="p-3 border-b border-lime-800 text-center min-w-[110px]">Đánh Giá NCC</th>
                     <th className="p-3 border-b border-lime-800 text-center w-24">Thao tác</th>
@@ -1079,6 +1348,17 @@ export default function SucKhoeTab({
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button
+                              onClick={() => {
+                                setTargetCampaignForPaste(item);
+                                setIsPasteModalOpen(true);
+                              }}
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors flex items-center flex-col"
+                              title="Dán Danh Sách Khám"
+                            >
+                              <Upload className="w-4 h-4" />
+                              <span className="text-[9px] font-bold mt-0.5 leading-none">DS Khám</span>
+                            </button>
+                            <button
                               onClick={() => handleOpenCampaignModal(item)}
                               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Sửa đợt khám"
@@ -1144,7 +1424,7 @@ export default function SucKhoeTab({
                 className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1"
               >
                 <Upload className="w-3.5 h-3.5" />
-                + Dán Excel Theo Mã NV
+                + Thêm Danh sách Khám
               </button>
             </div>
           </div>
@@ -1157,7 +1437,7 @@ export default function SucKhoeTab({
                 onClick={() => setIsPasteModalOpen(true)}
                 className="mt-3 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 shadow-sm transition-all"
               >
-                + Dán Excel KSK Nhân sự Ngay
+                + Danh sách Khám
               </button>
             </div>
           ) : caNhanViewMode === 'matrix' ? (
@@ -1434,14 +1714,38 @@ export default function SucKhoeTab({
                     className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
                     required
                   >
-                    {donViList.map(u => (
-                      <option key={u.id} value={u.id}>{u.ten_don_vi}</option>
-                    ))}
+                    <option value="" disabled>-- Chọn Đơn vị thực hiện --</option>
+                    <option value="HO">🏢 Công ty / Toàn hệ thống</option>
+                    {(() => {
+                      const { vpdhUnits, ctttNamUnits, ctttBacUnits, otherUnits } = groupParentUnits(donViList);
+
+                      const renderGroup = (label: string, items: any[]) => {
+                        if (!items || items.length === 0) return null;
+                        return (
+                          <optgroup label={label} key={label}>
+                            {items.map(u => (
+                              <option key={u.id} value={u.id}>
+                                {getUnitEmoji(u.loai_hinh)} {u.ten_don_vi}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      };
+
+                      return (
+                        <>
+                          {renderGroup("🏢 VPĐH & TỔNG CÔNG TY", vpdhUnits)}
+                          {renderGroup("🏬 CÔNG TY TỈNH THÀNH (NAM)", ctttNamUnits)}
+                          {renderGroup("🏬 CÔNG TY TỈNH THÀNH (BẮC)", ctttBacUnits)}
+                          {renderGroup("📌 ĐƠN VỊ KHÁC", otherUnits)}
+                        </>
+                      );
+                    })()}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Năm KSK *</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Năm Khám *</label>
                   <input
                     type="number"
                     value={editingCampaign.nam_kham}
@@ -1452,56 +1756,24 @@ export default function SucKhoeTab({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Tên Đợt Khám *</label>
-                  <input
-                    type="text"
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Đợt Khám *</label>
+                  <select
                     value={editingCampaign.ten_dot_kham || ''}
                     onChange={e => setEditingCampaign({ ...editingCampaign, ten_dot_kham: e.target.value })}
                     className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
                     required
-                  />
+                  >
+                    <option value="" disabled>-- Chọn Đợt Khám --</option>
+                    <option value="Khám sức khỏe định kỳ">Khám sức khỏe định kỳ</option>
+                    <option value="Khám Bệnh nghề nghiệp">Khám Bệnh nghề nghiệp</option>
+                    <option value="Khám sức khỏe định kỳ, Khám Bệnh nghề nghiệp">Cả 2 (KSK định kỳ & Bệnh nghề nghiệp)</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Phần 2: NCC KSK định kỳ (40%), Hình thức (20%), Ngày lấy mẫu/XN (20%), Ngày khám (20%) */}
-              <div className="flex flex-col md:flex-row items-center gap-4 pt-3 border-t border-gray-100">
-                <div className="w-full md:w-[40%]">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-gray-700">NCC KSK định kỳ</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuickNccTarget('ksk');
-                        setIsQuickAddNccOpen(true);
-                      }}
-                      className="text-[11px] font-bold text-lime-700 hover:text-lime-900 underline flex items-center gap-0.5"
-                    >
-                      + Thêm NCC
-                    </button>
-                  </div>
-                  <select
-                    value={editingCampaign.id_ncc || ''}
-                    onChange={e => {
-                      const selectedId = e.target.value;
-                      const matchedNcc = nccList.find(n => n.id === selectedId);
-                      setEditingCampaign({
-                        ...editingCampaign,
-                        id_ncc: selectedId,
-                        ten_ncc: matchedNcc ? (matchedNcc.ten_cong_ty || matchedNcc.ten_goi_tat) : e.target.value
-                      });
-                    }}
-                    className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
-                  >
-                    <option value="">-- Chọn NCC KSK (Nhóm Sức khỏe) --</option>
-                    {healthNccList.map(ncc => (
-                      <option key={ncc.id} value={ncc.id}>
-                        {ncc.ten_cong_ty || ncc.ten_goi_tat} ({ncc.nhom_dich_vu || 'Sức khỏe'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="w-full md:w-[20%]">
+              {/* Phần 2: Hình thức khám, Địa điểm khám */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-gray-100">
+                <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Hình thức khám</label>
                   <select
                     value={editingCampaign.hinh_thuc_kham}
@@ -1513,25 +1785,148 @@ export default function SucKhoeTab({
                   </select>
                 </div>
 
-                <div className="w-full md:w-[20%]">
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Ngày lấy mẫu/XN</label>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Địa điểm khám</label>
                   <input
-                    type="date"
-                    value={editingCampaign.ngay_lay_mau || ''}
-                    onChange={e => setEditingCampaign({ ...editingCampaign, ngay_lay_mau: e.target.value })}
+                    type="text"
+                    placeholder="VD: Tại TTYT Huyện ABC..."
+                    value={editingCampaign.dia_diem_kham || ''}
+                    onChange={e => setEditingCampaign({ ...editingCampaign, dia_diem_kham: e.target.value })}
                     className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
                   />
+                </div>
+              </div>
+
+              {/* Phần 3: Ngày lấy mẫu/XN, Ngày khám lâm sàng */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-gray-100">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Ngày lấy mẫu/XN (Từ - Đến)</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="date"
+                      value={editingCampaign.ngay_lay_mau?.split(' đến ')[0] || ''}
+                      onChange={e => {
+                        const den = editingCampaign.ngay_lay_mau?.split(' đến ')[1] || '';
+                        setEditingCampaign({ ...editingCampaign, ngay_lay_mau: `${e.target.value} đến ${den}` });
+                      }}
+                      className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input
+                      type="date"
+                      value={editingCampaign.ngay_lay_mau?.split(' đến ')[1] || ''}
+                      onChange={e => {
+                        const tu = editingCampaign.ngay_lay_mau?.split(' đến ')[0] || '';
+                        setEditingCampaign({ ...editingCampaign, ngay_lay_mau: `${tu} đến ${e.target.value}` });
+                      }}
+                      className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
+                    />
+                  </div>
                 </div>
 
-                <div className="w-full md:w-[20%]">
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Ngày khám</label>
-                  <input
-                    type="date"
-                    value={editingCampaign.ngay_kham_lam_sang || ''}
-                    onChange={e => setEditingCampaign({ ...editingCampaign, ngay_kham_lam_sang: e.target.value })}
-                    className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
-                  />
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Ngày khám lâm sàng (Từ - Đến)</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="date"
+                      value={editingCampaign.ngay_kham_lam_sang?.split(' đến ')[0] || ''}
+                      onChange={e => {
+                        const den = editingCampaign.ngay_kham_lam_sang?.split(' đến ')[1] || '';
+                        setEditingCampaign({ ...editingCampaign, ngay_kham_lam_sang: `${e.target.value} đến ${den}` });
+                      }}
+                      className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input
+                      type="date"
+                      value={editingCampaign.ngay_kham_lam_sang?.split(' đến ')[1] || ''}
+                      onChange={e => {
+                        const tu = editingCampaign.ngay_kham_lam_sang?.split(' đến ')[0] || '';
+                        setEditingCampaign({ ...editingCampaign, ngay_kham_lam_sang: `${tu} đến ${e.target.value}` });
+                      }}
+                      className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
+                    />
+                  </div>
                 </div>
+              </div>
+
+              {/* Phần Nhà Cung Cấp */}
+              <div className="flex flex-col md:flex-row gap-4 pt-3 border-t border-gray-100">
+                {editingCampaign.ten_dot_kham?.includes('Khám sức khỏe định kỳ') && (
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-gray-700">Đơn vị Khám sức khỏe</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickNccTarget('ksk');
+                          setIsQuickAddNccOpen(true);
+                        }}
+                        className="text-[11px] font-bold text-lime-700 hover:text-lime-900 underline flex items-center gap-0.5"
+                      >
+                        + Thêm NCC
+                      </button>
+                    </div>
+                    <select
+                      value={editingCampaign.id_ncc || ''}
+                      onChange={e => {
+                        const selectedId = e.target.value;
+                        const matchedNcc = nccList.find(n => n.id === selectedId);
+                        setEditingCampaign({
+                          ...editingCampaign,
+                          id_ncc: selectedId,
+                          ten_ncc: matchedNcc ? (matchedNcc.ten_cong_ty || matchedNcc.ten_goi_tat) : e.target.value
+                        });
+                      }}
+                      className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
+                    >
+                      <option value="">-- Chọn Đơn vị Khám sức khỏe --</option>
+                      {healthNccList.map(ncc => (
+                        <option key={ncc.id} value={ncc.id}>
+                          {ncc.ten_cong_ty || ncc.ten_goi_tat} ({ncc.nhom_dich_vu || 'Sức khỏe'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {editingCampaign.ten_dot_kham?.includes('Khám Bệnh nghề nghiệp') && (
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-gray-700">Đơn vị Khám Bệnh nghề nghiệp</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickNccTarget('bnn');
+                          setIsQuickAddNccOpen(true);
+                        }}
+                        className="text-[11px] font-bold text-lime-700 hover:text-lime-900 underline flex items-center gap-0.5"
+                      >
+                        + Thêm NCC
+                      </button>
+                    </div>
+                    <select
+                      value={editingCampaign.id_ncc_bnn || ''}
+                      onChange={e => {
+                        const selectedId = e.target.value;
+                        const matchedNcc = nccList.find(n => n.id === selectedId);
+                        setEditingCampaign({
+                          ...editingCampaign,
+                          id_ncc_bnn: selectedId,
+                          ten_ncc_bnn: matchedNcc ? (matchedNcc.ten_cong_ty || matchedNcc.ten_goi_tat) : e.target.value
+                        });
+                      }}
+                      className="w-full p-2 text-xs border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-lime-500 bg-[#FFFFF0]"
+                    >
+                      <option value="">-- Chọn Đơn vị Khám BNN --</option>
+                      {healthNccList.map(ncc => (
+                        <option key={ncc.id} value={ncc.id}>
+                          {ncc.ten_cong_ty || ncc.ten_goi_tat} ({ncc.nhom_dich_vu || 'Sức khỏe'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Phần 3: Số lượng & Chi phí */}
@@ -1570,7 +1965,17 @@ export default function SucKhoeTab({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Tổng Chi Phí (VNĐ)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-gray-700">Tổng Chi Phí (VNĐ)</label>
+                    <button
+                      type="button"
+                      onClick={handleAutoCalculateCost}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                      title="Tính tự động = Số lượng x Đơn giá"
+                    >
+                      🧮 Tính tự động
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={editingCampaign.tong_chi_phi ? formatCurrencySpace(editingCampaign.tong_chi_phi) : ''}
@@ -1585,325 +1990,286 @@ export default function SucKhoeTab({
               </div>
 
               {/* Phần 4: Cấu hình Gói khám ĐỘNG Linh Hoạt theo Năm */}
-              <div className="pt-3 border-t border-gray-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                    <Activity className="w-4 h-4 text-lime-600" />
-                    Cấu Hình Gói Khám Linh Hoạt & Số Lượng Khám Thực Tế
-                  </span>
-                </div>
+              {/* Phần 4 & 5: Cấu hình Gói khám */}
+              {editingCampaign.ten_dot_kham?.includes('Khám sức khỏe định kỳ') && (
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                      <Activity className="w-4 h-4 text-lime-600" />
+                      Cấu Hình Gói Khám Sức Khỏe & Số Lượng Khám Thực Tế
+                    </span>
+                  </div>
 
-                {/* Form thêm gói mới */}
-                <div className="flex items-center gap-2 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
-                  <input
-                    type="text"
-                    placeholder="Mã gói (VD: GK_4A)"
-                    value={newPackageCode}
-                    onChange={e => setNewPackageCode(e.target.value)}
-                    className="p-1.5 text-xs border border-gray-300 rounded-lg bg-white w-36"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Tên mô tả gói khám..."
-                    value={newPackageLabel}
-                    onChange={e => setNewPackageLabel(e.target.value)}
-                    className="p-1.5 text-xs border border-gray-300 rounded-lg bg-white flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddDynamicPackage}
-                    className="px-3 py-1.5 bg-lime-600 hover:bg-lime-700 text-white text-xs font-bold rounded-lg transition-all"
-                  >
-                    + Thêm Gói
-                  </button>
-                </div>
-
-                {/* Grid nhập số lượng từng gói */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                  {formGoiKhamSchema.map(gk => {
-                    const currentVal = editingCampaign.goi_kham_values?.[gk.code] || 0;
-                    return (
-                      <div key={gk.code} className="bg-lime-50/50 p-2.5 rounded-xl border border-lime-200 space-y-1 relative group">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveDynamicPackage(gk.code)}
-                          className="absolute top-1 right-1 text-gray-400 hover:text-rose-600 text-xs hidden group-hover:block"
-                          title="Xóa gói khám này"
-                        >
-                          ✕
-                        </button>
-                        <span className="block text-[11px] font-bold text-lime-900 truncate" title={gk.label}>
-                          {gk.code}
-                        </span>
-                        <input
-                          type="number"
-                          value={currentVal}
-                          onChange={e => {
-                            const val = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              goi_kham_values: {
-                                ...(editingCampaign.goi_kham_values || {}),
-                                [gk.code]: val
-                              }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded-lg bg-white font-bold text-center"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Dòng số tổng trợ giúp kiểm tra số lượng gói khám */}
-                {(() => {
-                  const totalGoi = Object.values(editingCampaign.goi_kham_values || {}).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
-                  return (
-                    <div className="pt-1">
-                      <span className="text-[11px] font-bold text-lime-800 bg-lime-50 px-2.5 py-1 rounded-lg border border-lime-200 inline-block">
-                        = Tổng số lượng các gói khám: <strong className="text-lime-950 font-black">{totalGoi}</strong> nhân sự
-                        {Boolean(editingCampaign.sl_thuc_te) && (
-                          <span className={`ml-2 font-bold ${totalGoi === editingCampaign.sl_thuc_te ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            ({totalGoi === editingCampaign.sl_thuc_te ? '✓ Khớp với SL thực tế' : `⚠️ Khác SL thực tế ${editingCampaign.sl_thuc_te}`})
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Phần 5: Kết quả Phân loại Sức khỏe I - V */}
-              <div className="pt-3 border-t border-gray-100 space-y-2">
-                <span className="text-xs font-bold text-gray-800">Kết Quả Phân Loại Sức Khỏe Định Kỳ (Loại I - V)</span>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                  {['loai_1', 'loai_2', 'loai_3', 'loai_4', 'loai_5', 'khong_phan_loai'].map((key) => {
-                    const labels: Record<string, string> = {
-                      loai_1: 'Loại I',
-                      loai_2: 'Loại II',
-                      loai_3: 'Loại III',
-                      loai_4: 'Loại IV',
-                      loai_5: 'Loại V',
-                      khong_phan_loai: 'Chưa loại'
-                    };
-                    const val = (editingCampaign.ket_qua_ksk_json as any)?.[key] || 0;
-
-                    return (
-                      <div key={key} className="bg-gray-50 p-2 rounded-xl border border-gray-200 text-center">
-                        <span className="block text-[11px] font-semibold text-gray-700">{labels[key]}</span>
-                        <input
-                          type="number"
-                          value={val}
-                          onChange={e => {
-                            const v = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              ket_qua_ksk_json: {
-                                ...(editingCampaign.ket_qua_ksk_json || {}),
-                                [key]: v
-                              }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded-lg bg-white font-bold text-center mt-1"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Dòng số tổng trợ giúp kiểm tra phân loại sức khỏe */}
-                {(() => {
-                  const kq = editingCampaign.ket_qua_ksk_json || {};
-                  const totalPl = (Number(kq.loai_1) || 0) + (Number(kq.loai_2) || 0) + (Number(kq.loai_3) || 0) + (Number(kq.loai_4) || 0) + (Number(kq.loai_5) || 0) + (Number(kq.khong_phan_loai) || 0);
-                  return (
-                    <div className="pt-1">
-                      <span className="text-[11px] font-bold text-lime-800 bg-lime-50 px-2.5 py-1 rounded-lg border border-lime-200 inline-block">
-                        = Tổng số lượng phân loại SK: <strong className="text-lime-950 font-black">{totalPl}</strong> nhân sự
-                        {Boolean(editingCampaign.sl_thuc_te) && (
-                          <span className={`ml-2 font-bold ${totalPl === editingCampaign.sl_thuc_te ? 'text-emerald-700' : 'text-amber-700'}`}>
-                            ({totalPl === editingCampaign.sl_thuc_te ? '✓ Khớp với SL thực tế' : `⚠️ Khác SL thực tế ${editingCampaign.sl_thuc_te}`})
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Phần 6: Khám Bệnh Nghề Nghiệp (Lần 1 & Lần 2) & NCC Khám BNN */}
-              <div className="pt-3 border-t border-gray-100 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/60 p-3 rounded-xl border border-emerald-200 overflow-hidden">
-                  <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5 shrink-0">
-                    <Stethoscope className="w-4 h-4 text-emerald-600" />
-                    Kết Quả Khám Bệnh Nghề Nghiệp (BNN - 2 Lần / Năm)
-                  </span>
-
-                  {/* Ô chọn & Thêm mới NCC Khám BNN vừa khít khung */}
-                  <div className="flex items-center gap-2 w-full sm:w-auto flex-1 max-w-sm min-w-0">
-                    <span className="text-xs font-bold text-emerald-900 shrink-0">NCC Khám BNN:</span>
-                    <select
-                      value={editingCampaign.id_ncc_bnn || ''}
-                      onChange={e => {
-                        const selectedId = e.target.value;
-                        const matchedNcc = nccList.find(n => n.id === selectedId);
-                        setEditingCampaign({
-                          ...editingCampaign,
-                          id_ncc_bnn: selectedId,
-                          ten_ncc_bnn: matchedNcc ? (matchedNcc.ten_cong_ty || matchedNcc.ten_goi_tat) : e.target.value
-                        });
-                      }}
-                      className="p-1.5 text-xs border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white flex-1 min-w-0 font-semibold text-emerald-950 truncate"
-                    >
-                      <option value="">-- Chọn NCC Khám BNN (Nhóm Sức khỏe) --</option>
-                      {healthNccList.map(ncc => (
-                        <option key={ncc.id} value={ncc.id}>
-                          {ncc.ten_cong_ty || ncc.ten_goi_tat} ({ncc.nhom_dich_vu || 'Sức khỏe'})
-                        </option>
-                      ))}
-                    </select>
+                  {/* Form thêm gói mới */}
+                  <div className="flex items-center gap-2 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+                    <input
+                      type="text"
+                      placeholder="Mã gói (VD: GK_4A)"
+                      value={newPackageCode}
+                      onChange={e => setNewPackageCode(e.target.value)}
+                      className="p-1.5 text-xs border border-gray-300 rounded-lg bg-white w-36"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Tên mô tả gói khám..."
+                      value={newPackageLabel}
+                      onChange={e => setNewPackageLabel(e.target.value)}
+                      className="p-1.5 text-xs border border-gray-300 rounded-lg bg-white flex-1"
+                    />
                     <button
                       type="button"
-                      onClick={() => {
-                        setQuickNccTarget('bnn');
-                        setIsQuickAddNccOpen(true);
-                      }}
-                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline whitespace-nowrap shrink-0 px-1"
+                      onClick={handleAddDynamicPackage}
+                      className="px-3 py-1.5 bg-lime-600 hover:bg-lime-700 text-white text-xs font-bold rounded-lg transition-all"
                     >
-                      + Thêm NCC
+                      + Thêm Gói
                     </button>
                   </div>
+
+                  {/* Grid nhập số lượng từng gói */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                    {formGoiKhamSchema.map(gk => {
+                      const currentVal = editingCampaign.goi_kham_values?.[gk.code] || 0;
+                      return (
+                        <div key={gk.code} className="bg-lime-50/50 p-2.5 rounded-xl border border-lime-200 space-y-1 relative group">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDynamicPackage(gk.code)}
+                            className="absolute top-1 right-1 text-gray-400 hover:text-rose-600 text-xs hidden group-hover:block"
+                            title="Xóa gói khám này"
+                          >
+                            ✕
+                          </button>
+                          <span className="block text-[11px] font-bold text-lime-900 truncate" title={gk.label}>
+                            {gk.code}
+                          </span>
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className="text-[10px] text-gray-500 w-8">SL:</span>
+                            <input
+                              type="number"
+                              value={currentVal}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                setEditingCampaign({
+                                  ...editingCampaign,
+                                  goi_kham_values: {
+                                    ...(editingCampaign.goi_kham_values || {}),
+                                    [gk.code]: val
+                                  }
+                                });
+                              }}
+                              className="w-full p-1 text-xs border border-gray-300 rounded-lg bg-white font-bold text-center"
+                            />
+                          </div>
+                          <div className="space-y-1 pt-1 border-t border-lime-200/50">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Chung:</span>
+                              <input
+                                type="text"
+                                value={gk.price ? formatCurrencySpace(gk.price) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-gray-300 rounded-md bg-white text-right font-mono text-lime-800"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Nam:</span>
+                              <input
+                                type="text"
+                                value={gk.price_nam ? formatCurrencySpace(gk.price_nam) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price_nam: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-gray-300 rounded-md bg-white text-right font-mono text-lime-800"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Nữ ĐT:</span>
+                              <input
+                                type="text"
+                                value={gk.price_nu_dt ? formatCurrencySpace(gk.price_nu_dt) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price_nu_dt: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-gray-300 rounded-md bg-white text-right font-mono text-lime-800"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Nữ CGĐ:</span>
+                              <input
+                                type="text"
+                                value={gk.price_nu_cgd ? formatCurrencySpace(gk.price_nu_cgd) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price_nu_cgd: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-gray-300 rounded-md bg-white text-right font-mono text-lime-800"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const totalGoi = Object.values(editingCampaign.goi_kham_values || {}).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
+                    return (
+                      <div className="pt-1">
+                        <span className="text-[11px] font-bold text-lime-800 bg-lime-50 px-2.5 py-1 rounded-lg border border-lime-200 inline-block">
+                          = Tổng số lượng các gói KSK: <strong className="text-lime-950 font-black">{totalGoi}</strong> nhân sự
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Lần 1 */}
-                  <div className="bg-amber-50/40 p-3 rounded-xl border border-amber-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-900">Lần 1 Trong Năm</span>
-                      <div className="flex items-center gap-1">
-                        <label className="text-[10px] font-bold text-amber-800">Ngày khám BNN Lần 1:</label>
-                        <input
-                          type="date"
-                          value={editingCampaign.ngay_kham_bnn_lan_1 || ''}
-                          onChange={e => setEditingCampaign({ ...editingCampaign, ngay_kham_bnn_lan_1: e.target.value })}
-                          className="p-1 text-xs border border-amber-300 rounded-lg bg-white font-medium focus:ring-2 focus:ring-amber-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <span className="text-[10px] text-gray-600 block">SL Khám</span>
-                        <input
-                          type="number"
-                          value={editingCampaign.bnn_lan_1_json?.sl_kham || 0}
-                          onChange={e => {
-                            const v = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              bnn_lan_1_json: { ...(editingCampaign.bnn_lan_1_json || {}), sl_kham: v }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded bg-white text-center font-bold"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-gray-600 block">Mắc BNN</span>
-                        <input
-                          type="number"
-                          value={editingCampaign.bnn_lan_1_json?.sl_mac_bnn || 0}
-                          onChange={e => {
-                            const v = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              bnn_lan_1_json: { ...(editingCampaign.bnn_lan_1_json || {}), sl_mac_bnn: v }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded bg-white text-center font-bold text-red-600"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-gray-600 block">Nguy cơ BNN</span>
-                        <input
-                          type="number"
-                          value={editingCampaign.bnn_lan_1_json?.sl_nguy_co || 0}
-                          onChange={e => {
-                            const v = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              bnn_lan_1_json: { ...(editingCampaign.bnn_lan_1_json || {}), sl_nguy_co: v }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded bg-white text-center font-bold text-amber-600"
-                        />
-                      </div>
-                    </div>
+              {editingCampaign.ten_dot_kham?.includes('Khám Bệnh nghề nghiệp') && (
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                      <Stethoscope className="w-4 h-4 text-emerald-600" />
+                      Cấu Hình Gói Khám Bệnh Nghề Nghiệp & Số Lượng Khám Thực Tế
+                    </span>
                   </div>
 
-                  {/* Lần 2 */}
-                  <div className="bg-amber-50/40 p-3 rounded-xl border border-amber-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-amber-900">Lần 2 Trong Năm</span>
-                      <div className="flex items-center gap-1">
-                        <label className="text-[10px] font-bold text-amber-800">Ngày khám BNN Lần 2:</label>
-                        <input
-                          type="date"
-                          value={editingCampaign.ngay_kham_bnn_lan_2 || ''}
-                          onChange={e => setEditingCampaign({ ...editingCampaign, ngay_kham_bnn_lan_2: e.target.value })}
-                          className="p-1 text-xs border border-amber-300 rounded-lg bg-white font-medium focus:ring-2 focus:ring-amber-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <span className="text-[10px] text-gray-600 block">SL Khám</span>
-                        <input
-                          type="number"
-                          value={editingCampaign.bnn_lan_2_json?.sl_kham || 0}
-                          onChange={e => {
-                            const v = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              bnn_lan_2_json: { ...(editingCampaign.bnn_lan_2_json || {}), sl_kham: v }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded bg-white text-center font-bold"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-gray-600 block">Mắc BNN</span>
-                        <input
-                          type="number"
-                          value={editingCampaign.bnn_lan_2_json?.sl_mac_bnn || 0}
-                          onChange={e => {
-                            const v = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              bnn_lan_2_json: { ...(editingCampaign.bnn_lan_2_json || {}), sl_mac_bnn: v }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded bg-white text-center font-bold text-red-600"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-gray-600 block">Nguy cơ BNN</span>
-                        <input
-                          type="number"
-                          value={editingCampaign.bnn_lan_2_json?.sl_nguy_co || 0}
-                          onChange={e => {
-                            const v = Number(e.target.value);
-                            setEditingCampaign({
-                              ...editingCampaign,
-                              bnn_lan_2_json: { ...(editingCampaign.bnn_lan_2_json || {}), sl_nguy_co: v }
-                            });
-                          }}
-                          className="w-full p-1 text-xs border border-gray-300 rounded bg-white text-center font-bold text-amber-600"
-                        />
-                      </div>
-                    </div>
+                  {/* Form thêm gói mới BNN */}
+                  <div className="flex items-center gap-2 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+                    <input
+                      type="text"
+                      placeholder="Mã gói (VD: BNN_1)"
+                      value={newBnnPackageCode}
+                      onChange={e => setNewBnnPackageCode(e.target.value)}
+                      className="p-1.5 text-xs border border-emerald-300 rounded-lg bg-white w-36 focus:ring-emerald-500"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Tên mô tả gói khám BNN..."
+                      value={newBnnPackageLabel}
+                      onChange={e => setNewBnnPackageLabel(e.target.value)}
+                      className="p-1.5 text-xs border border-emerald-300 rounded-lg bg-white flex-1 focus:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddBnnDynamicPackage}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all"
+                    >
+                      + Thêm Gói BNN
+                    </button>
                   </div>
+
+                  {/* Grid nhập số lượng từng gói BNN */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                    {formGoiKhamBnnSchema.map(gk => {
+                      const currentVal = editingCampaign.goi_kham_bnn_values?.[gk.code] || 0;
+                      return (
+                        <div key={gk.code} className="bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-200 space-y-1 relative group">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBnnDynamicPackage(gk.code)}
+                            className="absolute top-1 right-1 text-gray-400 hover:text-rose-600 text-xs hidden group-hover:block"
+                            title="Xóa gói khám BNN này"
+                          >
+                            ✕
+                          </button>
+                          <span className="block text-[11px] font-bold text-emerald-900 truncate" title={gk.label}>
+                            {gk.code}
+                          </span>
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className="text-[10px] text-gray-500 w-8">SL:</span>
+                            <input
+                              type="number"
+                              value={currentVal}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                setEditingCampaign({
+                                  ...editingCampaign,
+                                  goi_kham_bnn_values: {
+                                    ...(editingCampaign.goi_kham_bnn_values || {}),
+                                    [gk.code]: val
+                                  }
+                                });
+                              }}
+                              className="w-full p-1 text-xs border border-emerald-300 rounded-lg bg-white font-bold text-center"
+                            />
+                          </div>
+                          <div className="space-y-1 pt-1 border-t border-emerald-200/50">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Chung:</span>
+                              <input
+                                type="text"
+                                value={gk.price ? formatCurrencySpace(gk.price) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamBnnSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-emerald-300 rounded-md bg-white text-right font-mono text-emerald-800"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Nam:</span>
+                              <input
+                                type="text"
+                                value={gk.price_nam ? formatCurrencySpace(gk.price_nam) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamBnnSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price_nam: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-emerald-300 rounded-md bg-white text-right font-mono text-emerald-800"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Nữ ĐT:</span>
+                              <input
+                                type="text"
+                                value={gk.price_nu_dt ? formatCurrencySpace(gk.price_nu_dt) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamBnnSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price_nu_dt: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-emerald-300 rounded-md bg-white text-right font-mono text-emerald-800"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] text-gray-500 w-8">Nữ CGĐ:</span>
+                              <input
+                                type="text"
+                                value={gk.price_nu_cgd ? formatCurrencySpace(gk.price_nu_cgd) : ''}
+                                onChange={e => {
+                                  const val = Number(e.target.value.replace(/\D/g, ''));
+                                  setFormGoiKhamBnnSchema(prev => prev.map(p => p.code === gk.code ? { ...p, price_nu_cgd: val } : p));
+                                }}
+                                placeholder="VNĐ"
+                                className="w-full p-1 text-[10px] border border-emerald-300 rounded-md bg-white text-right font-mono text-emerald-800"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const totalGoi = Object.values(editingCampaign.goi_kham_bnn_values || {}).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
+                    return (
+                      <div className="pt-1">
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 inline-block">
+                          = Tổng số lượng các gói BNN: <strong className="text-emerald-950 font-black">{totalGoi}</strong> nhân sự
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
+              )}
 
               {/* Phần 7: Đánh giá NCC KSK */}
               <div className="pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">

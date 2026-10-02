@@ -144,10 +144,10 @@ export default function PersonnelDetailCuocChart({ personnel }: Props) {
 
   // Thông số vẽ SVG (Hệ tọa độ)
   const svgWidth = 660;
-  const svgHeight = 220;
+  const svgHeight = 320;
   const padLeft = 65;
   const padRight = 15;
-  const padTop = 20;
+  const padTop = 30;
   const padBottom = 35;
 
   const chartW = svgWidth - padLeft - padRight;
@@ -225,7 +225,7 @@ export default function PersonnelDetailCuocChart({ personnel }: Props) {
       </div>
 
       {/* SVG Container */}
-      <div className="relative flex-1 w-full flex items-center justify-center min-h-[220px]">
+      <div className="relative flex-1 w-full flex items-center justify-center min-h-[320px]">
         <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto overflow-visible">
           {/* Lưới ngang chấm mờ & Nhãn trục Oy */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
