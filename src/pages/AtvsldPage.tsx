@@ -567,11 +567,10 @@ export default function AtvsldPage() {
                   <button
                     type="button"
                     onClick={() => setIsFeaturesDropdownOpen(!isFeaturesDropdownOpen)}
-                    className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${
-                      isFeaturesDropdownOpen
-                        ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white border-emerald-600 shadow-sm'
-                        : 'bg-white text-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 hover:text-emerald-600'
-                    }`}
+                    className={`w-[119px] h-[32px] px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all shadow-xs whitespace-nowrap cursor-pointer shrink-0 ${isFeaturesDropdownOpen
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white border-emerald-600 shadow-sm'
+                      : 'bg-white text-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 hover:text-emerald-600'
+                      }`}
                   >
                     <Sparkles size={14} className={isFeaturesDropdownOpen ? 'text-amber-300 animate-pulse' : 'text-emerald-600'} />
                     <span>Tính năng</span>
@@ -617,11 +616,10 @@ export default function AtvsldPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${
-                      isActive
-                        ? `text-white font-black z-10 ${isLevel2Open ? 'pb-2.5 sm:pb-3' : ''}`
-                        : 'text-gray-500 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
-                    }`}
+                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${isActive
+                      ? `text-white font-black z-10 ${isLevel2Open ? 'pb-2.5 sm:pb-3' : ''}`
+                      : 'text-gray-500 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
+                      }`}
                   >
                     {isActive && (
                       <motion.div
@@ -661,11 +659,10 @@ export default function AtvsldPage() {
                             key={st.id}
                             type="button"
                             onClick={() => setActiveSubTab(st.id as any)}
-                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                              isSubActive
-                                ? `text-white font-black ${isLevel3Open && st.id === 'khoahoc' ? 'pb-2.5 rounded-b-none' : ''}`
-                                : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive
+                              ? `text-white font-black ${isLevel3Open && st.id === 'khoahoc' ? 'pb-2.5 rounded-b-none' : ''}`
+                              : 'text-white/80 hover:text-white hover:bg-white/10'
+                              }`}
                           >
                             {isSubActive && (
                               <motion.div
@@ -685,8 +682,8 @@ export default function AtvsldPage() {
                   ) : (
                     <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
                       {[
-                        { id: 'tonghop', label: 'Đợt KSK Tổng hợp cấp đơn vị', icon: <Building2 className="w-4 h-4" />, count: suckhoeCounts.campaignCount },
-                        { id: 'canhan', label: 'Lịch sử KSK chi tiết nhân sự', icon: <Users className="w-4 h-4" />, count: suckhoeCounts.caNhanCount }
+                        { id: 'tonghop', label: 'Đợt Khám', icon: <Building2 className="w-4 h-4" />, count: suckhoeCounts.campaignCount },
+                        { id: 'canhan', label: 'Lịch sử Đợt Khám', icon: <Users className="w-4 h-4" />, count: suckhoeCounts.caNhanCount }
                       ].map(st => {
                         const isSubActive = activeSubTabSuckhoe === st.id;
                         return (
@@ -694,9 +691,8 @@ export default function AtvsldPage() {
                             key={st.id}
                             type="button"
                             onClick={() => setActiveSubTabSuckhoe(st.id as any)}
-                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                              isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
+                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
+                              }`}
                           >
                             {isSubActive && (
                               <motion.div
@@ -743,9 +739,8 @@ export default function AtvsldPage() {
                           key={st.id}
                           type="button"
                           onClick={() => setActiveSubTab3(st.id as any)}
-                          className={`relative py-1.5 px-3.5 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                            isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
-                          }`}
+                          className={`relative py-1.5 px-3.5 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
+                            }`}
                         >
                           {isSubActive && (
                             <motion.div

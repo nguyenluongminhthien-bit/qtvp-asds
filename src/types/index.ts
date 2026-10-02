@@ -105,7 +105,7 @@ export interface Personnel {
   tuoi?: string | number;
   tham_nien?: string;
   thu_nhap: string | number;
-  mo_ta_ngoai_hinh: string;
+  mo_to_ngoai_hinh: string;
   ghi_chu: string;
   cc_atvsld: boolean;
   nhom_doi_tuong?: string;
@@ -617,6 +617,10 @@ export interface DynamicGoiKhamItem {
   code: string;
   label: string;
   mo_ta?: string;
+  price?: number; // Giá chung (fallback)
+  price_nam?: number; // Giá Nam
+  price_nu_dt?: number; // Giá Nữ Độc thân
+  price_nu_cgd?: number; // Giá Nữ Có gia đình
 }
 
 export interface KetQuaKSKBreakdown {
@@ -654,6 +658,8 @@ export interface KhamSucKhoeRecord {
   tong_chi_phi: number;
   goi_kham_schema?: DynamicGoiKhamItem[];  // Danh mục gói khám động năm đó
   goi_kham_values?: Record<string, number>; // Số lượng thực tế theo mã gói
+  goi_kham_bnn_schema?: DynamicGoiKhamItem[];  // Danh mục gói khám BNN
+  goi_kham_bnn_values?: Record<string, number>; // Số lượng thực tế khám BNN theo mã gói
   ket_qua_ksk_json?: KetQuaKSKBreakdown;
   bnn_lan_1_json?: KetQuaBNNBreakdown;
   bnn_lan_2_json?: KetQuaBNNBreakdown;

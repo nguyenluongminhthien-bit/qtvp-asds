@@ -3915,7 +3915,7 @@ export default function PersonnelPage() {
                   <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2"><UserIcon size={18} className="text-orange-500" /> Cá nhân & Ngoại hình</h4>
                   <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-3 flex-1">
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
-                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">CCCD:</span>
+                      <span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">CCCD:</span>
                       {hasRule('NS_HIDE_SENSITIVE') ? (
                         <span className="font-semibold text-gray-400 text-sm sm:text-right">***</span>
                       ) : (
@@ -3931,12 +3931,15 @@ export default function PersonnelPage() {
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Trình độ:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.trinh_do_hoc_van || '---'}</span></div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
+                    {viewData.hon_nhan && (
+                      <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-32 whitespace-nowrap shrink-0">Tình trạng hôn nhân:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.hon_nhan}</span></div>
+                    )}
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Trình độ:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.trinh_do_hoc_van || '---'}</span></div>
                     {viewData.sdt_cong_ty && (
                       <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
-                        <span className="text-gray-500 text-sm sm:w-32 shrink-0">Định mức cước ĐTDĐ:</span>
+                        <span className="text-gray-500 text-sm sm:w-32 whitespace-nowrap shrink-0">Định mức cước ĐTDĐ:</span>
                         <span className="font-bold text-[#05469B] text-sm sm:text-right">
                           {viewData.dinh_muc_cuoc !== null && viewData.dinh_muc_cuoc !== undefined
                             ? `${formatCurrency(viewData.dinh_muc_cuoc)} VNĐ`
@@ -3945,13 +3948,13 @@ export default function PersonnelPage() {
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
-                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">Thu nhập:</span>
+                      <span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Thu nhập:</span>
                       <span className="font-semibold text-gray-800 text-sm sm:text-right">
                         {hasRule('NS_HIDE_SENSITIVE') ? '***' : (viewData.thu_nhap ? `${formatCurrency(viewData.thu_nhap)} VNĐ` : '---')}
                       </span>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-4">
-                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">Ngoại hình:</span>
+                      <span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Ngoại hình:</span>
                       <span className="font-semibold text-gray-800 text-sm sm:text-right whitespace-pre-wrap flex-1">
                         {hasRule('NS_HIDE_SENSITIVE') ? '***' : (viewData.mo_to_ngoai_hinh || '---')}
                       </span>
