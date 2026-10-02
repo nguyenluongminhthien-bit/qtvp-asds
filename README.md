@@ -143,8 +143,9 @@ QTVP-ASDS App
   - Quản lý nhật ký/lịch sử kiểm định (`nk_kiem_dinh_tbnn`), đơn vị kiểm định, chi phí, link biên bản PDF.
   - Cảnh báo thời hạn kiểm định qua huy hiệu màu chuẩn: *Đỏ (Quá hạn)*, *Cam (Dưới 30 ngày)*, *Vàng (Dưới 60 ngày)*, *Xanh (An toàn)*.
 - **Tab 5: Khám sức khỏe & Bệnh nghề nghiệp (`SucKhoeTab.tsx`)**:
-  - Quản lý chiến dịch khám sức khỏe định kỳ của toàn đơn vị.
-  - Hỗ trợ dán Excel danh sách KSK cá nhân (tự viết hoa chữ cái đầu họ tên, tự gán đúng đơn vị khám năm cũ), tự động tính toán & tổng hợp đợt KSK cấp đơn vị.
+  - Quản lý chiến dịch khám sức khỏe định kỳ của toàn đơn vị. Tái cấu trúc Layout Modal 3 dòng chuyên nghiệp, kết hợp dropdown Gói khám (KSK, BNN).
+  - **Tự động hóa giá & Tổng chi phí:** Tự động cấu trúc Đơn giá linh hoạt (Chung, Nam, Nữ Độc thân, Nữ Có gia đình) vào mảng JSONB `goi_kham_schema` không cần tạo thêm cột trong DB. Tích hợp thuật toán **🧮 Tính tự động** giúp đối soát chéo danh sách nhân sự Excel (`gioi_tinh`, `hon_nhan`) với đơn giá của từng gói khám để tính tổng chi phí chính xác tuyệt đối.
+  - Hỗ trợ dán Excel danh sách KSK cá nhân: Tự viết hoa chữ cái đầu họ tên, tự động tính BMI, xử lý chuỗi "Phân loại sức khoẻ" (Loại I-V) linh hoạt, parse chuẩn xác và biểu diễn KPI thông minh cho Bệnh nghề nghiệp (SL Khám, SL Mắc, Nguy cơ).
   - Cơ chế lọc phân tách: Bảng ma trận lọc theo đơn vị hiện tại (xem tiến trình điều chuyển đơn vị), Bảng chi tiết lọc theo đơn vị lúc khám thực tế (báo cáo thống kê).
   - *Custom Confirm Modal Xóa:* Thay thế dialog confirm native của trình duyệt bằng Custom Confirm Modal giao diện mờ backdrop blur sang trọng.
 
