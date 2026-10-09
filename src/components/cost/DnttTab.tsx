@@ -215,7 +215,6 @@ export default function DnttTab({
     don_vi_hien_thi: '',
     noi_dung_thanh_toan: '',
     cau_dan: '',
-    cau_dan: true,
     tong_so_tien: 0,
     so_tien_bang_chu: '',
     hinh_thuc_thanh_toan: 'Chuyển khoản',
