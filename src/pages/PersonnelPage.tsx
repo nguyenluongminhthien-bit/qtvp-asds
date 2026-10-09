@@ -27,6 +27,8 @@ import CuocDiDongTab from '../components/personnel/CuocDiDongTab';
 import PersonnelDetailCuocChart from '../components/personnel/PersonnelDetailCuocChart';
 import { CERTIFICATES } from '../constants/certificates';
 import { getKhamSucKhoeCaNhan } from '../services/api/modules';
+import PersonnelDashboardTab from '../components/personnel/PersonnelDashboardTab';
+import PersonnelNgachLuongTab from '../components/personnel/PersonnelNgachLuongTab';
 
 const extractStartDateFromMaNV = (maNV: string) => {
   if (!maNV || maNV.length < 4) return null;
@@ -330,6 +332,8 @@ export default function PersonnelPage() {
   const [unreturnedAssets, setUnreturnedAssets] = useState<any[]>([]);
   const [forceOffboard, setForceOffboard] = useState(false);
   const [checkingAssets, setCheckingAssets] = useState(false);
+
+  const [activeSubTabStats, setActiveSubTabStats] = useState<'NHAN_SU' | 'DASHBOARD'>('NHAN_SU');
 
   // Thêm state cho Điều chuyển / Nghỉ việc
   const [transferType, setTransferType] = useState<'INTERNAL' | 'EXTERNAL' | 'OFFBOARD'>('INTERNAL');
@@ -834,8 +838,8 @@ export default function PersonnelPage() {
 
   const personnelTabs = useMemo(() => [
     { id: 'info', label: 'Danh sách nhân sự', icon: <Users size={18} />, count: filteredPersonnel.length },
-    { id: 'stats', label: 'Thống kê', icon: <BarChart3 size={18} /> },
-    { id: 'cuoc', label: 'Cước điện thoại', icon: <Phone size={18} /> }
+    { id: 'cuoc', label: 'Cước điện thoại', icon: <Phone size={18} /> },
+    { id: 'stats', label: 'Thống kê', icon: <BarChart3 size={18} /> }
   ], [filteredPersonnel.length]);
 
   const displayPersonnelList = useMemo(() => {
@@ -1060,14 +1064,14 @@ export default function PersonnelPage() {
         const pl = String(p.chuc_danh || '').trim().toLowerCase().normalize('NFC');
         const cv = String(p.chuc_vu || '').trim().toLowerCase().normalize('NFC');
 
-        const isBV = 
+        const isBV =
           bp === 'bv, đtkh' || bp === 'bv,đtkh' || bp === 'bv - đtkh' || bp === 'bv-đtkh' ||
-          bp.startsWith('bv, đtkh') || bp.startsWith('bv,đtkh') || 
-          bp.includes('bv, đtkh') || bp.includes('bv,đtkh') || 
+          bp.startsWith('bv, đtkh') || bp.startsWith('bv,đtkh') ||
+          bp.includes('bv, đtkh') || bp.includes('bv,đtkh') ||
           bp.includes('bảo vệ, đón tiếp') || bp.includes('bảo vệ & đón tiếp') || bp.includes('bảo vệ và đón tiếp');
 
-        const isPVHC = 
-          bp === 'pvhc' || bp.startsWith('pvhc') || bp.includes('pvhc') || 
+        const isPVHC =
+          bp === 'pvhc' || bp.startsWith('pvhc') || bp.includes('pvhc') ||
           bp.includes('phục vụ hậu cần') || bp.includes('phục vụ - hậu cần') || bp.includes('phục vụ & hậu cần');
 
         const isLead = pl.includes('tổ trưởng') || pl.includes('tổ phó') || pl.includes('trưởng nhóm') ||
@@ -1472,7 +1476,7 @@ export default function PersonnelPage() {
         }
 
         // Kiểm tra xem tất cả các trường thay đổi của nhân sự này có bị bỏ qua hay không
-        const allFieldsIgnored = group.changes.every((ch: any) => 
+        const allFieldsIgnored = group.changes.every((ch: any) =>
           ignoredFields.has(`${msnv}:${ch.field}`)
         );
         if (allFieldsIgnored) {
@@ -1628,7 +1632,7 @@ export default function PersonnelPage() {
         const tbPhone = (tb.so_dien_thoai || '').replace(/\D/g, '');
         const tbPhoneWithZero = tbPhone.length === 9 ? '0' + tbPhone : tbPhone;
         return (item.id && String(tb.id_nhan_su) === String(item.id)) ||
-               (cleanPhoneWithZero && tbPhoneWithZero === cleanPhoneWithZero);
+          (cleanPhoneWithZero && tbPhoneWithZero === cleanPhoneWithZero);
       });
       setPersonnelThueBao(matchedTb || null);
 
@@ -2034,7 +2038,7 @@ export default function PersonnelPage() {
       const phia = getRegion(dv.id); const tenDV = dv.ten_don_vi;
       const validIds = [dv.id, ...getAllSubordinateIds(dv.id, donViList)];
       const unitStaff = data.filter(p => validIds.includes(p.id_don_vi) && p.trang_thai !== 'Đã nghỉ việc' && p.trang_thai !== 'Đã điều chuyển');
-      
+
       const ptqtvp = unitStaff.find(p => {
         const cv = String(p.chuc_vu || '').trim().toLowerCase().normalize('NFC');
         return cv === 'pt qtvp' || cv === 'trưởng phòng qtvp' || cv === 'pt qtvp & asđs';
@@ -2186,10 +2190,10 @@ export default function PersonnelPage() {
           if (row[9]?.trim()) item.sdt_cong_ty = row[9].trim();
           if (row[10]?.trim()) item.gioi_tinh = row[10].trim();
           if (row[11]?.trim()) item.nam_sinh = formatExcelDate(row[11].trim());
-          
+
           if (excelDate) item.ngay_nhan_vien = excelDate;
           else if (extractStartDateFromMaNV(maNV)) item.ngay_nhan_vien = extractStartDateFromMaNV(maNV);
-          
+
           if (row[13]?.trim()) item.sdt_ca_nhan = row[13].trim();
           if (row[14]?.trim()) item.email = row[14].trim();
           if (row[15]?.trim()) item.ngach_luong = row[15].trim();
@@ -2762,7 +2766,7 @@ export default function PersonnelPage() {
           {/* 🟢 KHU VỰC TAB PHÂN CẤP LỒNG KHỐI LIỀN MẠCH (#00539c) */}
           <div className={`w-full flex flex-col mb-4 select-none shrink-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
             {/* --- CẤP 1 --- */}
-            <div className={`w-full bg-gray-100 dark:bg-slate-800 flex flex-wrap gap-1 pt-1 px-1 items-center transition-all duration-300 ${activeTab === 'info' ? 'pb-0 border-b-0' : 'pb-1'}`}>
+            <div className={`w-full bg-gray-100 dark:bg-slate-800 flex flex-wrap gap-1 pt-1 px-1 items-center transition-all duration-300 ${(activeTab === 'info' || activeTab === 'stats') ? 'pb-0 border-b-0' : 'pb-1'}`}>
               {personnelTabs.map((tab) => {
                 const isActive = tab.id === activeTab;
                 return (
@@ -2770,16 +2774,15 @@ export default function PersonnelPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${
-                      isActive
-                        ? `text-white font-black z-10 ${activeTab === 'info' ? 'pb-2.5 sm:pb-3' : ''}`
+                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${isActive
+                        ? `text-white font-black z-10 ${(activeTab === 'info' || activeTab === 'stats') ? 'pb-2.5 sm:pb-3' : ''}`
                         : 'text-gray-500 hover:text-[#00539c] dark:hover:text-blue-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
-                    }`}
+                      }`}
                   >
                     {isActive && (
                       <motion.div
                         layoutId="personnelMainTabSlide"
-                        className={`absolute inset-0 z-0 shadow-xs ${activeTab === 'info' ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
+                        className={`absolute inset-0 z-0 shadow-xs ${(activeTab === 'info' || activeTab === 'stats') ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
                         style={{ backgroundColor: '#00539c' }}
                         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                       />
@@ -2796,7 +2799,7 @@ export default function PersonnelPage() {
               })}
             </div>
 
-            {/* --- CẤP 2 (Chỉ mở khi chọn Tab 1: Danh sách nhân sự) --- */}
+            {/* --- CẤP 2 (Chỉ mở khi chọn Tab 1: Danh sách nhân sự hoặc Thống kê) --- */}
             <AnimatePresence initial={false}>
               {activeTab === 'info' && (
                 <motion.div
@@ -2818,11 +2821,10 @@ export default function PersonnelPage() {
                           key={st.id}
                           type="button"
                           onClick={() => setActiveSubTabPersonnel(st.id as any)}
-                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                            isSubActive
+                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive
                               ? 'text-white font-black'
                               : 'text-white/80 hover:text-white hover:bg-white/10'
-                          }`}
+                            }`}
                         >
                           {isSubActive && (
                             <motion.div
@@ -2837,6 +2839,49 @@ export default function PersonnelPage() {
                           </span>
                           <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
                             {st.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+              {activeTab === 'stats' && (
+                <motion.div
+                  key="level2-stats"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  className="overflow-hidden bg-[#00539c]"
+                >
+                  <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
+                    {[
+                      { id: 'NHAN_SU', label: 'Nhân sự', icon: <Users className="w-4 h-4" /> },
+                      { id: 'DASHBOARD', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> }
+                    ].map(st => {
+                      const isSubActive = activeSubTabStats === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setActiveSubTabStats(st.id as any)}
+                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
+                            isSubActive
+                              ? 'text-white font-black'
+                              : 'text-white/80 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {isSubActive && (
+                            <motion.div
+                              layoutId="statsSubTabSlide"
+                              className="absolute inset-0 bg-[#00386b] rounded-lg shadow-sm ring-1 ring-sky-400/40 z-0"
+                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                            />
+                          )}
+                          <span className="relative z-10 flex items-center gap-1.5">
+                            {st.icon}
+                            <span>{st.label}</span>
                           </span>
                         </button>
                       );
@@ -2929,7 +2974,7 @@ export default function PersonnelPage() {
 
         {/* 🟢 PHẦN 4 */}
         {/* 🟢 TAB THỐNG KÊ (DASHBOARD) */}
-        {activeTab === 'stats' && (() => {
+        {activeTab === 'stats' && activeSubTabStats === 'NHAN_SU' && (() => {
           // 🟢 TÌM GIÁ TRỊ LỚN NHẤT ĐỂ CHIA TỶ LỆ CỘT RÕ RÀNG HƠN
           const maxSeniority = Math.max(0, ...(Object.values(stats.seniority) as number[]));
           const maxAge = Math.max(0, ...(Object.values(stats.ageGroups) as number[]));
@@ -3210,58 +3255,7 @@ export default function PersonnelPage() {
                 </div>
               </div>
 
-              {/* DÒNG 3: CÁC BIỂU ĐỒ (Giới tính, Thâm niên, Độ tuổi) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
-                  <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><PieChartIcon size={18} className="text-[#05469B]" /> Cơ cấu Giới tính</h3>
-                  <div>
-                    <div className="flex justify-between mb-2 text-sm font-bold">
-                      <span className="text-[#05469B] flex items-center gap-1">Nam: {stats.male} ({stats.total > 0 ? Math.round(stats.male / stats.total * 100) : 0}%)</span>
-                      <span className="text-pink-500 flex items-center gap-1">({stats.total > 0 ? Math.round(stats.female / stats.total * 100) : 0}%) {stats.female} :Nữ</span>
-                    </div>
-                    <div className="w-full h-8 bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
-                      <div className="h-full bg-[#05469B] transition-all duration-1000" style={{ width: `${stats.total > 0 ? (stats.male / stats.total) * 100 : 0}%` }}></div>
-                      <div className="h-full bg-pink-400 transition-all duration-1000" style={{ width: `${stats.total > 0 ? (stats.female / stats.total) * 100 : 0}%` }}></div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><BarChart3 size={18} className="text-[#05469B]" /> Thâm niên công tác</h3>
-                  <div className="flex items-end justify-around h-32 pt-4 border-b border-gray-200">
-                    {Object.entries(stats.seniority).map(([label, count]: any) => {
-                      const heightPercent = maxSeniority > 0 ? Math.max((count / maxSeniority) * 100, count > 0 ? 5 : 0) : 0;
-                      return (
-                        <div key={label} className="flex flex-col items-center justify-end h-full group w-1/4">
-                          <span className="text-xs font-bold text-gray-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">{count}</span>
-                          <div className="flex items-end justify-center w-full flex-1 border-b border-gray-200 pb-0">
-                            <div className="w-8 sm:w-12 bg-emerald-500 rounded-t-md transition-all duration-1000 group-hover:bg-emerald-400" style={{ height: `${heightPercent}%`, minHeight: count > 0 ? '4px' : '0px' }}></div>
-                          </div>
-                          <span className="text-[10px] font-bold text-gray-600 mt-2 text-center h-4">{label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                  <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><Users size={18} className="text-[#05469B]" /> Phân bổ Độ tuổi</h3>
-                  <div className="flex items-end justify-around h-32 pt-4 border-b border-gray-200">
-                    {Object.entries(stats.ageGroups).map(([label, count]: any) => {
-                      const heightPercent = maxAge > 0 ? Math.max((count / maxAge) * 100, count > 0 ? 5 : 0) : 0;
-                      return (
-                        <div key={label} className="flex flex-col items-center justify-end h-full group w-1/4">
-                          <span className="text-xs font-bold text-gray-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">{count}</span>
-                          <div className="flex items-end justify-center w-full flex-1 border-b border-gray-200 pb-0">
-                            <div className="w-8 sm:w-12 bg-orange-400 rounded-t-md transition-all duration-1000 group-hover:bg-orange-300" style={{ height: `${heightPercent}%`, minHeight: count > 0 ? '4px' : '0px' }}></div>
-                          </div>
-                          <span className="text-[10px] font-bold text-gray-600 mt-2 text-center h-4">{label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
 
               {/* DÒNG 4: DANH SÁCH SINH NHẬT TRONG THÁNG */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8">
@@ -3291,6 +3285,15 @@ export default function PersonnelPage() {
             </div>
           );
         })()}
+
+        {activeTab === 'stats' && activeSubTabStats === 'DASHBOARD' && (
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-6 bg-slate-50 p-4 lg:p-6">
+            <PersonnelDashboardTab personnelList={filteredPersonnel} />
+            <div>
+              <PersonnelNgachLuongTab personnelList={filteredPersonnel} />
+            </div>
+          </div>
+        )}
 
         {activeTab === 'cuoc' && (
           <CuocDiDongTab
@@ -3581,11 +3584,10 @@ export default function PersonnelPage() {
                         </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${
-                          transferSimAction === 'TRANSFER'
+                        <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${transferSimAction === 'TRANSFER'
                             ? 'border-blue-500 bg-white text-blue-900 shadow-xs ring-2 ring-blue-400/20'
                             : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
-                        }`}>
+                          }`}>
                           <div className="flex items-center gap-2">
                             <input
                               type="radio"
@@ -3602,11 +3604,10 @@ export default function PersonnelPage() {
                           </p>
                         </label>
 
-                        <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${
-                          transferSimAction === 'REVOKE'
+                        <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${transferSimAction === 'REVOKE'
                             ? 'border-amber-500 bg-white text-amber-900 shadow-xs ring-2 ring-amber-400/20'
                             : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
-                        }`}>
+                          }`}>
                           <div className="flex items-center gap-2">
                             <input
                               type="radio"
@@ -3701,22 +3702,20 @@ export default function PersonnelPage() {
                                       <button
                                         type="button"
                                         onClick={() => setTransferAssetActions(prev => ({ ...prev, [asset.rawId]: 'TRANSFER' }))}
-                                        className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
-                                          currentAction === 'TRANSFER'
+                                        className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${currentAction === 'TRANSFER'
                                             ? 'bg-blue-600 text-white shadow-xs'
                                             : 'text-gray-600 hover:text-gray-900'
-                                        }`}
+                                          }`}
                                       >
                                         🔄 Chuyển sang ĐV mới
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setTransferAssetActions(prev => ({ ...prev, [asset.rawId]: 'REVOKE' }))}
-                                        className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
-                                          currentAction === 'REVOKE'
+                                        className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${currentAction === 'REVOKE'
                                             ? 'bg-amber-600 text-white shadow-xs'
                                             : 'text-gray-600 hover:text-gray-900'
-                                        }`}
+                                          }`}
                                       >
                                         📥 Thu hồi về ĐV cũ
                                       </button>
@@ -3795,15 +3794,14 @@ export default function PersonnelPage() {
                   (transferType === 'INTERNAL'
                     ? !transferInternalUnitId
                     : (unreturnedAssets.length > 0 && !forceOffboard) ||
-                      (transferType === 'EXTERNAL' && !transferExternalUnitName.trim()))
+                    (transferType === 'EXTERNAL' && !transferExternalUnitName.trim()))
                 }
-                className={`px-6 py-2.5 text-white rounded-xl font-bold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md ${
-                  transferType === 'INTERNAL'
+                className={`px-6 py-2.5 text-white rounded-xl font-bold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md ${transferType === 'INTERNAL'
                     ? 'bg-[#00539c] hover:bg-[#004077]'
                     : transferType === 'EXTERNAL'
-                    ? 'bg-indigo-600 hover:bg-indigo-700'
-                    : 'bg-orange-500 hover:bg-orange-600'
-                }`}
+                      ? 'bg-indigo-600 hover:bg-indigo-700'
+                      : 'bg-orange-500 hover:bg-orange-600'
+                  }`}
               >
                 {submitting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -3915,7 +3913,7 @@ export default function PersonnelPage() {
                   <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2"><UserIcon size={18} className="text-orange-500" /> Cá nhân & Ngoại hình</h4>
                   <div className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-3 flex-1">
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
-                      <span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">CCCD:</span>
+                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">CCCD:</span>
                       {hasRule('NS_HIDE_SENSITIVE') ? (
                         <span className="font-semibold text-gray-400 text-sm sm:text-right">***</span>
                       ) : (
@@ -3931,15 +3929,12 @@ export default function PersonnelPage() {
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
-                    {viewData.hon_nhan && (
-                      <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-32 whitespace-nowrap shrink-0">Tình trạng hôn nhân:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.hon_nhan}</span></div>
-                    )}
-                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
-                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Trình độ:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.trinh_do_hoc_van || '---'}</span></div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Trình độ:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.trinh_do_hoc_van || '---'}</span></div>
                     {viewData.sdt_cong_ty && (
                       <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
-                        <span className="text-gray-500 text-sm sm:w-32 whitespace-nowrap shrink-0">Định mức cước ĐTDĐ:</span>
+                        <span className="text-gray-500 text-sm sm:w-32 shrink-0">Định mức cước ĐTDĐ:</span>
                         <span className="font-bold text-[#05469B] text-sm sm:text-right">
                           {viewData.dinh_muc_cuoc !== null && viewData.dinh_muc_cuoc !== undefined
                             ? `${formatCurrency(viewData.dinh_muc_cuoc)} VNĐ`
@@ -3948,13 +3943,13 @@ export default function PersonnelPage() {
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
-                      <span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Thu nhập:</span>
+                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">Thu nhập:</span>
                       <span className="font-semibold text-gray-800 text-sm sm:text-right">
                         {hasRule('NS_HIDE_SENSITIVE') ? '***' : (viewData.thu_nhap ? `${formatCurrency(viewData.thu_nhap)} VNĐ` : '---')}
                       </span>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-4">
-                      <span className="text-gray-500 text-sm sm:w-20 whitespace-nowrap shrink-0">Ngoại hình:</span>
+                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">Ngoại hình:</span>
                       <span className="font-semibold text-gray-800 text-sm sm:text-right whitespace-pre-wrap flex-1">
                         {hasRule('NS_HIDE_SENSITIVE') ? '***' : (viewData.mo_to_ngoai_hinh || '---')}
                       </span>
@@ -4055,12 +4050,11 @@ export default function PersonnelPage() {
                               </span>
                             </td>
                             <td className="p-2 text-center">
-                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                                kItem.loai_suc_khoe?.includes('I') && !kItem.loai_suc_khoe?.includes('IV') && !kItem.loai_suc_khoe?.includes('V') ? 'bg-emerald-100 text-emerald-800' :
-                                kItem.loai_suc_khoe?.includes('II') ? 'bg-emerald-50 text-emerald-700' :
-                                kItem.loai_suc_khoe?.includes('III') ? 'bg-amber-50 text-amber-800' :
-                                'bg-rose-100 text-rose-800'
-                              }`}>
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${kItem.loai_suc_khoe?.includes('I') && !kItem.loai_suc_khoe?.includes('IV') && !kItem.loai_suc_khoe?.includes('V') ? 'bg-emerald-100 text-emerald-800' :
+                                  kItem.loai_suc_khoe?.includes('II') ? 'bg-emerald-50 text-emerald-700' :
+                                    kItem.loai_suc_khoe?.includes('III') ? 'bg-amber-50 text-amber-800' :
+                                      'bg-rose-100 text-rose-800'
+                                }`}>
                                 {kItem.loai_suc_khoe || 'Loại I'}
                               </span>
                             </td>
@@ -4393,8 +4387,8 @@ export default function PersonnelPage() {
                           <tbody className="divide-y divide-gray-200">
                             {reconciliationResult.updateItems.map((group, idx) => {
                               const isIgnored = ignoredUpdates.has(group.existing.ma_so_nhan_vien);
-                              const stickyBgClass = isIgnored 
-                                ? 'bg-gray-50 text-gray-400 opacity-60' 
+                              const stickyBgClass = isIgnored
+                                ? 'bg-gray-50 text-gray-400 opacity-60'
                                 : 'bg-white text-gray-700 group-hover:bg-amber-50/10';
 
                               return (
@@ -4403,7 +4397,7 @@ export default function PersonnelPage() {
                                   <td className={`p-3 text-center sticky left-0 z-10 border-r border-gray-200 font-bold ${stickyBgClass}`}>
                                     {idx + 1}
                                   </td>
-                                  
+
                                   {/* Cột Nhân sự Sticky */}
                                   <td className={`p-3 sticky left-[45px] z-10 border-r border-gray-200 ${stickyBgClass}`}>
                                     <div>

@@ -346,6 +346,7 @@ export default function DocumentPage() {
   const [selectedPhanLoai, setSelectedPhanLoai] = useState<string | null>('Thông báo');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedSigner, setSelectedSigner] = useState<string>('all');
+  const [selectedBoPhan, setSelectedBoPhan] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDateFrom, setSelectedDateFrom] = useState<string>('');
   const [selectedDateTo, setSelectedDateTo] = useState<string>('');
@@ -654,15 +655,27 @@ export default function DocumentPage() {
     return Array.from(signers).sort((a, b) => a.localeCompare(b, 'vi'));
   }, [visibleDocuments, selectedPhanLoai]);
 
+  const availableBoPhans = useMemo(() => {
+    let docs = visibleDocuments;
+    if (selectedPhanLoai) {
+      docs = docs.filter(item => item.phan_loai === selectedPhanLoai);
+    }
+    const boPhans = new Set<string>(
+      docs.map(item => item.bo_phan_lay_so ? item.bo_phan_lay_so.trim() : '').filter(Boolean)
+    );
+    return Array.from(boPhans).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [visibleDocuments, selectedPhanLoai]);
+
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (selectedYear !== 'all') count++;
     if (selectedSigner !== 'all') count++;
+    if (selectedBoPhan !== 'all') count++;
     if (selectedStatus !== 'all') count++;
     if (selectedDateFrom) count++;
     if (selectedDateTo) count++;
     return count;
-  }, [selectedYear, selectedSigner, selectedStatus, selectedDateFrom, selectedDateTo]);
+  }, [selectedYear, selectedSigner, selectedBoPhan, selectedStatus, selectedDateFrom, selectedDateTo]);
 
   const filteredDocsWithoutPhanLoai = useMemo(() => {
     let result = [...visibleDocuments];
@@ -688,6 +701,9 @@ export default function DocumentPage() {
     }
     if (selectedSigner !== 'all') {
       result = result.filter(item => item.nguoi_ky && normalizeSignerName(item.nguoi_ky) === selectedSigner);
+    }
+    if (selectedBoPhan !== 'all') {
+      result = result.filter(item => item.bo_phan_lay_so && item.bo_phan_lay_so.trim() === selectedBoPhan);
     }
     if (selectedStatus !== 'all') {
       if (isReplacedStatus(selectedStatus)) {
@@ -1242,7 +1258,7 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col w-full">
 
         {/* TOP BAR HIỂN THỊ RESPONSIVE */}
-        <div className={`flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 sm:mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''} shrink-0`}>
+        <div className={`relative flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 sm:mb-6 gap-4 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''} shrink-0`}>
           <div className="flex items-center justify-between w-full xl:w-auto">
             <div className="flex items-center gap-2.5">
               {isListCollapsed && (
@@ -1317,112 +1333,6 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
                 )}
               </button>
 
-              {/* 🟢 FLOATING FILTER PANEL (POPOVER) */}
-              {isFilterPopoverOpen && (
-                <>
-                  {/* Backdrop */}
-                  <div className="fixed inset-0 z-45 bg-transparent" onClick={() => setIsFilterPopoverOpen(false)}></div>
-
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="flex justify-between items-center pb-2.5 border-b border-gray-100 mb-3">
-                      <h3 className="font-bold text-[#05469B] text-sm flex items-center gap-1.5"><Filter size={16} /> Lọc nâng cao</h3>
-                      <button
-                        onClick={() => {
-                          setSelectedYear('all');
-                          setSelectedSigner('all');
-                          setSelectedStatus('all');
-                          setSelectedDateFrom('');
-                          setSelectedDateTo('');
-                        }}
-                        className="text-xs text-red-500 hover:text-red-700 font-bold hover:underline"
-                      >
-                        Đặt lại
-                      </button>
-                    </div>
-
-                    <div className="space-y-3 block">
-                      {/* Tiêu chí 1: Năm ban hành */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Năm ban hành</label>
-                        <select
-                          value={selectedYear}
-                          onChange={(e) => setSelectedYear(e.target.value)}
-                          className="w-full px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
-                        >
-                          <option value="all">Tất cả các năm</option>
-                          {availableYears.map(year => (
-                            <option key={year} value={year}>Năm {year}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Tiêu chí 2: Người ký */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Người ký</label>
-                        <select
-                          value={selectedSigner}
-                          onChange={(e) => setSelectedSigner(e.target.value)}
-                          className="w-full px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
-                        >
-                          <option value="all">Tất cả người ký</option>
-                          {availableSigners.map(signer => (
-                            <option key={signer} value={signer}>{signer}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Tiêu chí 3: Hiệu lực */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Trạng thái hiệu lực</label>
-                        <select
-                          value={selectedStatus}
-                          onChange={(e) => setSelectedStatus(e.target.value)}
-                          className="w-full px-2.5 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
-                        >
-                          <option value="all">Tất cả trạng thái</option>
-                          <option value="Còn hiệu lực">Còn hiệu lực</option>
-                          <option value="Hết hiệu lực">Hết hiệu lực</option>
-                          <option value="Được thay thế bằng VB">Được thay thế bằng VB</option>
-                        </select>
-                      </div>
-
-                      {/* Tiêu chí 4: Khoảng ngày ban hành */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Khoảng ngày ban hành</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <span className="text-[9px] text-gray-400 block mb-0.5">Từ ngày</span>
-                            <input
-                              type="date"
-                              value={selectedDateFrom}
-                              onChange={(e) => setSelectedDateFrom(e.target.value)}
-                              className="w-full px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
-                            />
-                          </div>
-                          <div>
-                            <span className="text-[9px] text-gray-400 block mb-0.5">Đến ngày</span>
-                            <input
-                              type="date"
-                              value={selectedDateTo}
-                              onChange={(e) => setSelectedDateTo(e.target.value)}
-                              className="w-full px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
-                      <button
-                        onClick={() => setIsFilterPopoverOpen(false)}
-                        className="w-full py-2 bg-[#05469B] text-white rounded-lg text-xs font-bold hover:bg-[#04367a] shadow-sm transition-all"
-                      >
-                        Áp dụng ({filteredDocs.length} văn bản)
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
 
             {/* 4. 🟢 Nút ban hành (độ cao 27 px) */}
@@ -1436,7 +1346,122 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
               </button>
             )}
           </div>
+
         </div>
+
+        {/* 🟢 KHUNG BỘ LỌC NÂNG CAO INLINE MỚI */}
+        {isFilterPopoverOpen && (
+          <div className="mb-4 sm:mb-6 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300 transition-all">
+            <div className="flex justify-between items-center px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+              <h3 className="font-bold text-[#05469B] text-sm flex items-center gap-2 uppercase tracking-wide">
+                <Filter size={16} /> BỘ LỌC NÂNG CAO
+              </h3>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => {
+                    setSelectedYear('all');
+                    setSelectedSigner('all');
+                    setSelectedBoPhan('all');
+                    setSelectedStatus('all');
+                    setSelectedDateFrom('');
+                    setSelectedDateTo('');
+                  }}
+                  className="text-xs text-[#05469B] hover:text-[#04367a] font-semibold hover:underline"
+                >
+                  Xóa bộ lọc
+                </button>
+                <button onClick={() => setIsFilterPopoverOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* Tiêu chí 1: Năm ban hành */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-1.5"><Calendar size={14} className="text-pink-500" /> Năm ban hành</label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className={`w-full px-3 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-[#05469B] outline-none ${selectedYear === 'all' ? 'text-gray-400 font-normal' : 'text-gray-900 font-semibold'}`}
+                  >
+                    <option value="all" className="text-gray-400 font-normal">Chọn Năm...</option>
+                    {availableYears.map(year => (
+                      <option key={year} value={year} className="text-gray-900 font-semibold">Năm {year}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tiêu chí 2: Người ký */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-1.5"><PenTool size={14} className="text-blue-500" /> Người ký</label>
+                  <select
+                    value={selectedSigner}
+                    onChange={(e) => setSelectedSigner(e.target.value)}
+                    className={`w-full px-3 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-[#05469B] outline-none ${selectedSigner === 'all' ? 'text-gray-400 font-normal' : 'text-gray-900 font-semibold'}`}
+                  >
+                    <option value="all" className="text-gray-400 font-normal">Chọn Người ký...</option>
+                    {availableSigners.map(signer => (
+                      <option key={signer} value={signer} className="text-gray-900 font-semibold">{signer}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tiêu chí 3: Bộ phận */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-1.5"><Briefcase size={14} className="text-emerald-500" /> Bộ phận</label>
+                  <select
+                    value={selectedBoPhan}
+                    onChange={(e) => setSelectedBoPhan(e.target.value)}
+                    className={`w-full px-3 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-[#05469B] outline-none ${selectedBoPhan === 'all' ? 'text-gray-400 font-normal' : 'text-gray-900 font-semibold'}`}
+                  >
+                    <option value="all" className="text-gray-400 font-normal">Chọn Bộ phận...</option>
+                    {availableBoPhans.map(bp => (
+                      <option key={bp} value={bp} className="text-gray-900 font-semibold">{bp}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tiêu chí 4: Trạng thái hiệu lực */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-1.5"><CheckCircle2 size={14} className="text-orange-500" /> Trạng thái</label>
+                  <select
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                    className={`w-full px-3 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-[#05469B] outline-none ${selectedStatus === 'all' ? 'text-gray-400 font-normal' : 'text-gray-900 font-semibold'}`}
+                  >
+                    <option value="all" className="text-gray-400 font-normal">Chọn Trạng thái...</option>
+                    <option value="Còn hiệu lực" className="text-gray-900 font-semibold">Còn hiệu lực</option>
+                    <option value="Hết hiệu lực" className="text-gray-900 font-semibold">Hết hiệu lực</option>
+                    <option value="Được thay thế bằng VB" className="text-gray-900 font-semibold">Được thay thế bằng VB</option>
+                  </select>
+                </div>
+
+                {/* Tiêu chí 5: Khoảng ngày ban hành */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-1.5"><Clock size={14} className="text-purple-500" /> Khoảng ngày ban hành</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      title="Từ ngày"
+                      value={selectedDateFrom}
+                      onChange={(e) => setSelectedDateFrom(e.target.value)}
+                      className="w-1/2 px-1 sm:px-2 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
+                    />
+                    <input
+                      type="date"
+                      title="Đến ngày"
+                      value={selectedDateTo}
+                      onChange={(e) => setSelectedDateTo(e.target.value)}
+                      className="w-1/2 px-1 sm:px-2 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#05469B] outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm shrink-0">

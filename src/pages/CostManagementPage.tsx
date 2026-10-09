@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   FileText, BarChart3, BarChart2, Tag, Building2, PanelLeftOpen,
-  Wallet, RefreshCw, Loader2, Search, RotateCcw, Sparkles, ChevronDown, PlusCircle, Layers, FileSpreadsheet, Lock, Calendar
+  Wallet, RefreshCw, Loader2, Search, RotateCcw, Sparkles, ChevronDown, PlusCircle, Layers, FileSpreadsheet, Lock, Calendar, Filter, X, Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { apiService } from '../services/api';
@@ -40,6 +40,14 @@ export default function CostManagementPage() {
   const [moveDnttRequest, setMoveDnttRequest] = useState<{ dnttId: string; targetUnitId?: string } | null>(null);
 
   const isLevel2Open = activeTab === 'admin' || activeTab === 'thong_ke';
+
+  // Bộ lọc nâng cao DNTT
+  const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
+  const [advFilterNoiDung, setAdvFilterNoiDung] = useState('');
+  const [advFilterKmp, setAdvFilterKmp] = useState('');
+  const [advFilterNcc, setAdvFilterNcc] = useState('');
+  const [advFilterDateFrom, setAdvFilterDateFrom] = useState('');
+  const [advFilterDateTo, setAdvFilterDateTo] = useState('');
 
   // Dữ liệu State
   const [donViList, setDonViList] = useState<DonVi[]>([]);
@@ -152,6 +160,51 @@ export default function CostManagementPage() {
       return String(b.so_dntt || '').localeCompare(String(a.so_dntt || ''));
     });
   }, [dnttList, userPermittedUnitIds, donViList]);
+
+  // Danh sách DNTT sau khi áp dụng Bộ lọc nâng cao
+  const advancedFilteredDnttList = useMemo(() => {
+    let result = [...permittedDnttList];
+    const removeAccents = (str: string) => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';
+
+    if (advFilterNoiDung) {
+      const search = removeAccents(advFilterNoiDung);
+      result = result.filter(d => removeAccents(d.noi_dung_thanh_toan || '').includes(search));
+    }
+    if (advFilterNcc) {
+      const search = removeAccents(advFilterNcc);
+      result = result.filter(d => removeAccents(d.ten_tai_khoan || '').includes(search));
+    }
+    if (advFilterDateFrom) {
+      const fromTime = new Date(advFilterDateFrom).getTime();
+      result = result.filter(d => {
+        const time = new Date(d.ngay_lap).getTime();
+        return !isNaN(time) && time >= fromTime;
+      });
+    }
+    if (advFilterDateTo) {
+      const toTime = new Date(advFilterDateTo).getTime();
+      result = result.filter(d => {
+        const time = new Date(d.ngay_lap).getTime();
+        return !isNaN(time) && time <= toTime;
+      });
+    }
+    if (advFilterKmp) {
+      const search = removeAccents(advFilterKmp);
+      const matchedDnttIds = new Set<string>();
+      phanBoList.forEach(pb => {
+        const kmp = kmpList.find(k => k.id === pb.id_kmp);
+        if (kmp) {
+          const matchStr = removeAccents(`${kmp.ma_b7} ${kmp.ma_b10 || ''} ${kmp.dien_giai || kmp.nhom_chi_phi || ''}`);
+          if (matchStr.includes(search)) {
+            matchedDnttIds.add(pb.dntt_id);
+          }
+        }
+      });
+      result = result.filter(d => matchedDnttIds.has(String(d.id)));
+    }
+
+    return result;
+  }, [permittedDnttList, advFilterNoiDung, advFilterKmp, advFilterNcc, advFilterDateFrom, advFilterDateTo, phanBoList, kmpList]);
 
   // Danh sách Phân bổ DNTT thuộc phạm vi phân quyền của tài khoản
   const permittedPhanBoList = useMemo(() => {
@@ -457,6 +510,23 @@ export default function CostManagementPage() {
                         <button
                           type="button"
                           onClick={() => {
+                            setIsAdvancedFilterOpen(!isAdvancedFilterOpen);
+                            setIsFeaturesDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2.5 transition-all hover:bg-emerald-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 hover:text-emerald-600 cursor-pointer"
+                        >
+                          <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-slate-700 text-emerald-600">
+                            <Filter size={15} />
+                          </div>
+                          <div>
+                            <div className="text-gray-800 dark:text-gray-100 font-bold text-xs">Bộ lọc nâng cao</div>
+                            <div className="text-[10px] text-gray-400 font-normal">Lọc chi tiết các phiếu DNTT</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
                             setActiveTab('thong_ke');
                             setActiveThongKeSubTab('dashboard');
                             setIsFeaturesDropdownOpen(false);
@@ -540,6 +610,95 @@ export default function CostManagementPage() {
               </div>
             </div>
           </div>
+
+          {/* KHUNG BỘ LỌC NÂNG CAO INLINE */}
+          {isAdvancedFilterOpen && activeTab === 'dntt' && (
+            <div className="mb-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300 w-full transition-all">
+              <div className="flex justify-between items-center px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
+                <h3 className="font-bold text-emerald-600 dark:text-emerald-400 text-sm flex items-center gap-2 uppercase tracking-wide">
+                  <Filter size={16} /> BỘ LỌC NÂNG CAO
+                </h3>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      setAdvFilterNoiDung('');
+                      setAdvFilterKmp('');
+                      setAdvFilterNcc('');
+                      setAdvFilterDateFrom('');
+                      setAdvFilterDateTo('');
+                    }}
+                    className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold hover:underline"
+                  >
+                    Xóa bộ lọc
+                  </button>
+                  <button onClick={() => setIsAdvancedFilterOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Tiêu chí 1: Nội dung thanh toán */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5"><FileText size={14} className="text-blue-500" /> Nội dung thanh toán</label>
+                    <input
+                      type="text"
+                      placeholder="Gõ nội dung thanh toán..."
+                      value={advFilterNoiDung}
+                      onChange={(e) => setAdvFilterNoiDung(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#FFFFF0] dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs sm:text-sm font-semibold focus:ring-2 focus:ring-emerald-500 outline-none text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+
+                  {/* Tiêu chí 2: Khoản mục phí */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5"><Tag size={14} className="text-pink-500" /> Khoản mục phí</label>
+                    <input
+                      type="text"
+                      placeholder="Gõ mã B7, B10 hoặc tên..."
+                      value={advFilterKmp}
+                      onChange={(e) => setAdvFilterKmp(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#FFFFF0] dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs sm:text-sm font-semibold focus:ring-2 focus:ring-emerald-500 outline-none text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+
+                  {/* Tiêu chí 3: Nhà cung cấp (Chủ TK) */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5"><Briefcase size={14} className="text-amber-500" /> Nhà cung cấp (Chủ TK)</label>
+                    <input
+                      type="text"
+                      placeholder="Gõ tên chủ tài khoản..."
+                      value={advFilterNcc}
+                      onChange={(e) => setAdvFilterNcc(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#FFFFF0] dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs sm:text-sm font-semibold focus:ring-2 focus:ring-emerald-500 outline-none text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
+
+                  {/* Tiêu chí 4: Thời gian */}
+                  <div>
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5"><Calendar size={14} className="text-purple-500" /> Thời gian (Từ - Đến)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        title="Từ ngày"
+                        value={advFilterDateFrom}
+                        onChange={(e) => setAdvFilterDateFrom(e.target.value)}
+                        className="w-1/2 px-1 sm:px-2 py-2 bg-[#FFFFF0] dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-none text-gray-900 dark:text-gray-100"
+                      />
+                      <input
+                        type="date"
+                        title="Đến ngày"
+                        value={advFilterDateTo}
+                        onChange={(e) => setAdvFilterDateTo(e.target.value)}
+                        className="w-1/2 px-1 sm:px-2 py-2 bg-[#FFFFF0] dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-none text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* DÒNG 3: KHU VỰC TABS PHÂN CẤP LIỀN KHỐI (NESTED CONNECTED TABS) */}
           <div className={`w-full flex flex-col select-none shrink-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
@@ -676,7 +835,7 @@ export default function CostManagementPage() {
             <>
               {activeTab === 'dntt' && (
                 <DnttTab
-                  dnttList={permittedDnttList}
+                  dnttList={advancedFilteredDnttList}
                   chiTietList={chiTietList}
                   phanBoList={phanBoList}
                   kmpList={kmpList}
