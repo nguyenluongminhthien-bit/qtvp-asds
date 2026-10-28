@@ -1708,6 +1708,7 @@ export default function EquipmentPage() {
           {/* HÀNG TAB CHÍNH KÉO DÀI 100% CHIỀU DÀI BẢNG (w-full) VỚI HIỆU ỨNG TRƯỢT FLYONUI */}
           <div className={`w-full transition-all duration-300 ${isListCollapsed ? 'md:pl-10 lg:pl-0' : ''}`}>
             <SegmentTabs
+              theme="equipment"
               tabs={equipmentTabs}
               activeTab={activeMainTab}
               onChange={(id) => {
@@ -1715,7 +1716,6 @@ export default function EquipmentPage() {
                 if (id === 'report') setDrillDownValue(null);
               }}
               layoutId="equipmentMainTabsSlide"
-              activeBgColor="#05469B"
               fullWidth
             />
           </div>

@@ -31,6 +31,7 @@ import { toast } from '../utils/toast';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 import { exportSecurityReport } from '../utils/exportExcel';
 import DepartmentMapModal from '../components/department/DepartmentMapModal';
+import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
 
 
 // 🟢 [HÀM TIỆN ÍCH CHUNG]
@@ -1026,71 +1027,42 @@ export default function DepartmentPage() {
   };
   // =====================================================================
 
-  // 🟢 3. HÀM RENDER CÂY THƯ MỤC (Vừa được khôi phục)
-  const renderUnitTree = (parent: DonVi, level: number = 1) => {
-    const children = getChildUnits(parent.id);
-    const isExpanded = expandedParents.includes(parent.id) || !!searchTerm;
-    const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
-
-    return (
-      <div key={parent.id} className={level === 1 ? "mb-1" : "mt-1"}>
-        <button onClick={() => { setSelectedUnitId(parent.id); if (children.length > 0) toggleParent(parent.id); }} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${selectedUnitId === parent.id ? 'bg-blue-50 text-[#05469B]' : 'text-gray-700 hover:bg-gray-50'} ${isParentDimmed ? 'opacity-50' : ''}`}>
-          {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />) : <div className="w-4 shrink-0" />}
-          <span className={`shrink-0 ${selectedUnitId === parent.id ? 'opacity-100' : 'opacity-70'}`}>{getUnitEmoji(parent.loai_hinh)}</span>
-          <span className="truncate text-left">{parent.ten_don_vi}</span>
-        </button>
-        {isExpanded && children.length > 0 && (<div className={`ml-${level === 1 ? '6' : '4'} mt-1 border-l-2 border-gray-100 pl-2 space-y-1`}>{children.map(child => renderUnitTree(child, level + 1))}</div>)}
-      </div>
-    );
-  };
-
   if (loading) return <PageWithFilterSkeleton rows={8} />;
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] overflow-hidden relative">
       {isListCollapsed && (
-        <button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all" title="Mở danh sách đơn vị"><PanelLeftOpen size={20} /></button>
+        <button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all cursor-pointer" title="Mở danh sách đơn vị"><PanelLeftOpen size={20} /></button>
       )}
 
-      {/* CỘT TRÁI BỘ LỌC */}
-      {!isListCollapsed && (
-        <div
-          className="fixed inset-0 bg-black/40 z-[70] lg:hidden animate-in fade-in duration-200"
-          onClick={() => setIsListCollapsed(true)}
-        />
-      )}
-      <div className={`${isListCollapsed ? 'lg:w-80 lg:-ml-80 lg:relative lg:opacity-0' : 'w-80 opacity-100 absolute lg:relative inset-y-0 left-0 z-[80] lg:z-10'} transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl lg:shadow-sm shrink-0 overflow-hidden ${isListCollapsed ? 'hidden lg:flex' : 'flex'}`}>
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-[#05469B] flex items-center gap-2 whitespace-nowrap"><Building2 size={20} /> Công ty & Showroom</h2>
-            <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-[#05469B] hover:bg-blue-50 rounded-md transition-colors"><PanelLeftClose size={18} /></button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input type="text" placeholder="Tìm đơn vị, showroom..." className="w-full pl-9 pr-4 py-2 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#05469B] outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          </div>
-        </div>
+      {/* CỘT TRÁI BỘ LỌC ĐƠN VỊ VỚI HIỆU ỨNG TRƯỢT MƯỢT MÀ */}
+      <UnitFilterSidebar
+        donViList={data}
+        selectedUnitFilter={selectedUnitId}
+        setSelectedUnitFilter={(id) => { if (id) setSelectedUnitId(id); }}
+        allowedDonViIds={effectiveAllowedDonViIds}
+        unitSearchTerm={searchTerm}
+        setUnitSearchTerm={setSearchTerm}
+        expandedParents={expandedParents}
+        setExpandedParents={setExpandedParents}
+        isListCollapsed={isListCollapsed}
+        setIsListCollapsed={setIsListCollapsed}
+        themeColor="blue"
+        title="Công ty & Showroom"
+        titleIcon={<Building2 size={20} />}
+        hideAllUnitsButton={true}
+        searchPlaceholder="Tìm đơn vị, showroom..."
+        footerAction={
+          canCreate('CongTy') ? (
+            <button
+              onClick={() => openModal('create')}
+              className="w-full py-2.5 bg-white border border-dashed border-[#05469B] text-[#05469B] hover:bg-blue-50 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            >
+              <Plus size={18} /> THÊM ĐƠN VỊ
+            </button>
+          ) : undefined
+        }
+      />
 
-        <div className="flex-1 overflow-y-auto p-2 min-w-[319px]">
-          {loading ? (
-            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-[#05469B]" /></div>
-          ) : parentUnits.length === 0 ? (
-            <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
-          ) : (
-            <>
-              {vpdhUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">VPĐH</p>{vpdhUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {ctttNamUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Nam</p>{ctttNamUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {ctttBacUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Bắc</p>{ctttBacUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {otherUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>{otherUnits.map(dv => renderUnitTree(dv))}</div>)}
-            </>
-          )}
-        </div>
-
-        {canCreate('CongTy') && (
-          <div className="p-4 border-t border-gray-100 bg-gray-50 min-w-[319px]">
-            <button onClick={() => openModal('create')} className="w-full py-2.5 bg-white border border-dashed border-[#05469B] text-[#05469B] hover:bg-blue-50 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"><Plus size={18} /> THÊM ĐƠN VỊ</button>
-          </div>
-        )}
-      </div>
 
       {/* CỘT PHẢI CHI TIẾT */}
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-6 relative transition-all duration-300 w-full">

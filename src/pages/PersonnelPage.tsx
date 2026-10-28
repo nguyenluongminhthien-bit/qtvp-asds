@@ -40,6 +40,109 @@ const extractStartDateFromMaNV = (maNV: string) => {
   return `${fullYear}-${mm}-01`;
 };
 
+const getUnitDepth = (unitId: string, allUnits: DonVi[]): number => {
+  const strId = String(unitId || '').trim();
+  if (!strId) return 999;
+  let depth = 0;
+  let currentId = strId;
+  const visited = new Set<string>();
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    const parent = allUnits.find(u => String(u.id) === String(currentId));
+    if (!parent) {
+      if (depth === 0) return 999;
+      break;
+    }
+    const parentId = parent.cap_quan_ly?.trim() || '';
+    if (!parentId || parentId === 'HO' || parentId === 'DV_HO') {
+      break;
+    }
+    currentId = parentId;
+    depth++;
+  }
+  return depth;
+};
+
+const isKiemTitle = (title?: string): boolean => {
+  const clean = stripAccents(title || '').toLowerCase();
+  return clean.includes('kiem') || clean.includes('kiêm');
+};
+
+const chucDanhOrder: Record<string, number> = {
+  'Ban Lãnh đạo': 1, 'Ban lãnh đạo': 1, 'Lãnh đạo': 1,
+  'Chủ tịch': 2,
+  'Tổng Giám đốc': 3, 'Phó Tổng Giám đốc': 4,
+  'Giám đốc': 5, 'Phó Giám đốc': 6,
+  'Trưởng phòng': 7, 'Trưởng bộ phận': 8, 'Phó phòng': 9, 'Phó bộ phận': 9,
+  'Trợ lý': 10, 'Trưởng nhóm': 11, 'Tổ trưởng': 12, 'Tổ phó': 13,
+  'Chuyên viên': 14, 'PT DVHT KD': 14, 'PT DVHC': 15, 'PT NS': 16,
+  'BV, ĐTKH': 17, 'Nhân viên': 18, 'Chưa phân loại': 99
+};
+
+const getChucDanhRank = (chucDanh?: string): number => {
+  const cd = (chucDanh || '').trim();
+  if (!cd) return 99;
+  if (chucDanhOrder[cd] !== undefined) return chucDanhOrder[cd];
+  const clean = stripAccents(cd).toLowerCase();
+  if (clean.includes('lanh dao')) return 1;
+  if (clean.includes('chu tich')) return 2;
+  if (clean.includes('tong giam doc')) return 3;
+  if (clean.includes('pho tong giam doc')) return 4;
+  if (clean.includes('pho giam doc')) return 6;
+  if (clean.includes('giam doc')) return 5;
+  if (clean.includes('truong phong')) return 7;
+  if (clean.includes('truong bo phan')) return 8;
+  if (clean.includes('pho phong') || clean.includes('pho bo phan')) return 9;
+  if (clean.includes('tro ly')) return 10;
+  if (clean.includes('truong nhom')) return 11;
+  if (clean.includes('to truong')) return 12;
+  if (clean.includes('to pho')) return 13;
+  if (clean.includes('chuyen vien')) return 14;
+  if (clean.includes('nhan vien')) return 18;
+  return 99;
+};
+
+// 🟢 Hàm so sánh nhân sự chuẩn theo 3 mức ưu tiên:
+// Ưu tiên 1 - Cấp đơn vị trong sơ đồ tổ chức (getUnitDepth)
+// Ưu tiên 2 - Chức vụ chính thức (không chứa từ kiêm/kiêm nhiệm xếp trước)
+// Ưu tiên 3 - Cấp bậc phân loại cán bộ lãnh đạo (chucDanhOrder)
+const comparePersonnel = (a: any, b: any, donViList: DonVi[]): number => {
+  // 0. Nhân sự đã nghỉ việc / điều chuyển luôn xếp ở dưới cùng
+  const isInactiveA = a.trang_thai === 'Đã nghỉ việc' || a.trang_thai === 'Đã điều chuyển';
+  const isInactiveB = b.trang_thai === 'Đã nghỉ việc' || b.trang_thai === 'Đã điều chuyển';
+  if (isInactiveA && !isInactiveB) return 1;
+  if (!isInactiveA && isInactiveB) return -1;
+
+  // Ưu tiên 1 - Cấp đơn vị trong sơ đồ tổ chức (depth nhỏ hơn = cấp cao hơn)
+  const depthA = getUnitDepth(a.id_don_vi, donViList);
+  const depthB = getUnitDepth(b.id_don_vi, donViList);
+  if (depthA !== depthB) return depthA - depthB;
+
+  // Ưu tiên 2 - Chức vụ chính thức (chính thức xếp trước kiêm nhiệm)
+  const isKiemA = isKiemTitle(a.chuc_vu);
+  const isKiemB = isKiemTitle(b.chuc_vu);
+  if (!isKiemA && isKiemB) return -1;
+  if (isKiemA && !isKiemB) return 1;
+
+  // Ưu tiên 3 - Cấp bậc phân loại cán bộ lãnh đạo
+  const orderA = getChucDanhRank(a.chuc_danh);
+  const orderB = getChucDanhRank(b.chuc_danh);
+  if (orderA !== orderB) return orderA - orderB;
+
+  // Tiêu chí phụ 1: Thứ tự đơn vị trong sơ đồ tổ chức (thu_tu)
+  const unitA = donViList.find(u => String(u.id) === String(a.id_don_vi));
+  const unitB = donViList.find(u => String(u.id) === String(b.id_don_vi));
+  const thuTuA = unitA ? (Number(unitA.thu_tu) || 999) : 999;
+  const thuTuB = unitB ? (Number(unitB.thu_tu) || 999) : 999;
+  if (thuTuA !== thuTuB) return thuTuA - thuTuB;
+
+  // Tiêu chí phụ 2: Thời gian tạo
+  const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+  const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+  return timeA - timeB;
+};
+
+
 const PersonnelDesktopRow = React.memo(({ item, props }: any) => {
   const { showSelectCheckboxes, selectedPersonnelIds, handleSelectRow, donViMap, hasRule, handleView, handleDuplicate, openModal, handleOffboardClick, setPersonnelToRehire, setIsRehireModalOpen, setItemToDelete, setIsConfirmOpen, calculateSeniority } = props;
   return (
@@ -54,14 +157,16 @@ const PersonnelDesktopRow = React.memo(({ item, props }: any) => {
           />
         </td>
       )}
-      <td className="py-2.5 px-3 font-semibold text-gray-800 whitespace-nowrap text-[11px] align-middle text-left">{item.ma_so_nhan_vien}</td>
-      <td className="py-2.5 px-3 align-middle text-left">
+      <td className="py-2.5 pl-3 pr-1.5 font-semibold text-gray-800 whitespace-nowrap text-[11px] align-middle text-left">{item.ma_so_nhan_vien}</td>
+      <td className="py-2.5 pl-3 pr-1.5 align-middle text-left">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0">
             {item.hinh_anh ? <img src={getDirectImageLink(item.hinh_anh)} alt="" className="w-full h-full object-cover" /> : <UserIcon size={14} className="text-gray-400" />}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-[#00539c] leading-snug text-[13px] whitespace-nowrap">{item.ho_ten}</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="font-bold text-[#00539c] leading-snug text-[13px] whitespace-nowrap">{item.ho_ten}</p>
+            </div>
             {(item.email || item.trang_thai === 'Đã nghỉ việc' || item.trang_thai === 'Đã điều chuyển') && (
               <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                 {item.email && (
@@ -88,24 +193,59 @@ const PersonnelDesktopRow = React.memo(({ item, props }: any) => {
       </td>
       <td className="py-2.5 px-3 align-middle text-left">
         <div className="flex flex-col justify-center">
-          <p className="font-bold text-gray-800 text-[12px] leading-snug truncate" title={item.chuc_vu}>{item.chuc_vu || '---'}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-bold text-gray-800 text-[12px] leading-snug" title={item.chuc_vu}>{item.chuc_vu || '---'}</p>
+            {item.is_kiem_nhiem_single && !item.kiem_nhiem_list?.length && (
+              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                Kiêm nhiệm
+              </span>
+            )}
+          </div>
           {((item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có') || (item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có')) && (
             <div className="flex items-center gap-1 mt-0.5 overflow-hidden whitespace-nowrap">
               {item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có' && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs truncate max-w-[140px]" title={`Bộ phận: ${item.phong_ban}`}>
-                  BP: {item.phong_ban}
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs truncate max-w-[180px]" title={`Bộ phận: ${item.phong_ban}`}>
+                  {item.phong_ban}
                 </span>
               )}
               {item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có' && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-2xs truncate max-w-[140px]" title={`Khối: ${item.khoi}`}>
-                  {String(item.khoi).startsWith('Khối') ? item.khoi : `Khối: ${item.khoi}`}
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-2xs truncate max-w-[180px]" title={`Khối: ${item.khoi}`}>
+                  {String(item.khoi).startsWith('Khối') ? item.khoi : `${item.khoi}`}
                 </span>
               )}
             </div>
           )}
+
+          {/* 🟢 Hiển thị các vai trò kiêm nhiệm gộp (đồng bộ tông màu & viền amber) */}
+          {item.kiem_nhiem_list && item.kiem_nhiem_list.length > 0 && (
+            <div className="mt-1.5 space-y-1 pt-1 border-t border-dashed border-amber-200/60">
+              {item.kiem_nhiem_list.map((kn: any, knIdx: number) => (
+                <div key={knIdx} className="flex items-center gap-1.5 text-[10px] text-amber-900 bg-amber-50/80 hover:bg-amber-100/70 border border-amber-200/90 rounded px-1.5 py-0.5 transition-colors shadow-2xs">
+                  <span className="font-extrabold text-amber-800 bg-amber-100/90 px-1 py-0.2 rounded border border-amber-200 text-[9px] uppercase shrink-0">Kiêm:</span>
+                  <span className="font-bold text-amber-950 truncate" title={kn.chuc_vu}>{kn.chuc_vu}</span>
+                  <span className="text-amber-300">|</span>
+                  <span className="text-amber-800/90 text-[9.5px] truncate font-medium" title={kn.ten_don_vi}>({kn.ten_don_vi})</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </td>
-      <td className="py-2.5 px-3 text-[11.5px] font-medium text-gray-700 leading-normal align-middle text-left">{donViMap[String(item.id_don_vi)] || item.id_don_vi || '-'}</td>
+      <td className="py-2.5 px-3 text-[11.5px] font-medium text-gray-700 leading-normal align-middle text-left">
+        <div>
+          <p className="font-semibold text-gray-800">{donViMap[String(item.id_don_vi)] || item.id_don_vi || '-'}</p>
+          {item.kiem_nhiem_list && item.kiem_nhiem_list.length > 0 && (
+            <div className="mt-1 flex flex-col gap-0.5">
+              {item.kiem_nhiem_list.map((kn: any, knIdx: number) => (
+                <span key={knIdx} className="text-[10px] text-amber-800 font-medium truncate flex items-center gap-1" title={kn.ten_don_vi}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+                  {kn.ten_don_vi}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </td>
       <td className="py-2.5 px-3 whitespace-nowrap align-middle text-left">
         <div className="flex flex-col gap-1 text-[11px]">
           {item.sdt_cong_ty && <a href={`tel:${String(item.sdt_cong_ty).replace(/\D/g, '')}`} className="font-bold text-[#05469B] hover:underline flex items-center gap-1 w-fit"><Phone size={11} className="text-blue-400" /> {formatPhoneNumber(item.sdt_cong_ty)}</a>}
@@ -177,7 +317,9 @@ const PersonnelMobileCard = React.memo(({ item, props }: any) => {
               <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded uppercase">Đang làm việc</span>
             )}
           </div>
-          <h4 className="font-extrabold text-[#00539c] text-sm leading-snug truncate mt-0.5">{item.ho_ten}</h4>
+          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+            <h4 className="font-extrabold text-[#00539c] text-sm leading-snug truncate">{item.ho_ten}</h4>
+          </div>
           {item.email && (
             <button
               type="button"
@@ -199,7 +341,14 @@ const PersonnelMobileCard = React.memo(({ item, props }: any) => {
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
         <div className="col-span-2">
           <p className="text-[10px] font-bold text-gray-400 uppercase">Chức vụ &amp; Bộ phận</p>
-          <p className="font-bold text-gray-800 leading-normal truncate">{item.chuc_vu || '---'}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="font-bold text-gray-800 leading-normal">{item.chuc_vu || '---'}</p>
+            {item.is_kiem_nhiem_single && !item.kiem_nhiem_list?.length && (
+              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                Kiêm nhiệm
+              </span>
+            )}
+          </div>
           {((item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có') || (item.khoi && item.khoi !== '-' && item.khoi !== 'Chưa có')) && (
             <div className="flex items-center gap-1.5 mt-1">
               {item.phong_ban && item.phong_ban !== '-' && item.phong_ban !== 'Chưa phân bộ' && item.phong_ban !== 'Chưa có' && (
@@ -214,10 +363,27 @@ const PersonnelMobileCard = React.memo(({ item, props }: any) => {
               )}
             </div>
           )}
+          {item.kiem_nhiem_list && item.kiem_nhiem_list.length > 0 && (
+            <div className="mt-1.5 space-y-1 pt-1 border-t border-dashed border-amber-200/60">
+              {item.kiem_nhiem_list.map((kn: any, knIdx: number) => (
+                <div key={knIdx} className="flex items-center gap-1.5 text-[10px] text-amber-900 bg-amber-50/80 border border-amber-200/90 rounded px-1.5 py-0.5 shadow-2xs">
+                  <span className="font-extrabold text-amber-800 bg-amber-100/90 px-1 py-0.2 rounded border border-amber-200 text-[9px] uppercase shrink-0">Kiêm:</span>
+                  <span className="font-bold text-amber-950 truncate">{kn.chuc_vu}</span>
+                  <span className="text-amber-300">|</span>
+                  <span className="text-amber-800/90 text-[9px] truncate">({kn.ten_don_vi})</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="col-span-2">
           <p className="text-[10px] font-bold text-gray-400 uppercase">Đơn vị quản lý</p>
-          <p className="font-medium text-gray-700 leading-normal truncate">{donViMap[String(item.id_don_vi)] || item.id_don_vi || '-'}</p>
+          <p className="font-medium text-gray-700 leading-normal">{donViMap[String(item.id_don_vi)] || item.id_don_vi || '-'}</p>
+          {item.kiem_nhiem_list && item.kiem_nhiem_list.length > 0 && (
+            <p className="text-[10px] text-gray-500 mt-0.5 truncate">
+              Kiêm: {item.kiem_nhiem_list.map((k: any) => k.ten_don_vi).join(', ')}
+            </p>
+          )}
         </div>
         <div>
           <p className="text-[10px] font-bold text-gray-400 uppercase">Điện thoại</p>
@@ -351,12 +517,16 @@ export default function PersonnelPage() {
 
   const khoiOptions = useMemo(() => {
     const base = [
-      'KD Xe & SBH Xe DL',
-      'KD Xe & DV SBH Xe TM',
-      'KD xe DL',
-      'KD xe Thương mại & Xuất khẩu',
       'Khối Bán lẻ',
-      'KD DVPT',
+      'Khối Thu mua',
+      'Khối KD Xuất khẩu',
+      'Khối KD Cơ khí và CNHT',
+      'Khối KD xe & DV SBH xe DL',
+      'Khối KD xe & DV SBH xe Thương mại',
+      'Khối Sản xuất Cơ khí và TBCD',
+      'Khối Công nghiệp nặng',
+      'Khối Công nghệ và Giải pháp số hoá',
+      'Khối SX Ô tô, Đầu máy & Toa xe và LKPT',
       'NVQT Chuyên ngành',
       'NVQT Cơ bản',
       'Nghiệp vụ'
@@ -555,10 +725,18 @@ export default function PersonnelPage() {
     const updateItems: any[] = [];
     const unchangedItems: any[] = [];
 
+    // 🟢 Dò tìm toàn công ty để tránh tạo trùng nhân sự khi chuyển đơn vị (Option B)
     const dbMap = new Map<string, any>();
-    activeDbList.forEach(ns => {
-      if (ns.ma_so_nhan_vien) {
-        dbMap.set(String(ns.ma_so_nhan_vien).trim().toLowerCase(), ns);
+    data.forEach(ns => {
+      if (ns.ma_so_nhan_vien && ns.trang_thai === 'Đã nghỉ việc') {
+        const k = String(ns.ma_so_nhan_vien).trim().toLowerCase();
+        if (!dbMap.has(k)) dbMap.set(k, ns);
+      }
+    });
+    data.forEach(ns => {
+      if (ns.ma_so_nhan_vien && ns.trang_thai !== 'Đã nghỉ việc') {
+        const k = String(ns.ma_so_nhan_vien).trim().toLowerCase();
+        dbMap.set(k, ns);
       }
     });
 
@@ -572,9 +750,12 @@ export default function PersonnelPage() {
         const changes: any[] = [];
 
         const fieldLabels: Record<string, string> = {
+          id_don_vi: 'Đơn vị công tác',
+          trang_thai: 'Trạng thái',
           ho_ten: 'Họ tên',
           chuc_vu: 'Chức vụ',
-          phong_ban: 'Phòng ban/Bộ phận',
+          phong_ban: 'Ban/Phòng',
+          bo_phan: 'Bộ phận',
           chuc_danh: 'Chức danh',
           sdt_cong_ty: 'SĐT Công ty',
           sdt_ca_nhan: 'SĐT Cá nhân',
@@ -589,16 +770,31 @@ export default function PersonnelPage() {
           gia_tri_den: 'Giá trị chứng nhận đến',
           chung_nhan: 'Chứng nhận',
           khoi: 'Khối',
+          to_chuc: 'Tổ chức / Mảng',
           dia_diem_lam_viec: 'Địa điểm làm việc',
           cccd: 'Số CCCD',
           the_thang: 'Thẻ tháng',
           the_xe: 'Thẻ xe',
           hang_loai_xe: 'Hạng/Loại xe',
-          bks: 'Biển kiểm soát'
+          bks: 'Biển kiểm soát',
+          dia_chi: 'Địa chỉ',
+          dv_chi_luong: 'Đơn vị chi lương'
         };
 
         Object.keys(item).forEach(col => {
-          if (col === 'id_don_vi') return;
+          if (col === 'id_don_vi') {
+            const oldUnit = String(existing.id_don_vi || '').trim();
+            const newUnit = String(item.id_don_vi || '').trim();
+            if (oldUnit && newUnit && oldUnit !== newUnit) {
+              changes.push({
+                field: 'id_don_vi',
+                label: 'Đơn vị công tác',
+                oldValue: donViMap[oldUnit] || oldUnit || '---',
+                newValue: donViMap[newUnit] || newUnit || '---'
+              });
+            }
+            return;
+          }
 
           const valIncoming = item[col];
           if (valIncoming !== undefined && valIncoming !== null) {
@@ -651,7 +847,7 @@ export default function PersonnelPage() {
       unchangedItems,
       missingItems
     };
-  }, [bulkImportData, currentActivePersonnelOfUnit]);
+  }, [bulkImportData, currentActivePersonnelOfUnit, data, donViMap]);
 
   const allChangedFields = useMemo(() => {
     if (!reconciliationResult?.updateItems) return [];
@@ -789,27 +985,12 @@ export default function PersonnelPage() {
       result = result.filter(item => stripAccents(item.chuc_danh || '').includes(cleanVal));
     }
 
-    const chucDanhOrder: Record<string, number> = {
-      'Lãnh đạo': 1, 'Chủ tịch': 2, 'Tổng Giám đốc': 3, 'Phó Tổng Giám đốc': 4,
-      'Giám đốc': 5, 'Phó Giám đốc': 6, 'Trưởng phòng': 7, 'Trưởng bộ phận': 8, 'Phó phòng': 9,
-      'Trợ lý': 10, 'Trưởng nhóm': 11, 'Tổ trưởng': 12, 'Tổ phó': 13,
-      'Chuyên viên': 14, 'PT DVHT KD': 14, 'PT DVHC': 15, 'PT NS': 16,
-      'BV, ĐTKH': 17, 'Nhân viên': 18, 'Chưa phân loại': 99
-    };
-
-    return result.sort((a, b) => {
-      const isInactiveA = a.trang_thai === 'Đã nghỉ việc' || a.trang_thai === 'Đã điều chuyển';
-      const isInactiveB = b.trang_thai === 'Đã nghỉ việc' || b.trang_thai === 'Đã điều chuyển';
-      if (isInactiveA && !isInactiveB) return 1;
-      if (!isInactiveA && isInactiveB) return -1;
-      const orderA = chucDanhOrder[a.chuc_danh || ''] || 99;
-      const orderB = chucDanhOrder[b.chuc_danh || ''] || 99;
-      if (orderA !== orderB) return orderA - orderB;
-      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return timeA - timeB;
-    });
-  }, [data, debouncedPersonnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, selectedUnitSubordinates, filterPhongBan, filterKhoi, filterChucVu, filterChucDanh]);
+    // 🟢 Sắp xếp danh sách theo 3 mức ưu tiên:
+    // Ưu tiên 1 - Cấp đơn vị trong sơ đồ tổ chức;
+    // Ưu tiên 2 - Chức vụ chính thức;
+    // Ưu tiên 3 - Cấp bậc phân loại cán bộ lãnh đạo
+    return result.sort((a, b) => comparePersonnel(a, b, donViList));
+  }, [data, debouncedPersonnelSearchTerm, selectedUnitFilter, allowedDonViIds, donViMap, donViList, selectedUnitSubordinates, filterPhongBan, filterKhoi, filterChucVu, filterChucDanh]);
 
   const [selectedPersonnelIds, setSelectedPersonnelIds] = useState<string[]>([]);
 
@@ -828,26 +1009,128 @@ export default function PersonnelPage() {
     }
   }, [showSelectCheckboxes]);
 
-  const countActive = useMemo(() => {
+  // 🟢 Hàm gộp các dòng kiêm nhiệm cùng mã số nhân viên & xác định vị trí chính (Primary appointment)
+  const groupAppointments = (list: any[]) => {
+    // Nhóm theo ma_so_nhan_vien (nếu rỗng thì theo id)
+    const groupsMap = new Map<string, any[]>();
+    list.forEach(item => {
+      const key = item.ma_so_nhan_vien && String(item.ma_so_nhan_vien).trim() !== ''
+        ? String(item.ma_so_nhan_vien).trim().toUpperCase()
+        : `NO_MSNV_${item.id}`;
+      if (!groupsMap.has(key)) {
+        groupsMap.set(key, []);
+      }
+      groupsMap.get(key)!.push(item);
+    });
+
+    const result: any[] = [];
+
+    groupsMap.forEach((records, msnvKey) => {
+      if (records.length === 1) {
+        const item = records[0];
+        // Kiểm tra xem người này có kiêm nhiệm không (qua chức vụ hoặc nếu trong toàn bộ database data có nhiều hơn 1 vị trí)
+        const hasOtherRolesInDb = msnvKey.startsWith('NO_MSNV_')
+          ? false
+          : data.some(d => d.id !== item.id && String(d.ma_so_nhan_vien || '').trim().toUpperCase() === msnvKey && d.trang_thai !== 'Đã nghỉ việc' && d.trang_thai !== 'Đã điều chuyển');
+
+        const isKiem = isKiemTitle(item.chuc_vu) || hasOtherRolesInDb;
+
+        result.push({
+          ...item,
+          kiem_nhiem_list: [],
+          all_record_ids: [item.id],
+          is_kiem_nhiem_single: isKiem
+        });
+        return;
+      }
+
+      // Có nhiều hơn 1 bản ghi trong danh sách đang lọc -> Sắp xếp theo 3 mức ưu tiên để tìm bản ghi Chính (Primary)
+      const sorted = [...records].sort((a, b) => comparePersonnel(a, b, donViList));
+
+      const primary = sorted[0];
+      const others = sorted.slice(1);
+
+      const kiem_nhiem_list = others.map(other => ({
+        id: other.id,
+        chuc_vu: other.chuc_vu || '---',
+        chuc_danh: other.chuc_danh || '---',
+        id_don_vi: other.id_don_vi,
+        ten_don_vi: donViMap[String(other.id_don_vi)] || other.id_don_vi || '---',
+        phong_ban: other.phong_ban,
+        khoi: other.khoi,
+        raw: other
+      }));
+
+      result.push({
+        ...primary,
+        kiem_nhiem_list,
+        all_record_ids: records.map(r => r.id),
+        is_kiem_nhiem_single: false
+      });
+    });
+
+    // 🟢 Sắp xếp danh sách kết quả theo 3 mức ưu tiên:
+    // Ưu tiên 1 - Cấp đơn vị trong sơ đồ tổ chức;
+    // Ưu tiên 2 - Chức vụ chính thức;
+    // Ưu tiên 3 - Cấp bậc phân loại cán bộ lãnh đạo
+    return result.sort((a, b) => comparePersonnel(a, b, donViList));
+  };
+
+  // Tổng số vị trí công tác (Tổng số dòng thực tế trước khi gộp kiêm nhiệm)
+  const totalActivePositions = useMemo(() => {
     return filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc' && p.trang_thai !== 'Đã điều chuyển').length;
   }, [filteredPersonnel]);
 
+  // Danh sách nhân sự đang làm việc (Gộp các dòng kiêm nhiệm theo mã NV)
+  const groupedActivePersonnel = useMemo(() => {
+    const rawActive = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc' && p.trang_thai !== 'Đã điều chuyển');
+    return groupAppointments(rawActive);
+  }, [filteredPersonnel, data, donViList, donViMap]);
+
+  // Danh sách nhân sự đã nghỉ việc / điều chuyển (Gộp theo mã NV)
+  const groupedOffboardPersonnel = useMemo(() => {
+    const rawOffboard = filteredPersonnel.filter(p => p.trang_thai === 'Đã nghỉ việc' || p.trang_thai === 'Đã điều chuyển');
+    return groupAppointments(rawOffboard);
+  }, [filteredPersonnel, data, donViList, donViMap]);
+
+  // Số lượng đếm chuẩn hóa theo Headcount thực tế
+  const countActive = useMemo(() => {
+    return groupedActivePersonnel.length;
+  }, [groupedActivePersonnel]);
+
   const countOffboard = useMemo(() => {
-    return filteredPersonnel.filter(p => p.trang_thai === 'Đã nghỉ việc' || p.trang_thai === 'Đã điều chuyển').length;
-  }, [filteredPersonnel]);
+    return groupedOffboardPersonnel.length;
+  }, [groupedOffboardPersonnel]);
 
   const personnelTabs = useMemo(() => [
-    { id: 'info', label: 'Danh sách nhân sự', icon: <Users size={18} />, count: filteredPersonnel.length },
+    {
+      id: 'info',
+      label: 'Danh sách nhân sự',
+      icon: <Users size={18} />,
+      count: countActive + countOffboard,
+      subTabs: [
+        { id: 'ACTIVE', label: 'Đang làm việc', icon: <UserCheck className="w-4 h-4" />, count: countActive },
+        { id: 'OFFBOARD', label: 'Đã nghỉ việc / Điều chuyển', icon: <LogOut className="w-4 h-4" />, count: countOffboard }
+      ]
+    },
     { id: 'cuoc', label: 'Cước điện thoại', icon: <Phone size={18} /> },
-    { id: 'stats', label: 'Thống kê', icon: <BarChart3 size={18} /> }
-  ], [filteredPersonnel.length]);
+    {
+      id: 'stats',
+      label: 'Thống kê',
+      icon: <BarChart3 size={18} />,
+      subTabs: [
+        { id: 'NHAN_SU', label: 'Nhân sự', icon: <Users className="w-4 h-4" /> },
+        { id: 'DASHBOARD', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> }
+      ]
+    }
+  ], [countActive, countOffboard]);
 
   const displayPersonnelList = useMemo(() => {
     if (activeSubTabPersonnel === 'ACTIVE') {
-      return filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc' && p.trang_thai !== 'Đã điều chuyển');
+      return groupedActivePersonnel;
     }
-    return filteredPersonnel.filter(p => p.trang_thai === 'Đã nghỉ việc' || p.trang_thai === 'Đã điều chuyển');
-  }, [filteredPersonnel, activeSubTabPersonnel]);
+    return groupedOffboardPersonnel;
+  }, [groupedActivePersonnel, groupedOffboardPersonnel, activeSubTabPersonnel]);
 
   const isAllSelected = useMemo(() => {
     if (displayPersonnelList.length === 0) return false;
@@ -1247,7 +1530,8 @@ export default function PersonnelPage() {
 
   const openModal = (mode: 'create' | 'update', item?: any) => {
     if (item) {
-      setModal({ isOpen: true, mode, formData: { ...item } });
+      const { all_record_ids, kiem_nhiem_list, is_kiem_nhiem_single, ...cleanItem } = item;
+      setModal({ isOpen: true, mode, formData: { ...cleanItem } });
     } else {
       const defaultUnitId = selectedUnitFilter || allowedDonViIds[0] || (donViList[0]?.id ? String(donViList[0].id) : '');
       const targetUnit = donViList.find(d => String(d.id) === String(defaultUnitId));
@@ -1257,9 +1541,10 @@ export default function PersonnelPage() {
         mode,
         formData: {
           ma_so_nhan_vien: '', ho_ten: '', nam_sinh: '', cccd: '',
+          dia_chi: '', dv_chi_luong: '',
           sdt_ca_nhan: '', sdt_cong_ty: '', email: '',
           id_don_vi: defaultUnitId,
-          phong_ban: '', chuc_vu: '', ngach_luong: '',
+          khoi: '', to_chuc: '', phong_ban: '', bo_phan: '', chuc_danh: '', chuc_vu: '', ngach_luong: '',
           ngay_nhan_vien: new Date().toISOString().split('T')[0],
           gioi_tinh: 'Nam', trang_thai: 'Đang làm việc'
         }
@@ -1273,7 +1558,31 @@ export default function PersonnelPage() {
       toast.warning("Bạn không có quyền xem chi tiết hồ sơ nhân sự này!");
       return;
     }
-    setViewData(item);
+    let enhancedItem = item;
+    if ((!item.kiem_nhiem_list || item.kiem_nhiem_list.length === 0) && item.ma_so_nhan_vien) {
+      const msnv = String(item.ma_so_nhan_vien).trim().toUpperCase();
+      const otherRoles = data.filter(d =>
+        d.id !== item.id &&
+        String(d.ma_so_nhan_vien || '').trim().toUpperCase() === msnv &&
+        d.trang_thai !== 'Đã nghỉ việc' && d.trang_thai !== 'Đã điều chuyển'
+      );
+      if (otherRoles.length > 0) {
+        enhancedItem = {
+          ...item,
+          kiem_nhiem_list: otherRoles.map(other => ({
+            id: other.id,
+            chuc_vu: other.chuc_vu || '---',
+            chuc_danh: other.chuc_danh || '---',
+            id_don_vi: other.id_don_vi,
+            ten_don_vi: donViMap[String(other.id_don_vi)] || other.id_don_vi || '---',
+            phong_ban: other.phong_ban,
+            khoi: other.khoi,
+            raw: other
+          }))
+        };
+      }
+    }
+    setViewData(enhancedItem);
     setShowNgachLuong(false);
     setShowCCCD(false);
     setIsViewModalOpen(true);
@@ -1295,13 +1604,17 @@ export default function PersonnelPage() {
   };
 
   const handleDuplicate = (item: any) => {
-    setModal({ isOpen: true, mode: 'create', formData: { ...item, id: '', chuc_vu: item.chuc_vu ? `${item.chuc_vu} (Kiêm nhiệm)` : 'Kiêm nhiệm', trang_thai: 'Đang làm việc', ngay_nghi_viec: '' } });
+    const { all_record_ids, kiem_nhiem_list, is_kiem_nhiem_single, ...cleanItem } = item;
+    setModal({ isOpen: true, mode: 'create', formData: { ...cleanItem, id: '', chuc_vu: item.chuc_vu ? `${item.chuc_vu} (Kiêm nhiệm)` : 'Kiêm nhiệm', trang_thai: 'Đang làm việc', ngay_nghi_viec: '' } });
     setError(null);
   };
 
   const executeSave = async (finalDataToSave: any) => {
     setSubmitting(true); setError(null);
     try {
+      const uiFields = ['all_record_ids', 'kiem_nhiem_list', 'is_kiem_nhiem_single', 'ngay_sinh', 'email_ca_nhan', 'id_phap_nhan', 'ten_phap_nhan', 'ten_don_vi', 'ngay_nhan_viec'];
+      uiFields.forEach(f => { delete (finalDataToSave as any)[f]; });
+
       const response = await apiService.save(finalDataToSave, modal.mode, "ns_dich_vu");
       const currentId = response.id || response.newId || finalDataToSave.id || `NS-${Date.now()}`;
       finalDataToSave.id = currentId;
@@ -1309,15 +1622,29 @@ export default function PersonnelPage() {
       if (modal.mode === 'update' && finalDataToSave.ma_so_nhan_vien) {
         const kiemNhiemList = data.filter(item => item.ma_so_nhan_vien === finalDataToSave.ma_so_nhan_vien && item.id !== currentId);
         if (kiemNhiemList.length > 0) {
-          const fieldsToExclude = ['id', 'id_don_vi', 'phong_ban', 'chuc_vu', 'phan_loai', 'ngach_luong', 'thu_nhap', 'trang_thai', 'ngay_nghi_viec', 'ngay_vao_lam_lai'];
+          // 🟢 Các trường thuộc về Vị trí công tác tại Đơn vị cụ thể -> TUYỆT ĐỐI ĐỘC LẬP, KHÔNG ĐỒNG BỘ ĐÈ
+          const positionSpecificFields = [
+            'id', 'id_don_vi', 'chuc_vu', 'chuc_danh', 'phan_loai', 'phong_ban', 'bo_phan',
+            'khoi', 'to_chuc', 'dia_diem_lam_viec', 'ngach_luong', 'thu_nhap', 'dv_chi_luong',
+            'dinh_muc_cuoc', 'ngay_nhan_vien', 'ngay_nghi_viec', 'ngay_vao_lam_lai',
+            'trang_thai', 'tham_nien', 'ghi_chu', ...uiFields
+          ];
           const syncData: any = {};
-          Object.keys(finalDataToSave).forEach(key => { if (!fieldsToExclude.includes(key)) syncData[key] = finalDataToSave[key]; });
-          for (const kn of kiemNhiemList) {
-            const updatedKN = { ...kn, ...syncData };
-            await apiService.save(updatedKN, 'update', "ns_dich_vu");
-            setData(prev => prev.map(item => item.id === updatedKN.id ? updatedKN : item));
+          Object.keys(finalDataToSave).forEach(key => {
+            if (!positionSpecificFields.includes(key) && finalDataToSave[key] !== undefined) {
+              syncData[key] = finalDataToSave[key];
+            }
+          });
+          // Chỉ đồng bộ nếu có thay đổi về thông tin cá nhân dùng chung
+          if (Object.keys(syncData).length > 0) {
+            for (const kn of kiemNhiemList) {
+              const updatedKN = { ...kn, ...syncData };
+              uiFields.forEach(f => { delete (updatedKN as any)[f]; });
+              await apiService.save(updatedKN, 'update', "ns_dich_vu");
+              setData(prev => prev.map(item => item.id === updatedKN.id ? updatedKN : item));
+            }
+            toast.success(`Đã tự động đồng bộ thông tin cá nhân cho ${kiemNhiemList.length} vị trí kiêm nhiệm!`);
           }
-          toast.success(`Đã tự động đồng bộ thông tin cho ${kiemNhiemList.length} vị trí kiêm nhiệm!`);
         }
       }
 
@@ -1355,7 +1682,7 @@ export default function PersonnelPage() {
           finalDataToSave.tuoi = age.toString();
         }
 
-        const fieldsToExclude = ['ngay_sinh', 'email_ca_nhan', 'id_phap_nhan', 'ten_phap_nhan', 'ten_don_vi', 'ngay_nhan_viec'];
+        const fieldsToExclude = ['all_record_ids', 'kiem_nhiem_list', 'is_kiem_nhiem_single', 'ngay_sinh', 'email_ca_nhan', 'id_phap_nhan', 'ten_phap_nhan', 'ten_don_vi', 'ngay_nhan_viec'];
         fieldsToExclude.forEach(f => { delete (finalDataToSave as any)[f]; });
 
         if (!finalDataToSave.ngay_nhan_vien && finalDataToSave.ma_so_nhan_vien) { finalDataToSave.ngay_nhan_vien = extractStartDateFromMaNV(finalDataToSave.ma_so_nhan_vien); }
@@ -1413,7 +1740,7 @@ export default function PersonnelPage() {
     };
 
     // Loại bỏ các trường không thuộc bảng CSDL ns_dich_vu
-    const fieldsToExclude = ['ngay_sinh', 'email_ca_nhan', 'id_phap_nhan', 'ten_phap_nhan', 'ten_don_vi', 'ngay_nhan_viec'];
+    const fieldsToExclude = ['all_record_ids', 'kiem_nhiem_list', 'is_kiem_nhiem_single', 'ngay_sinh', 'email_ca_nhan', 'id_phap_nhan', 'ten_phap_nhan', 'ten_don_vi', 'ngay_nhan_viec'];
     fieldsToExclude.forEach(f => {
       delete (finalDataToSave as any)[f];
     });
@@ -1497,7 +1824,7 @@ export default function PersonnelPage() {
         });
 
         if (hasActualUpdate) {
-          mergedData.trang_thai = mergedData.trang_thai || 'Đang làm việc';
+          mergedData.trang_thai = 'Đang làm việc';
           await apiService.save(mergedData, 'update', 'ns_dich_vu');
           updateCount++;
         }
@@ -2089,24 +2416,6 @@ export default function PersonnelPage() {
     setIsExportModalOpen(false); toast.success("Đã xuất file Danh bạ (Excel) thành công!");
   };
 
-  const getUnitDepth = (unitId: string, allUnits: DonVi[]): number => {
-    let depth = 0;
-    let currentId = unitId;
-    const visited = new Set<string>();
-    while (currentId && !visited.has(currentId)) {
-      visited.add(currentId);
-      const parent = allUnits.find(u => u.id === currentId);
-      if (!parent) break;
-      const parentId = parent.cap_quan_ly?.trim() || '';
-      if (!parentId || parentId === 'HO' || parentId === 'THACO AUTO') {
-        break;
-      }
-      currentId = parentId;
-      depth++;
-    }
-    return depth;
-  };
-
   const handlePasteBulkData = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const rawText = e.target.value; setBulkImportText(rawText);
     if (!rawText.trim()) { setBulkImportData([]); return; }
@@ -2133,19 +2442,86 @@ export default function PersonnelPage() {
           return dateStr;
         };
 
-        const normalizeName = (name: string) => {
-          if (!name) return '';
-          return toUnaccented(name)
-            .toLowerCase()
-            .replace(/\s+/g, '')
+        const cleanUnitStr = (str: string) => {
+          if (!str) return '';
+          return toUnaccented(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+        };
+
+        const stripUnitPrefixes = (str: string) => {
+          if (!str) return '';
+          const s = cleanUnitStr(str);
+          const stripped = s
             .replace(/showroom/g, '')
             .replace(/sr/g, '')
-            .replace(/vanphong/g, '')
-            .replace(/thacoauto/g, '')
-            .replace(/congty/g, '')
-            .replace(/tnhh/g, '')
-            .replace(/[-_.]/g, '');
+            .replace(/vanphong|vp/g, '')
+            .replace(/congty|cty/g, '')
+            .replace(/tnhh|mtv/g, '')
+            .replace(/thacoauto|thaco/g, '');
+          return stripped.length >= 2 ? stripped : s;
         };
+
+        const matchUnitInList = (text: string, candidateUnits: DonVi[]): DonVi | null => {
+          if (!text || !text.trim()) return null;
+          const cleanTarget = cleanUnitStr(text);
+          if (!cleanTarget) return null;
+          const strippedTarget = stripUnitPrefixes(text);
+
+          // 1. Khớp chính xác hoàn toàn chuỗi sạch (VD: "thacoauto" === "thacoauto")
+          const exactMatches = candidateUnits.filter(d => cleanUnitStr(d.ten_don_vi) === cleanTarget);
+          if (exactMatches.length > 0) {
+            exactMatches.sort((a, b) => getUnitDepth(b.id, donViList) - getUnitDepth(a.id, donViList));
+            return exactMatches[0];
+          }
+
+          // 2. Khớp sau khi lược bỏ tiền tố (VD: "ansuong" === "ansuong")
+          if (strippedTarget) {
+            const strippedMatches = candidateUnits.filter(d => stripUnitPrefixes(d.ten_don_vi) === strippedTarget);
+            if (strippedMatches.length > 0) {
+              strippedMatches.sort((a, b) => getUnitDepth(b.id, donViList) - getUnitDepth(a.id, donViList));
+              return strippedMatches[0];
+            }
+          }
+
+          // 3. Khớp chuỗi con nếu từ khóa đủ đặc thù (độ dài >= 4 ký tự)
+          if (cleanTarget.length >= 4) {
+            const substringMatches = candidateUnits.filter(d => {
+              const c = cleanUnitStr(d.ten_don_vi);
+              return c.includes(cleanTarget) || cleanTarget.includes(c);
+            });
+            if (substringMatches.length > 0) {
+              substringMatches.sort((a, b) => getUnitDepth(b.id, donViList) - getUnitDepth(a.id, donViList));
+              return substringMatches[0];
+            }
+          }
+
+          return null;
+        };
+
+        // Tự động nhận diện cấu trúc dán:
+        // - Mẫu MỚI NHẤT (31 cột): Cột 4 là Giới tính, Cột 16 là Tổ chức, Cột 17 là Ban/Phòng, Cột 18 là Bộ phận
+        // - Mẫu 30 cột: Cột 4 là Giới tính, Cột 16 là Ban/Phòng, Cột 17 là Bộ phận
+        // - Mẫu CŨ (29 cột): Cột 4 là Chức danh, Cột 11 là Giới tính
+        let hasHeaderToChuc = false;
+        let isNewFormatWithGenderCol4 = false;
+        let maxCols = 0;
+        for (const r of rows) {
+          if (r.length > maxCols) maxCols = r.length;
+          const c3 = toUnaccented(r[3] || '').trim().toLowerCase();
+          const c10 = toUnaccented(r[10] || '').trim().toLowerCase();
+          if (c3 === 'gioi tinh' || c3 === 'nam' || c3 === 'nu') {
+            isNewFormatWithGenderCol4 = true;
+          }
+          if (c10 === 'gioi tinh' || c10 === 'nam' || c10 === 'nu') {
+            isNewFormatWithGenderCol4 = false;
+          }
+          const c15 = toUnaccented(r[15] || '').trim().toLowerCase();
+          if (c15.includes('to chuc') || c15.includes('mang')) {
+            hasHeaderToChuc = true;
+          }
+        }
+
+        const is31ColFormat = isNewFormatWithGenderCol4 && (maxCols >= 31 || hasHeaderToChuc);
+        const is30ColFormat = isNewFormatWithGenderCol4 && !is31ColFormat;
 
         const parsedData = [];
         for (let i = 0; i < rows.length; i++) {
@@ -2153,71 +2529,195 @@ export default function PersonnelPage() {
           const checkHeader2 = toUnaccented(row[1] || ''); const checkHeader3 = toUnaccented(row[2] || '');
           if (checkHeader2.includes('ma') || checkHeader3.includes('ten')) continue;
 
-          const maNV = row[1]?.trim() || '';
-          const excelDate = formatExcelDate(row[12]?.trim());
+          let maNV = '';
+          let hoTen = '';
+          let gioiTinh = '';
+          let namSinh = '';
+          let cccdVal = '';
+          let diaChiVal = '';
+          let sdtCaNhan = '';
+          let sdtCongTy = '';
+          let emailVal = '';
+          let donViCongTacExcel = '';
+          let showroomExcel = '';
+          let dvChiLuongVal = '';
+          let excelDate = '';
+          let khoiVal = '';
+          let toChucVal = '';
+          let phongBanVal = '';
+          let boPhanVal = '';
+          let chucDanhVal = '';
+          let chucVuVal = '';
+          let ngachLuongVal = '';
+          let diaDiemVal = '';
+          let rawNhom = '';
+          let hlTu = '';
+          let hlDen = '';
+          let giaTriDen = '';
+          let theThangVal = '';
+          let theXeVal = '';
+          let hangLoaiXeVal = '';
+          let bksVal = '';
 
-          let rawNhom = row[16]?.trim() || '';
-          const nhomNum = rawNhom.replace(/\D/g, '');
-          const nhomFormatted = nhomNum ? `Nhóm ${nhomNum}` : '';
-
-          const hlTu = formatExcelDate(row[17]?.trim());
-          const hlDen = formatExcelDate(row[18]?.trim());
-          let giaTriDen = formatExcelDate(row[19]?.trim());
-
-          const khoiVal = row[20]?.trim() || '';
-          const diaDiemVal = row[21]?.trim() || '';
-
-          const cccdVal = (row[22] || '').trim();
-          const theThangVal = (row[23] || '').trim();
-          const theXeVal = (row[24] || '').trim();
-          const hangLoaiXeVal = (row[25] || '').trim();
-          const bksVal = (row[26] || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-          if (!giaTriDen && hlDen && nhomFormatted) {
-            giaTriDen = calcGiaTriDen(hlDen, nhomFormatted, chuKyList);
+          if (is31ColFormat) {
+            // MẪU MỚI NHẤT (31 CỘT: CÓ TỔ CHỨC)
+            maNV = row[1]?.trim() || '';
+            hoTen = row[2]?.trim() || '';
+            gioiTinh = row[3]?.trim() || '';
+            namSinh = formatExcelDate(row[4]?.trim() || '');
+            cccdVal = (row[5] || '').trim();
+            diaChiVal = (row[6] || '').trim();
+            sdtCaNhan = row[7]?.trim() || '';
+            sdtCongTy = row[8]?.trim() || '';
+            emailVal = row[9]?.trim() || '';
+            donViCongTacExcel = row[10]?.trim() || '';
+            showroomExcel = row[11]?.trim() || '';
+            dvChiLuongVal = (row[12] || '').trim();
+            excelDate = formatExcelDate(row[13]?.trim() || '');
+            khoiVal = row[14]?.trim() || '';
+            toChucVal = row[15]?.trim() || '';
+            phongBanVal = row[16]?.trim() || '';
+            boPhanVal = row[17]?.trim() || '';
+            chucDanhVal = row[18]?.trim() || '';
+            chucVuVal = row[19]?.trim() || '';
+            ngachLuongVal = row[20]?.trim() || '';
+            diaDiemVal = row[21]?.trim() || '';
+            // row[22]: Phía (không lưu)
+            rawNhom = row[23]?.trim() || '';
+            hlTu = formatExcelDate(row[24]?.trim() || '');
+            hlDen = formatExcelDate(row[25]?.trim() || '');
+            giaTriDen = formatExcelDate(row[26]?.trim() || '');
+            theThangVal = (row[27] || '').trim();
+            theXeVal = (row[28] || '').trim();
+            hangLoaiXeVal = (row[29] || '').trim();
+            bksVal = (row[30] || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          } else if (is30ColFormat) {
+            // MẪU 30 CỘT (CÓ BỘ PHẬN, CHƯA CÓ TỔ CHỨC)
+            maNV = row[1]?.trim() || '';
+            hoTen = row[2]?.trim() || '';
+            gioiTinh = row[3]?.trim() || '';
+            namSinh = formatExcelDate(row[4]?.trim() || '');
+            cccdVal = (row[5] || '').trim();
+            diaChiVal = (row[6] || '').trim();
+            sdtCaNhan = row[7]?.trim() || '';
+            sdtCongTy = row[8]?.trim() || '';
+            emailVal = row[9]?.trim() || '';
+            donViCongTacExcel = row[10]?.trim() || '';
+            showroomExcel = row[11]?.trim() || '';
+            dvChiLuongVal = (row[12] || '').trim();
+            excelDate = formatExcelDate(row[13]?.trim() || '');
+            khoiVal = row[14]?.trim() || '';
+            phongBanVal = row[15]?.trim() || '';
+            boPhanVal = row[16]?.trim() || '';
+            chucDanhVal = row[17]?.trim() || '';
+            chucVuVal = row[18]?.trim() || '';
+            ngachLuongVal = row[19]?.trim() || '';
+            diaDiemVal = row[20]?.trim() || '';
+            // row[21]: Phía (không lưu)
+            rawNhom = row[22]?.trim() || '';
+            hlTu = formatExcelDate(row[23]?.trim() || '');
+            hlDen = formatExcelDate(row[24]?.trim() || '');
+            giaTriDen = formatExcelDate(row[25]?.trim() || '');
+            theThangVal = (row[26] || '').trim();
+            theXeVal = (row[27] || '').trim();
+            hangLoaiXeVal = (row[28] || '').trim();
+            bksVal = (row[29] || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+          } else {
+            // MẪU CŨ (29 CỘT)
+            maNV = row[1]?.trim() || '';
+            hoTen = row[2]?.trim() || '';
+            chucDanhVal = row[3]?.trim() || '';
+            chucVuVal = row[4]?.trim() || '';
+            phongBanVal = row[5]?.trim() || '';
+            donViCongTacExcel = row[6]?.trim() || '';
+            showroomExcel = row[7]?.trim() || '';
+            // row[8]: Phía
+            sdtCongTy = row[9]?.trim() || '';
+            gioiTinh = row[10]?.trim() || '';
+            namSinh = formatExcelDate(row[11]?.trim() || '');
+            excelDate = formatExcelDate(row[12]?.trim() || '');
+            sdtCaNhan = row[13]?.trim() || '';
+            emailVal = row[14]?.trim() || '';
+            ngachLuongVal = row[15]?.trim() || '';
+            rawNhom = row[16]?.trim() || '';
+            hlTu = formatExcelDate(row[17]?.trim() || '');
+            hlDen = formatExcelDate(row[18]?.trim() || '');
+            giaTriDen = formatExcelDate(row[19]?.trim() || '');
+            khoiVal = row[20]?.trim() || '';
+            diaDiemVal = row[21]?.trim() || '';
+            cccdVal = (row[22] || '').trim();
+            theThangVal = (row[23] || '').trim();
+            theXeVal = (row[24] || '').trim();
+            hangLoaiXeVal = (row[25] || '').trim();
+            bksVal = (row[26] || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+            diaChiVal = (row[27] || '').trim();
+            dvChiLuongVal = (row[28] || '').trim();
           }
 
-          const certName = getChungNhanByNhom(nhomFormatted) || '';
+          const nhomNum = rawNhom.replace(/\D/g, '');
+
+          if (!giaTriDen && hlDen && nhomNum) {
+            giaTriDen = calcGiaTriDen(hlDen, nhomNum, chuKyList);
+          }
+
+          const certName = getChungNhanByNhom(nhomNum) || '';
 
           const item: Record<string, any> = {
             ma_so_nhan_vien: maNV,
-            ho_ten: row[2]?.trim() || ''
+            ho_ten: hoTen
           };
 
-          if (row[3]?.trim()) item.chuc_danh = row[3].trim();
-          if (row[4]?.trim()) item.chuc_vu = row[4].trim();
-          if (row[5]?.trim()) item.phong_ban = row[5].trim();
-          if (row[9]?.trim()) item.sdt_cong_ty = row[9].trim();
-          if (row[10]?.trim()) item.gioi_tinh = row[10].trim();
-          if (row[11]?.trim()) item.nam_sinh = formatExcelDate(row[11].trim());
+          if (chucDanhVal) item.chuc_danh = chucDanhVal;
+          if (chucVuVal) item.chuc_vu = chucVuVal;
+          if (toChucVal) item.to_chuc = toChucVal;
+          if (phongBanVal) item.phong_ban = phongBanVal;
+          if (boPhanVal) item.bo_phan = boPhanVal;
+          if (sdtCongTy) item.sdt_cong_ty = sdtCongTy;
+          if (gioiTinh) item.gioi_tinh = gioiTinh;
+          if (namSinh) item.nam_sinh = namSinh;
 
           if (excelDate) item.ngay_nhan_vien = excelDate;
           else if (extractStartDateFromMaNV(maNV)) item.ngay_nhan_vien = extractStartDateFromMaNV(maNV);
 
-          if (row[13]?.trim()) item.sdt_ca_nhan = row[13].trim();
-          if (row[14]?.trim()) item.email = row[14].trim();
-          if (row[15]?.trim()) item.ngach_luong = row[15].trim();
+          if (sdtCaNhan) item.sdt_ca_nhan = sdtCaNhan;
+          if (emailVal) item.email = emailVal;
+          if (ngachLuongVal) item.ngach_luong = ngachLuongVal;
 
-          // 🟢 TỰ ĐỘNG DÒ TÌM SHOWROOM CON THUỘC ĐƠN VỊ ĐANG CHỌN (ƯU TIÊN CẤP SÂU NHẤT)
+          // 🟢 TỰ ĐỘNG DÒ TÌM ĐƠN VỊ CÔNG TÁC / SHOWROOM
           let resolvedUnitId = selectedUnitFilter;
-          const showroomExcel = row[7]?.trim() || '';
-          if (showroomExcel && selectedUnitFilter) {
-            const subIds = [selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViList)];
-            const subUnits = donViList.filter(d => subIds.includes(d.id));
-            const matches = subUnits.filter(d => {
-              const dbNorm = normalizeName(d.ten_don_vi);
-              const excelNorm = normalizeName(showroomExcel);
-              return dbNorm === excelNorm && dbNorm !== '';
-            });
-            if (matches.length > 0) {
-              // Sắp xếp theo độ sâu giảm dần (độ sâu cao hơn = cấp cháu/lá)
-              matches.sort((a, b) => getUnitDepth(b.id, donViList) - getUnitDepth(a.id, donViList));
-              resolvedUnitId = matches[0].id;
-            }
+
+          // Danh sách đơn vị cấp dưới của selectedUnitFilter
+          const subIds = selectedUnitFilter
+            ? [selectedUnitFilter, ...getAllSubordinateIds(selectedUnitFilter, donViList)]
+            : [];
+          const candidateSubUnits = donViList.filter(d => subIds.includes(d.id));
+
+          let matchedUnit: DonVi | null = null;
+
+          // Bước 1: Dò tìm trong phạm vi cây đơn vị đang lọc (ưu tiên cao nhất)
+          // 1.1 Thử cột Showroom trước (cấp chi tiết hơn)
+          if (showroomExcel && candidateSubUnits.length > 0) {
+            matchedUnit = matchUnitInList(showroomExcel, candidateSubUnits);
+          }
+          // 1.2 Nếu cột Showroom không khớp hoặc trống, thử cột Đơn vị công tác
+          if (!matchedUnit && donViCongTacExcel && candidateSubUnits.length > 0) {
+            matchedUnit = matchUnitInList(donViCongTacExcel, candidateSubUnits);
+          }
+
+          // Bước 2: Nếu không khớp trong cây đang lọc, mở rộng dò tìm trên TOÀN BỘ đơn vị hệ thống
+          if (!matchedUnit && showroomExcel) {
+            matchedUnit = matchUnitInList(showroomExcel, donViList);
+          }
+          if (!matchedUnit && donViCongTacExcel) {
+            matchedUnit = matchUnitInList(donViCongTacExcel, donViList);
+          }
+
+          if (matchedUnit) {
+            resolvedUnitId = matchedUnit.id;
           }
           item.id_don_vi = resolvedUnitId;
 
-          if (nhomFormatted) item.nhom_doi_tuong = nhomFormatted;
+          if (nhomNum) item.nhom_doi_tuong = nhomNum;
           if (hlTu) item.huan_luyen_tu = hlTu;
           if (hlDen) item.huan_luyen_den = hlDen;
           if (giaTriDen) item.gia_tri_den = giaTriDen;
@@ -2231,6 +2731,8 @@ export default function PersonnelPage() {
           if (theXeVal) item.the_xe = theXeVal;
           if (hangLoaiXeVal) item.hang_loai_xe = hangLoaiXeVal;
           if (bksVal) item.bks = bksVal;
+          if (diaChiVal) item.dia_chi = diaChiVal;
+          if (dvChiLuongVal) item.dv_chi_luong = dvChiLuongVal;
 
           parsedData.push(item);
         }
@@ -2242,9 +2744,16 @@ export default function PersonnelPage() {
         let missingCount = 0;
 
         const dbMap = new Map<string, any>();
-        activeDbList.forEach(ns => {
-          if (ns.ma_so_nhan_vien) {
-            dbMap.set(String(ns.ma_so_nhan_vien).trim().toLowerCase(), ns);
+        data.forEach(ns => {
+          if (ns.ma_so_nhan_vien && ns.trang_thai === 'Đã nghỉ việc') {
+            const k = String(ns.ma_so_nhan_vien).trim().toLowerCase();
+            if (!dbMap.has(k)) dbMap.set(k, ns);
+          }
+        });
+        data.forEach(ns => {
+          if (ns.ma_so_nhan_vien && ns.trang_thai !== 'Đã nghỉ việc') {
+            const k = String(ns.ma_so_nhan_vien).trim().toLowerCase();
+            dbMap.set(k, ns);
           }
         });
 
@@ -2256,7 +2765,14 @@ export default function PersonnelPage() {
           } else {
             let hasChanged = false;
             Object.keys(item).forEach(col => {
-              if (col === 'id_don_vi') return;
+              if (col === 'id_don_vi') {
+                const oldUnit = String(existing.id_don_vi || '').trim();
+                const newUnit = String(item.id_don_vi || '').trim();
+                if (oldUnit && newUnit && oldUnit !== newUnit) {
+                  hasChanged = true;
+                }
+                return;
+              }
               const valIncoming = item[col];
               if (valIncoming !== undefined && valIncoming !== null) {
                 const valExisting = existing[col];
@@ -2416,7 +2932,9 @@ export default function PersonnelPage() {
               <div>
                 <h2 className="text-2xl font-bold text-[#00539c] flex items-center gap-2"><Users size={28} /> Quản lý Nhân sự</h2>
                 <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({displayPersonnelList.length} nhân sự)</span>
+                  <span>
+                    Đang xem: <span className="text-emerald-600 font-bold">{selectedUnitName}</span> ({displayPersonnelList.length} nhân sự{totalActivePositions > countActive && activeSubTabPersonnel === 'ACTIVE' ? ` • ${totalActivePositions} vị trí` : ''})
+                  </span>
                   {displayPersonnelList.length > 0 && (
                     <button
                       type="button"
@@ -2763,133 +3281,22 @@ export default function PersonnelPage() {
             </div>
           )}
 
-          {/* 🟢 KHU VỰC TAB PHÂN CẤP LỒNG KHỐI LIỀN MẠCH (#00539c) */}
-          <div className={`w-full flex flex-col mb-4 select-none shrink-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
-            {/* --- CẤP 1 --- */}
-            <div className={`w-full bg-gray-100 dark:bg-slate-800 flex flex-wrap gap-1 pt-1 px-1 items-center transition-all duration-300 ${(activeTab === 'info' || activeTab === 'stats') ? 'pb-0 border-b-0' : 'pb-1'}`}>
-              {personnelTabs.map((tab) => {
-                const isActive = tab.id === activeTab;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${isActive
-                        ? `text-white font-black z-10 ${(activeTab === 'info' || activeTab === 'stats') ? 'pb-2.5 sm:pb-3' : ''}`
-                        : 'text-gray-500 hover:text-[#00539c] dark:hover:text-blue-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
-                      }`}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="personnelMainTabSlide"
-                        className={`absolute inset-0 z-0 shadow-xs ${(activeTab === 'info' || activeTab === 'stats') ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
-                        style={{ backgroundColor: '#00539c' }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                      />
-                    )}
-                    {tab.icon && <span className="relative z-10 shrink-0 flex items-center">{tab.icon}</span>}
-                    <span className="relative z-10">{tab.label}</span>
-                    {tab.count !== undefined && (
-                      <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-500'}`}>
-                        {tab.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* --- CẤP 2 (Chỉ mở khi chọn Tab 1: Danh sách nhân sự hoặc Thống kê) --- */}
-            <AnimatePresence initial={false}>
-              {activeTab === 'info' && (
-                <motion.div
-                  key="level2-personnel"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="overflow-hidden bg-[#00539c]"
-                >
-                  <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                    {[
-                      { id: 'ACTIVE', label: 'Đang làm việc', icon: <UserCheck className="w-4 h-4" />, count: countActive },
-                      { id: 'OFFBOARD', label: 'Đã nghỉ việc / Điều chuyển', icon: <LogOut className="w-4 h-4" />, count: countOffboard }
-                    ].map(st => {
-                      const isSubActive = activeSubTabPersonnel === st.id;
-                      return (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => setActiveSubTabPersonnel(st.id as any)}
-                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive
-                              ? 'text-white font-black'
-                              : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
-                        >
-                          {isSubActive && (
-                            <motion.div
-                              layoutId="personnelSubTabSlide"
-                              className="absolute inset-0 bg-[#00386b] rounded-lg shadow-sm ring-1 ring-sky-400/40 z-0"
-                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            />
-                          )}
-                          <span className="relative z-10 flex items-center gap-1.5">
-                            {st.icon}
-                            <span>{st.label}</span>
-                          </span>
-                          <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
-                            {st.count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-              {activeTab === 'stats' && (
-                <motion.div
-                  key="level2-stats"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="overflow-hidden bg-[#00539c]"
-                >
-                  <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                    {[
-                      { id: 'NHAN_SU', label: 'Nhân sự', icon: <Users className="w-4 h-4" /> },
-                      { id: 'DASHBOARD', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> }
-                    ].map(st => {
-                      const isSubActive = activeSubTabStats === st.id;
-                      return (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => setActiveSubTabStats(st.id as any)}
-                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${
-                            isSubActive
-                              ? 'text-white font-black'
-                              : 'text-white/80 hover:text-white hover:bg-white/10'
-                          }`}
-                        >
-                          {isSubActive && (
-                            <motion.div
-                              layoutId="statsSubTabSlide"
-                              className="absolute inset-0 bg-[#00386b] rounded-lg shadow-sm ring-1 ring-sky-400/40 z-0"
-                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            />
-                          )}
-                          <span className="relative z-10 flex items-center gap-1.5">
-                            {st.icon}
-                            <span>{st.label}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* 🟢 KHU VỰC TAB PHÂN CẤP LỒNG KHỐI LIỀN MẠCH (#00539c) CHUẨN SEGMENTTABS */}
+          <div className={`w-full transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+            <SegmentTabs
+              theme="personnel"
+              tabs={personnelTabs}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as any)}
+              activeSubTab={activeTab === 'info' ? activeSubTabPersonnel : activeSubTabStats}
+              onSubChange={(id) => {
+                if (activeTab === 'info') setActiveSubTabPersonnel(id as any);
+                else if (activeTab === 'stats') setActiveSubTabStats(id as any);
+              }}
+              layoutId="personnelMainTabSlide"
+              subTabsLayoutId="personnelSubTabSlide"
+              fullWidth
+            />
           </div>
         </div>
 
@@ -2922,7 +3329,7 @@ export default function PersonnelPage() {
             <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-200 w-full flex-1 min-h-0 overflow-auto custom-scrollbar">
               <table className="w-full min-w-[1100px] table-fixed text-left border-collapse text-[11.5px]">
                 <thead className="sticky top-0 bg-[#f8fafc] z-10 text-[11.5px]">
-                  <tr className="border-b border-gray-200 font-bold text-gray-600 uppercase tracking-wider">
+                  <tr className="border-b border-gray-200 font-bold text-gray-600 uppercase tracking-wider text-center">
                     {showSelectCheckboxes && (
                       <th className="py-2.5 px-3 w-[4%] text-center bg-[#f8fafc]">
                         <input
@@ -2933,13 +3340,13 @@ export default function PersonnelPage() {
                         />
                       </th>
                     )}
-                    <th className="py-2.5 px-3 w-[8%] whitespace-nowrap bg-[#f8fafc]">Mã NV</th>
-                    <th className="py-2.5 px-3 w-[24%] whitespace-nowrap bg-[#f8fafc]">Họ và tên</th>
-                    <th className={`py-2.5 px-3 ${showSelectCheckboxes ? 'w-[20%]' : 'w-[22%]'} bg-[#f8fafc]`}>Chức vụ &amp; Bộ phận</th>
-                    <th className={`py-2.5 px-3 ${showSelectCheckboxes ? 'w-[16%]' : 'w-[18%]'} bg-[#f8fafc]`}>Đơn Vị</th>
-                    <th className="py-2.5 px-3 w-[14%] whitespace-nowrap bg-[#f8fafc]">Điện thoại</th>
-                    <th className="py-2.5 px-3 w-[10%] whitespace-nowrap bg-[#f8fafc]">Thâm niên</th>
-                    <th className="py-2.5 px-3 text-center w-[14%] whitespace-nowrap bg-[#f8fafc]">Thao tác</th>
+                    <th className="py-2.5 px-3 w-[6%] whitespace-nowrap bg-[#f8fafc] text-center">Mã NV</th>
+                    <th className="py-2.5 px-3 w-[25%] whitespace-nowrap bg-[#f8fafc] text-center">Họ và tên</th>
+                    <th className={`py-2.5 px-3 ${showSelectCheckboxes ? 'w-[28%]' : 'w-[28%]'} bg-[#f8fafc] text-center`}>Chức vụ &amp; Bộ phận</th>
+                    <th className={`py-2.5 px-3 ${showSelectCheckboxes ? 'w-[15%]' : 'w-[15%]'} bg-[#f8fafc] text-center`}>Đơn Vị</th>
+                    <th className="py-2.5 px-3 w-[10%] whitespace-nowrap bg-[#f8fafc] text-center">Điện thoại</th>
+                    <th className="py-2.5 px-3 w-[10%] whitespace-nowrap bg-[#f8fafc] text-center">Thâm niên</th>
+                    <th className="py-2.5 px-3 text-center w-[10%] whitespace-nowrap bg-[#f8fafc]">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -3585,8 +3992,8 @@ export default function PersonnelPage() {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${transferSimAction === 'TRANSFER'
-                            ? 'border-blue-500 bg-white text-blue-900 shadow-xs ring-2 ring-blue-400/20'
-                            : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
+                          ? 'border-blue-500 bg-white text-blue-900 shadow-xs ring-2 ring-blue-400/20'
+                          : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
                           }`}>
                           <div className="flex items-center gap-2">
                             <input
@@ -3605,8 +4012,8 @@ export default function PersonnelPage() {
                         </label>
 
                         <label className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-1 ${transferSimAction === 'REVOKE'
-                            ? 'border-amber-500 bg-white text-amber-900 shadow-xs ring-2 ring-amber-400/20'
-                            : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
+                          ? 'border-amber-500 bg-white text-amber-900 shadow-xs ring-2 ring-amber-400/20'
+                          : 'border-gray-200 bg-white/60 hover:bg-white text-gray-700'
                           }`}>
                           <div className="flex items-center gap-2">
                             <input
@@ -3703,8 +4110,8 @@ export default function PersonnelPage() {
                                         type="button"
                                         onClick={() => setTransferAssetActions(prev => ({ ...prev, [asset.rawId]: 'TRANSFER' }))}
                                         className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${currentAction === 'TRANSFER'
-                                            ? 'bg-blue-600 text-white shadow-xs'
-                                            : 'text-gray-600 hover:text-gray-900'
+                                          ? 'bg-blue-600 text-white shadow-xs'
+                                          : 'text-gray-600 hover:text-gray-900'
                                           }`}
                                       >
                                         🔄 Chuyển sang ĐV mới
@@ -3713,8 +4120,8 @@ export default function PersonnelPage() {
                                         type="button"
                                         onClick={() => setTransferAssetActions(prev => ({ ...prev, [asset.rawId]: 'REVOKE' }))}
                                         className={`py-1 px-2.5 rounded-md font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${currentAction === 'REVOKE'
-                                            ? 'bg-amber-600 text-white shadow-xs'
-                                            : 'text-gray-600 hover:text-gray-900'
+                                          ? 'bg-amber-600 text-white shadow-xs'
+                                          : 'text-gray-600 hover:text-gray-900'
                                           }`}
                                       >
                                         📥 Thu hồi về ĐV cũ
@@ -3797,10 +4204,10 @@ export default function PersonnelPage() {
                     (transferType === 'EXTERNAL' && !transferExternalUnitName.trim()))
                 }
                 className={`px-6 py-2.5 text-white rounded-xl font-bold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md ${transferType === 'INTERNAL'
-                    ? 'bg-[#00539c] hover:bg-[#004077]'
-                    : transferType === 'EXTERNAL'
-                      ? 'bg-indigo-600 hover:bg-indigo-700'
-                      : 'bg-orange-500 hover:bg-orange-600'
+                  ? 'bg-[#00539c] hover:bg-[#004077]'
+                  : transferType === 'EXTERNAL'
+                    ? 'bg-indigo-600 hover:bg-indigo-700'
+                    : 'bg-orange-500 hover:bg-orange-600'
                   }`}
               >
                 {submitting ? (
@@ -3855,8 +4262,10 @@ export default function PersonnelPage() {
                 <h4 className="font-bold text-gray-800 mb-3 uppercase tracking-wider text-sm flex items-center gap-2"><Building2 size={18} className="text-[#05469B]" /> Thông tin Công tác</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Đơn vị</p><p className="font-semibold text-gray-800 break-words">{donViMap[String(viewData.id_don_vi)] || viewData.id_don_vi || '---'}</p></div>
-                  <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Bộ phận</p><p className="font-semibold text-gray-800">{viewData.phong_ban || '---'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Khối</p><p className="font-semibold text-[#1e2939]">{viewData.khoi || '---'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Tổ chức / Mảng</p><p className="font-semibold text-gray-800">{viewData.to_chuc || '---'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Ban/Phòng</p><p className="font-semibold text-gray-800">{viewData.phong_ban || '---'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Bộ phận</p><p className="font-semibold text-gray-800">{viewData.bo_phan || '---'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Địa điểm LV</p><p className="font-semibold text-[#1e2939]">{viewData.dia_diem_lam_viec || '---'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Chức danh</p><p className="font-semibold text-gray-800">{viewData.chuc_danh || '---'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Ngày nhận việc</p><p className="font-semibold text-gray-800">{viewData.ngay_nhan_vien ? new Date(viewData.ngay_nhan_vien).toLocaleDateString('vi-VN') : '---'}</p></div>
@@ -3893,6 +4302,10 @@ export default function PersonnelPage() {
                       </div>
                     )}
                   </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Đơn vị chi lương</p>
+                    <p className="font-semibold text-[#05469B] break-words">{viewData.dv_chi_luong || '---'}</p>
+                  </div>
                   {viewData.ngay_vao_lam_lai && (<div className="col-span-2 md:col-span-1"><p className="text-xs text-blue-500 uppercase font-bold mb-1">Vào làm lại</p><p className="font-semibold text-blue-600">{new Date(viewData.ngay_vao_lam_lai).toLocaleDateString('vi-VN')}</p></div>)}
                   <div className="col-span-2 md:col-span-4 lg:col-span-5 h-px bg-gray-200 my-1"></div>
                   <div><p className="text-xs text-gray-500 uppercase font-bold mb-1">Thẻ thang máy</p><p className="font-semibold text-gray-800">{viewData.the_thang === 'Yes' ? 'Có sử dụng' : (viewData.the_thang && viewData.the_thang !== 'No' && viewData.the_thang !== 'Không có' ? viewData.the_thang : 'Không')}</p></div>
@@ -3905,6 +4318,57 @@ export default function PersonnelPage() {
                   )}
                 </div>
               </div>
+
+              {/* 🟢 KHỐI DANH SÁCH VAI TRÒ KIÊM NHIỆM */}
+              {viewData.kiem_nhiem_list && viewData.kiem_nhiem_list.length > 0 && (
+                <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 shadow-2xs">
+                  <h4 className="font-bold text-amber-900 mb-3 uppercase tracking-wider text-xs flex items-center gap-2">
+                    <Sparkles size={16} className="text-amber-600" />
+                    Các vị trí kiêm nhiệm ({viewData.kiem_nhiem_list.length})
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {viewData.kiem_nhiem_list.map((kn: any, idx: number) => (
+                      <div key={idx} className="bg-white p-3.5 rounded-lg border border-amber-200/70 shadow-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <span className="font-bold text-gray-900 text-sm">{kn.chuc_vu}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                              Kiêm nhiệm
+                            </span>
+                          </div>
+                          <div className="space-y-1 text-xs text-gray-600">
+                            <div className="flex items-center gap-1.5">
+                              <Building2 size={13} className="text-gray-400 shrink-0" />
+                              <span className="font-medium text-gray-800">{kn.ten_don_vi}</span>
+                            </div>
+                            {(kn.phong_ban || kn.khoi) && (
+                              <div className="flex items-center gap-2 text-gray-500 text-[11px]">
+                                {kn.phong_ban && <span>BP: {kn.phong_ban}</span>}
+                                {kn.phong_ban && kn.khoi && <span>•</span>}
+                                {kn.khoi && <span>Khối: {kn.khoi}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {hasRule('NS_EDIT') && kn.raw && (
+                          <div className="mt-3 pt-2 border-t border-gray-100 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsViewModalOpen(false);
+                                openModal('update', kn.raw);
+                              }}
+                              className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <Edit size={12} /> Chỉnh sửa vị trí này
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 🟢 HÀNG CÁ NHÂN & NGOẠI HÌNH (35%) + BIỂU ĐỒ CƯỚC (65%) */}
               <div className="flex flex-col lg:flex-row gap-6 items-stretch">
@@ -3928,6 +4392,12 @@ export default function PersonnelPage() {
                           )}
                         </div>
                       )}
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4">
+                      <span className="text-gray-500 text-sm sm:w-20 shrink-0">Địa chỉ:</span>
+                      <span className="font-semibold text-gray-800 text-sm sm:text-right flex-1 break-words">
+                        {viewData.dia_chi || '---'}
+                      </span>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Giới tính:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.gioi_tinh || '---'}</span></div>
                     <div className="flex flex-col sm:flex-row sm:justify-between border-b border-orange-100 pb-2 gap-1 sm:gap-4"><span className="text-gray-500 text-sm sm:w-20 shrink-0">Năm sinh:</span><span className="font-semibold text-gray-800 text-sm sm:text-right">{viewData.nam_sinh ? new Date(viewData.nam_sinh).toLocaleDateString('vi-VN') : '---'} {viewData.tuoi && <span className="ml-2 text-orange-600 font-bold">({viewData.tuoi} tuổi)</span>}</span></div>
@@ -4051,9 +4521,9 @@ export default function PersonnelPage() {
                             </td>
                             <td className="p-2 text-center">
                               <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${kItem.loai_suc_khoe?.includes('I') && !kItem.loai_suc_khoe?.includes('IV') && !kItem.loai_suc_khoe?.includes('V') ? 'bg-emerald-100 text-emerald-800' :
-                                  kItem.loai_suc_khoe?.includes('II') ? 'bg-emerald-50 text-emerald-700' :
-                                    kItem.loai_suc_khoe?.includes('III') ? 'bg-amber-50 text-amber-800' :
-                                      'bg-rose-100 text-rose-800'
+                                kItem.loai_suc_khoe?.includes('II') ? 'bg-emerald-50 text-emerald-700' :
+                                  kItem.loai_suc_khoe?.includes('III') ? 'bg-amber-50 text-amber-800' :
+                                    'bg-rose-100 text-rose-800'
                                 }`}>
                                 {kItem.loai_suc_khoe || 'Loại I'}
                               </span>
@@ -4093,6 +4563,7 @@ export default function PersonnelPage() {
         formData={formData}
         submitting={submitting}
         donViList={donViList}
+        phapNhanList={phapNhanList}
         chucDanhSuggestions={chucDanhSuggestions}
         onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
         onSave={handleSave}
@@ -4184,40 +4655,44 @@ export default function PersonnelPage() {
                 <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-3">
                   <div className="flex items-center gap-1.5 text-xs text-indigo-800 font-bold">
                     <Info size={15} className="shrink-0 text-indigo-600" />
-                    <span>Cấu trúc dán (Quét từ Cột 1 đến 27, có hay không có Tiêu đề đều được):</span>
+                    <span>Cấu trúc dán (Quét từ Cột 1 đến 31 theo bảng mẫu, có hay không có Tiêu đề đều được):</span>
                   </div>
                   <div className="flex flex-wrap gap-2 text-[11px]">
                     <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-500 font-medium">1. Stt</span>
                     <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">2. Mã *</span>
                     <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">3. Họ tên *</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">4. Chức danh *</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">5. Chức vụ *</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">6. Bộ phận làm việc</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-500 font-medium">7. Đơn vị công tác</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-500 font-medium">8. Showroom</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-500 font-medium">9. Phía</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">10. SDT Cty</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">11. Giới tính</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">12. Năm sinh</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">13. Ngày nhận việc</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">14. SDT CN</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">15. Email</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">16. Ngạch</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-300 text-indigo-900 font-bold shadow-xs">17. Nhóm</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">18. Từ</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">19. Đến</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">20. Giá trị</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">21. Khối</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">4. Giới tính</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">5. Năm sinh</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">6. CCCD</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">7. Địa chỉ</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">8. SDT CN</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">9. SDT Cty</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">10. Email</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-500 font-medium">11. Đơn vị công tác</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-500 font-medium">12. Showroom</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">13. Đơn vị chi lương</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">14. Ngày nhận việc</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">15. Khối</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">16. Tổ chức</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">17. Ban/Phòng</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">18. Bộ phận</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">19. Chức danh *</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">20. Chức vụ *</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">21. Ngạch</span>
                     <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">22. Địa điểm làm việc</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">23. CCCD</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">24. Thẻ thang (True/False)</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">25. Thẻ xe (True/False)</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">26. Hãng-Loại xe</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">27. BKS</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-500 font-medium">23. Phía</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-300 text-indigo-900 font-bold shadow-xs">24. Nhóm ATVSLĐ (1, 2, 3, 4, 6)</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">25. Từ</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">26. Đến</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-200 text-gray-700 font-medium">27. Giá trị</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">28. Thẻ thang (True/False)</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">29. Thẻ xe (True/False)</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">30. Hãng-Loại xe</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-indigo-300 text-indigo-800 font-bold">31. BKS</span>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs pt-1 gap-2">
                     <span className="text-emerald-600 font-black flex items-center gap-1">✓ Hệ thống tự động quét và gán vào các Showroom trực thuộc của: {selectedUnitName}</span>
-                    <span className="text-gray-400 italic">Chú ý: Cột 8 (Showroom) trong file Excel cần khớp với tên Showroom/Đơn vị trên hệ thống để tự động gán.</span>
+                    <span className="text-gray-400 italic">Chú ý: Cột 12 (Showroom) trong file Excel cần khớp với tên Showroom/Đơn vị trên hệ thống để tự động gán.</span>
                   </div>
                 </div>
               )}
@@ -4310,9 +4785,12 @@ export default function PersonnelPage() {
                             <tr>
                               <th className="p-3 border-r border-gray-200">Mã số nhân viên</th>
                               <th className="p-3 border-r border-gray-200">Họ và Tên</th>
-                              <th className="p-3 border-r border-gray-200">Chức vụ</th>
-                              <th className="p-3 border-r border-gray-200">Bộ phận</th>
+                              <th className="p-3 border-r border-gray-200">Đơn vị phân bổ</th>
                               <th className="p-3 border-r border-gray-200">Khối</th>
+                              <th className="p-3 border-r border-gray-200">Tổ chức</th>
+                              <th className="p-3 border-r border-gray-200">Ban/Phòng</th>
+                              <th className="p-3 border-r border-gray-200">Bộ phận</th>
+                              <th className="p-3 border-r border-gray-200">Chức vụ</th>
                               <th className="p-3">Địa điểm làm việc</th>
                             </tr>
                           </thead>
@@ -4321,9 +4799,12 @@ export default function PersonnelPage() {
                               <tr key={idx} className="hover:bg-emerald-50/10 transition-colors">
                                 <td className="p-3 font-bold text-emerald-700 border-r border-gray-200">{item.ma_so_nhan_vien}</td>
                                 <td className="p-3 font-semibold text-gray-800 border-r border-gray-200">{item.ho_ten}</td>
-                                <td className="p-3 text-gray-600 border-r border-gray-200">{item.chuc_vu || '---'}</td>
-                                <td className="p-3 text-gray-600 border-r border-gray-200">{item.phong_ban || '---'}</td>
+                                <td className="p-3 font-medium text-blue-700 border-r border-gray-200">{donViMap[item.id_don_vi] || item.id_don_vi || '---'}</td>
                                 <td className="p-3 text-gray-600 border-r border-gray-200">{item.khoi || '---'}</td>
+                                <td className="p-3 text-gray-600 border-r border-gray-200">{item.to_chuc || '---'}</td>
+                                <td className="p-3 text-gray-600 border-r border-gray-200">{item.phong_ban || '---'}</td>
+                                <td className="p-3 text-gray-600 border-r border-gray-200">{item.bo_phan || '---'}</td>
+                                <td className="p-3 text-gray-600 border-r border-gray-200">{item.chuc_vu || '---'}</td>
                                 <td className="p-3 text-gray-500">{item.dia_diem_lam_viec || '---'}</td>
                               </tr>
                             ))}
@@ -4404,6 +4885,9 @@ export default function PersonnelPage() {
                                       <div className={`font-bold text-gray-800 ${isIgnored ? 'line-through text-gray-400' : ''}`}>{group.existing.ho_ten}</div>
                                       <div className="text-[10px] font-mono font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded inline-block mt-1">
                                         {group.existing.ma_so_nhan_vien}
+                                      </div>
+                                      <div className="text-[10px] text-gray-500 font-medium mt-0.5">
+                                        ĐV hiện tại: <span className="font-semibold text-gray-700">{donViMap[group.existing.id_don_vi] || group.existing.id_don_vi || '---'}</span>
                                       </div>
                                       <div className="text-[10px] mt-1 font-semibold">
                                         {isIgnored ? (

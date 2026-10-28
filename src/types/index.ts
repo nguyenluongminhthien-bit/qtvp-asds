@@ -127,10 +127,14 @@ export interface Personnel {
   trang_thai: string;
   ngay_nghi_viec: string;
   cccd?: string;
+  dia_chi?: string;
+  dv_chi_luong?: string;
   the_thang?: string;
   the_xe?: string;
   hang_loai_xe?: string;
   bks?: string;
+  to_chuc?: string;
+  bo_phan?: string;
   [key: string]: any;
 }
 
@@ -621,6 +625,46 @@ export interface DynamicGoiKhamItem {
   price_nam?: number; // Giá Nam
   price_nu_dt?: number; // Giá Nữ Độc thân
   price_nu_cgd?: number; // Giá Nữ Có gia đình
+  
+  // 🟢 ĐỊNH MỨC TỐI ĐA (Admin cài đặt theo Thông báo ban hành)
+  max_price?: number;
+  max_price_nam?: number;
+  max_price_nu_dt?: number;
+  max_price_nu_cgd?: number;
+
+  // 🟢 MÃ ĐỐI ỨNG TẬP ĐOÀN MẸ (THACO AUTO)
+  ma_goi_tap_doan?: string;
+  ten_goi_tap_doan?: string;
+}
+
+export interface AnhXaGoiTapDoanItem {
+  id: string;
+  ma_goi_tap_doan: string;      // VD: "GK1", "GK2", "GK3", "GK4", "GK4A"...
+  ten_goi_tap_doan: string;     // VD: "Gói Khám Lãnh đạo cấp cao", "Gói Khám Chuyên viên"...
+  ngach_tap_doan: string;       // VD: "Ngạch A1-A3", "Ngạch B1-B3"...
+  ma_goi_don_vi: string;        // VD: "GK_1", "GK_2", "GK_3A"... (hoặc rỗng nếu Đơn vị không có)
+  ten_goi_don_vi: string;       // VD: "GK 1 (Tiêu chuẩn Quản lý/Chuyên viên)"...
+  ngach_don_vi: string;         // VD: "Ngạch A6-A8", "NV Kho xe & Lái xe, Bảo vệ"...
+  ghi_chu?: string;
+}
+
+export interface ConfigKhamSucKhoeRecord {
+  id: string;
+  nam: number;                                 // Năm áp dụng (VD: 2026)
+  loai_dot_kham: 'BNN' | 'KSK' | 'KSK_VA_BNN'; // BNN 6 tháng / KSK định kỳ / Cả hai
+  so_hieu_thong_bao: string;                   // Số hiệu văn bản (VD: "88/TB-QTVP")
+  tieu_de_thong_bao: string;                   // Tiêu đề thông báo
+  ngay_ban_hanh?: string;                      // YYYY-MM-DD
+  link_thong_bao?: string;                     // Link file PDF văn bản thông báo
+  file_dinh_kem_url?: string;                  // Alias file PDF đính kèm
+  trang_thai: 'DANG_AP_DUNG' | 'HET_HIEU_LUC';
+  goi_kham_schema: DynamicGoiKhamItem[];       // Danh mục gói KSK kèm định mức
+  goi_kham_bnn_schema: DynamicGoiKhamItem[];   // Danh mục gói BNN kèm định mức
+  bang_anh_xa_tap_doan: AnhXaGoiTapDoanItem[]; // Bảng Ma trận ánh xạ đối ứng động
+  ghi_chu?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
 }
 
 export interface KetQuaKSKBreakdown {
@@ -669,6 +713,9 @@ export interface KhamSucKhoeRecord {
   ly_do_ncc_khong_dat?: string;
   link_bao_cao?: string;
   ghi_chu?: string;
+  id_config_thong_bao?: string;   // ID cấu hình thông báo áp dụng
+  so_hieu_thong_bao?: string;     // Số hiệu thông báo lưu vết
+  ap_dung_goi_tap_doan?: boolean; // Áp dụng gói riêng của Tập đoàn mẹ (dành cho VPĐH / Phân phối)
   created_at?: string;
   updated_at?: string;
   [key: string]: any;

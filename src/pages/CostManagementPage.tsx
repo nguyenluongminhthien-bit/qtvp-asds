@@ -17,6 +17,7 @@ import CostStatisticsTab from '../components/cost/CostStatisticsTab';
 import CostDashboardTab from '../components/cost/CostDashboardTab';
 import KmpConfigTab from '../components/cost/KmpConfigTab';
 import AdminLegalTab from '../components/cost/AdminLegalTab';
+import SegmentTabs from '../components/ui/SegmentTabs';
 import { toast } from '../utils/toast';
 import { isCostManagementUnit, getUserPermittedUnitIds, getAllSubordinateIds } from '../utils/hierarchy';
 
@@ -360,7 +361,11 @@ export default function CostManagementPage() {
     {
       id: 'thong_ke',
       label: 'Thống kê',
-      icon: <BarChart2 size={16} />
+      icon: <BarChart2 size={16} />,
+      subTabs: [
+        { id: 'bao_cao', label: 'Báo cáo thống kê', icon: <BarChart2 className="w-4 h-4" /> },
+        { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> }
+      ]
     },
     {
       id: 'kmp',
@@ -371,9 +376,13 @@ export default function CostManagementPage() {
     {
       id: 'admin',
       label: 'Quản trị và Pháp nhân',
-      icon: <Building2 size={16} />
+      icon: <Building2 size={16} />,
+      subTabs: [
+        { id: 'bophan', label: 'Danh mục Bộ phận', icon: <Layers className="w-4 h-4" />, count: boPhanList.length > 0 ? boPhanList.length : 16 },
+        { id: 'phapnhan', label: 'Pháp nhân & Showroom', icon: <Building2 className="w-4 h-4" />, count: phapNhanList.length }
+      ]
     }
-  ], [activeDnttCount, kmpList.length]);
+  ], [activeDnttCount, kmpList.length, boPhanList.length, phapNhanList.length]);
 
   return (
     <div className="flex w-full max-w-full h-full bg-[#f4f7f9] dark:bg-slate-900 overflow-hidden relative font-sans">
@@ -401,7 +410,7 @@ export default function CostManagementPage() {
         setExpandedParents={setExpandedParents}
         isListCollapsed={isListCollapsed}
         setIsListCollapsed={setIsListCollapsed}
-        themeColor="blue"
+        themeColor="amber"
         allUnitsLabel={allUnitsLabel}
         searchPlaceholder="Tìm đơn vị quản trị..."
         onDropDntt={(dnttId, targetUnitId) => {
@@ -435,7 +444,7 @@ export default function CostManagementPage() {
                   <Wallet size={28} /> Quản lý Chi phí
                 </h2>
                 <p className="text-sm font-medium text-gray-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>Đang xem: <span className="text-emerald-600 font-bold">{currentUnitName}</span> ({activeDnttCount} phiếu DNTT)</span>
+                  <span>Đang xem: <span className="text-[#D97706] font-bold">{currentUnitName}</span> ({activeDnttCount} phiếu DNTT)</span>
                 </p>
               </div>
             </div>
@@ -700,126 +709,22 @@ export default function CostManagementPage() {
             </div>
           )}
 
-          {/* DÒNG 3: KHU VỰC TABS PHÂN CẤP LIỀN KHỐI (NESTED CONNECTED TABS) */}
-          <div className={`w-full flex flex-col select-none shrink-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
-            {/* --- CẤP 1 --- */}
-            <div className={`w-full bg-gray-100 dark:bg-slate-800 flex flex-wrap gap-1 pt-1 px-1 items-center transition-all duration-300 ${isLevel2Open ? 'pb-0 border-b-0' : 'pb-1'}`}>
-              {tabs.map((tab) => {
-                const isActive = tab.id === activeTab;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${isActive
-                      ? `text-white font-black z-10 ${isLevel2Open ? 'pb-2.5 sm:pb-3' : ''}`
-                      : 'text-gray-500 hover:text-[#D97706] dark:hover:text-amber-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
-                      }`}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="costMainTabSlide"
-                        className={`absolute inset-0 z-0 shadow-xs ${isLevel2Open ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
-                        style={{ backgroundColor: '#D97706' }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                      />
-                    )}
-                    {tab.icon && <span className="relative z-10 shrink-0 flex items-center">{tab.icon}</span>}
-                    <span className="relative z-10">{tab.label}</span>
-                    {tab.count !== undefined && (
-                      <span className={`relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-gray-300'}`}>
-                        {tab.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* --- CẤP 2 (Mở khi chọn Quản trị và Pháp nhân HOẶC Thống kê) --- */}
-            <AnimatePresence initial={false}>
-              {isLevel2Open && (
-                <motion.div
-                  key={`level2-${activeTab}`}
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="overflow-hidden bg-[#D97706] dark:bg-[#b45309]"
-                >
-                  {activeTab === 'thong_ke' && (
-                    <div className="w-full flex flex-wrap gap-3 px-4 py-1.5 items-center transition-all duration-300">
-                      {[
-                        { id: 'bao_cao', label: 'Báo cáo thống kê', icon: <BarChart2 className="w-4 h-4" /> },
-                        { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> }
-                      ].map(st => {
-                        const isSubActive = activeThongKeSubTab === st.id;
-                        return (
-                          <button
-                            key={st.id}
-                            type="button"
-                            onClick={() => setActiveThongKeSubTab(st.id as any)}
-                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive
-                              ? 'text-white font-black'
-                              : 'text-white/80 hover:text-white hover:bg-white/10'
-                              }`}
-                          >
-                            {isSubActive && (
-                              <motion.div
-                                layoutId="costThongKeSubTabSlide"
-                                className="absolute inset-0 bg-amber-800 dark:bg-amber-950 rounded-lg shadow-sm ring-1 ring-amber-400/30 z-0"
-                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                              />
-                            )}
-                            <span className="relative z-10 flex items-center gap-1.5">
-                              {st.icon}
-                              <span>{st.label}</span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {activeTab === 'admin' && (
-                    <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                      {[
-                        { id: 'bophan', label: 'Danh mục Bộ phận', icon: <Layers className="w-4 h-4" />, count: boPhanList.length > 0 ? boPhanList.length : 16 },
-                        { id: 'phapnhan', label: 'Pháp nhân & Showroom', icon: <Building2 className="w-4 h-4" />, count: phapNhanList.length }
-                      ].map(st => {
-                        const isSubActive = activeAdminSubTab === st.id;
-                        return (
-                          <button
-                            key={st.id}
-                            type="button"
-                            onClick={() => setActiveAdminSubTab(st.id as any)}
-                            className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive
-                              ? 'text-white font-black'
-                              : 'text-white/80 hover:text-white hover:bg-white/10'
-                              }`}
-                          >
-                            {isSubActive && (
-                              <motion.div
-                                layoutId="costAdminSubTabSlide"
-                                className="absolute inset-0 bg-amber-800 dark:bg-amber-950 rounded-lg shadow-sm ring-1 ring-amber-400/30 z-0"
-                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                              />
-                            )}
-                            <span className="relative z-10 flex items-center gap-1.5">
-                              {st.icon}
-                              <span>{st.label}</span>
-                            </span>
-                            <span className={`relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80'}`}>
-                              {st.count}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* DÒNG 3: KHU VỰC TABS PHÂN CẤP LIỀN KHỐI (NESTED CONNECTED TABS) CHUẨN SEGMENTTABS */}
+          <div className={`w-full transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+            <SegmentTabs
+              theme="cost"
+              tabs={tabs}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as any)}
+              activeSubTab={activeTab === 'thong_ke' ? activeThongKeSubTab : activeAdminSubTab}
+              onSubChange={(id) => {
+                if (activeTab === 'thong_ke') setActiveThongKeSubTab(id as any);
+                else if (activeTab === 'admin') setActiveAdminSubTab(id as any);
+              }}
+              layoutId="costMainTabSlide"
+              subTabsLayoutId="costSubTabSlide"
+              fullWidth
+            />
           </div>
 
         </div>

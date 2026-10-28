@@ -1,4 +1,4 @@
-import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmNhomChiPhi, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe, ChiPhiPivotConfig } from '../../types';
+import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmNhomChiPhi, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe, ChiPhiPivotConfig, ConfigKhamSucKhoeRecord } from '../../types';
 import { fetchWithCache, resolveTable, invalidateCache } from './cache';
 import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { writeLog } from './logs';
@@ -145,6 +145,9 @@ function sanitizePayload(item: Record<string, any>, isUpdate: boolean = false, t
     uiOnlyKeys.add('email_ca_nhan');
     uiOnlyKeys.add('ngay_nhan_viec');
     uiOnlyKeys.add('phan_loai');
+    uiOnlyKeys.add('all_record_ids');
+    uiOnlyKeys.add('kiem_nhiem_list');
+    uiOnlyKeys.add('is_kiem_nhiem_single');
   }
 
   Object.keys(item || {}).forEach(key => {
@@ -353,7 +356,20 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
     void writeLog(tenHanhDong, `Bảng: ${realTableName} | ${detailSummary}`);
 
     const resultData = await response.json();
-    return Array.isArray(resultData) ? resultData[0] : resultData;
+    if (action === 'update' && Array.isArray(resultData) && resultData.length === 0) {
+      // Nếu PATCH không tìm thấy bản ghi (vd bị xóa trực tiếp trên Supabase), tự động fallback tạo mới (UPSERT)
+      const recordId = data.id || data.ID || data.ID_Xe || data.ID_User;
+      const postRes = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ ...cleanedData, id: recordId })
+      });
+      if (postRes.ok) {
+        const postData = await postRes.json();
+        return Array.isArray(postData) ? postData[0] : postData;
+      }
+    }
+    return Array.isArray(resultData) ? (resultData[0] || data) : (resultData || data);
   } catch (err: any) {
     console.error(`🔴 Giao tiếp Supabase thất bại cho bảng ${tableName}:`, err.message);
     throw err;
@@ -435,11 +451,32 @@ export async function getKhamSucKhoeCampaigns(): Promise<any[]> {
 }
 
 export async function saveKhamSucKhoeCampaign(data: any, action: 'create' | 'update'): Promise<any> {
-  return save(data, action, 'hs_kham_suc_khoe');
+  try {
+    return await save(data, action, 'hs_kham_suc_khoe');
+  } catch (err: any) {
+    if (err.message && err.message.includes('goi_kham_bnn_values')) {
+      console.warn("⚠️ Cột goi_kham_bnn_values chưa được thêm vào bảng hs_kham_suc_khoe trên Supabase. Đang lưu với các cột hiện có...");
+      const { goi_kham_bnn_values, ...fallbackData } = data;
+      return await save(fallbackData, action, 'hs_kham_suc_khoe');
+    }
+    throw err;
+  }
 }
 
 export async function deleteKhamSucKhoeCampaign(id: string): Promise<boolean> {
   return deleteRecord(id, 'hs_kham_suc_khoe');
+}
+
+export async function getConfigKhamSucKhoe(forceRefresh = false): Promise<ConfigKhamSucKhoeRecord[]> {
+  return getWithFallback<ConfigKhamSucKhoeRecord>('config_kham_suc_khoe', forceRefresh);
+}
+
+export async function saveConfigKhamSucKhoe(data: any, action: 'create' | 'update'): Promise<any> {
+  return save(data, action, 'config_kham_suc_khoe');
+}
+
+export async function deleteConfigKhamSucKhoe(id: string): Promise<boolean> {
+  return deleteRecord(id, 'config_kham_suc_khoe');
 }
 
 export async function getKhamSucKhoeCaNhan(): Promise<any[]> {

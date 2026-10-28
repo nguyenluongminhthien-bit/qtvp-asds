@@ -1,6 +1,6 @@
-'File cài đặt Thương hiệu xe và icon thương hiệu; với các lựa chọn là png trong folder Public/vehicle'
-'1. Kích thước mặc định của Icon Logo khi gọi getBrandEmoji - Tại dòng 184, tham số imgClass quy định kích thước mặc định cho các ảnh logo thương hiệu'
-'2. Kích thước Icon bên trong Badge thương hiệu(renderBrandBadge) - Tại dòng 202, hàm renderBrandBadge gọi getBrandEmoji với class kích thước riêng dành cho badge'
+// File cài đặt Thương hiệu xe và icon thương hiệu; với các lựa chọn là png trong folder Public/vehicle
+// 1. Kích thước mặc định của Icon Logo khi gọi getBrandEmoji - Tại dòng 184, tham số imgClass quy định kích thước mặc định cho các ảnh logo thương hiệu
+// 2. Kích thước Icon bên trong Badge thương hiệu(renderBrandBadge) - Tại dòng 202, hàm renderBrandBadge gọi getBrandEmoji với class kích thước riêng dành cho badge
 
 import React from 'react';
 

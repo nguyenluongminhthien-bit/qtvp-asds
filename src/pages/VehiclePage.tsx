@@ -23,6 +23,7 @@ import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import VehicleStatsTab from '../components/vehicle/VehicleStatsTab';
 import {
   VEHICLE_MODELS,
+  getBrandConfig,
   getBrandBadgeStyle,
   getBrandEmoji,
   renderBrandBadge
@@ -648,10 +649,27 @@ export default function VehiclePage() {
   }, [baseFilteredCars, vehicleSubTab, filterStatus]);
 
   const vehicleTabs = useMemo(() => [
-    { id: 'list', label: 'Danh sách xe', icon: <Car size={16} />, count: activeCarsCount },
+    {
+      id: 'list',
+      label: 'Danh sách xe',
+      icon: <Car size={16} />,
+      count: activeCarsCount,
+      subTabs: [
+        { id: 'active', label: 'Hiện hữu', icon: <Car className="w-4 h-4" />, count: activeCarsCount },
+        { id: 'liquidated', label: 'Thanh lý', icon: <Archive className="w-4 h-4" />, count: liquidatedCarsCount }
+      ]
+    },
     { id: 'schedule', label: 'Lịch trình & Nhật ký', icon: <Calendar size={16} /> },
-    { id: 'stats', label: 'Thống kê', icon: <BarChart3 size={16} /> }
-  ], [activeCarsCount]);
+    {
+      id: 'stats',
+      label: 'Thống kê',
+      icon: <BarChart3 size={16} />,
+      subTabs: [
+        ...(canViewVehiclePivot ? [{ id: 'pivot', label: 'Thống kê', icon: <TableProperties className="w-4 h-4" />, count: filteredCars.length }] : []),
+        { id: 'dashboard', label: 'Dashboard', icon: <BarChart2 className="w-4 h-4" /> }
+      ]
+    }
+  ], [activeCarsCount, liquidatedCarsCount, canViewVehiclePivot, filteredCars.length]);
 
 
   // 🟢 BỘ LỌC CẢNH BÁO XE (Tự động quét Hạn đăng kiểm và Bảo hiểm)
@@ -2222,141 +2240,22 @@ export default function VehiclePage() {
             </div>
           )}
 
-          {/* 🟢 KHU VỰC TAB PHÂN CẤP LỒNG KHỐI LIỀN MẠCH (#005698) CHUẨN NCT */}
-          <div className={`w-full flex flex-col mb-4 select-none shrink-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
-            {/* --- CẤP 1 (CHA) --- */}
-            {(() => {
-              const isTabConnected = activeTab === 'list' || activeTab === 'stats';
-              return (
-                <div className={`w-full bg-gray-100 dark:bg-slate-800 flex flex-wrap gap-1 pt-1 px-1 items-center transition-all duration-300 ${isTabConnected ? 'pb-0 border-b-0' : 'pb-1'}`}>
-                  {vehicleTabs.map((tab) => {
-                    const isActive = tab.id === activeTab;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap outline-none border-none bg-transparent ${isActive
-                          ? `text-white font-black z-10 ${isTabConnected ? 'pb-2.5 sm:pb-3' : ''}`
-                          : 'text-gray-500 hover:text-[#005698] dark:hover:text-blue-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-xl'
-                          }`}
-                      >
-                        {isActive && (
-                          <motion.div
-                            layoutId="vehicleMainTabSlide"
-                            className={`absolute inset-0 z-0 shadow-xs ${isTabConnected ? 'rounded-t-xl rounded-b-none' : 'rounded-xl'}`}
-                            style={{ backgroundColor: '#005698' }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                          />
-                        )}
-                        {tab.icon && <span className="relative z-10 shrink-0 flex items-center">{tab.icon}</span>}
-                        <span className="relative z-10">{tab.label}</span>
-                        {tab.count !== undefined && (
-                          <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-slate-700 text-gray-500'}`}>
-                            {tab.count}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            {/* --- CẤP 2 (CON) --- */}
-            <AnimatePresence initial={false}>
-              {/* Cấp 2 cho Tab 1: Danh sách xe */}
-              {activeTab === 'list' && (
-                <motion.div
-                  key="level2-vehicle-list"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="overflow-hidden bg-[#005698]"
-                >
-                  <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                    {[
-                      { id: 'active', label: 'Hiện hữu', icon: <Car className="w-4 h-4" />, count: activeCarsCount },
-                      { id: 'liquidated', label: 'Thanh lý', icon: <Archive className="w-4 h-4" />, count: liquidatedCarsCount }
-                    ].map(st => {
-                      const isSubActive = vehicleSubTab === st.id;
-                      return (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => setVehicleSubTab(st.id as any)}
-                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
-                        >
-                          {isSubActive && (
-                            <motion.div
-                              layoutId="vehicleSubTabSlide"
-                              className="absolute inset-0 bg-[#00386b] rounded-lg shadow-sm ring-1 ring-sky-400/40 z-0"
-                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            />
-                          )}
-                          <span className="relative z-10 flex items-center gap-1.5">
-                            {st.icon}
-                            <span>{st.label}</span>
-                          </span>
-                          <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
-                            {st.count}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Cấp 2 cho Tab 3: Thống kê (Pivot & Dashboard) */}
-              {activeTab === 'stats' && (
-                <motion.div
-                  key="level2-vehicle-stats"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="overflow-hidden bg-[#005698]"
-                >
-                  <div className="w-full flex flex-wrap gap-4 px-4 py-1.5 items-center transition-all duration-300">
-                    {[
-                      ...(canViewVehiclePivot ? [{ id: 'pivot', label: 'Thống kê', icon: <TableProperties className="w-4 h-4" />, count: filteredCars.length }] : []),
-                      { id: 'dashboard', label: 'Dashboard', icon: <BarChart2 className="w-4 h-4" /> }
-                    ].map(st => {
-                      const isSubActive = statsSubTab === st.id;
-                      return (
-                        <button
-                          key={st.id}
-                          type="button"
-                          onClick={() => setStatsSubTab(st.id as any)}
-                          className={`relative py-1.5 px-4 text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer rounded-lg bg-transparent ${isSubActive ? 'text-white font-black' : 'text-white/80 hover:text-white hover:bg-white/10'
-                            }`}
-                        >
-                          {isSubActive && (
-                            <motion.div
-                              layoutId="vehicleStatsSubTabSlide"
-                              className="absolute inset-0 bg-[#00386b] rounded-lg shadow-sm ring-1 ring-sky-400/40 z-0"
-                              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            />
-                          )}
-                          <span className="relative z-10 flex items-center gap-1.5">
-                            {st.icon}
-                            <span>{st.label}</span>
-                          </span>
-                          {st.count !== undefined && (
-                            <span className={`relative z-10 px-2 py-0.5 rounded-full text-[10px] font-bold ${isSubActive ? 'bg-[#0284c7] text-white' : 'bg-white/15 text-white/90'}`}>
-                              {st.count}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* 🟢 KHU VỰC TAB PHÂN CẤP LỒNG KHỐI LIỀN MẠCH (#005698) CHUẨN SEGMENTTABS */}
+          <div className={`w-full transition-all duration-300 ${isListCollapsed ? 'md:ml-10 lg:ml-0' : ''}`}>
+            <SegmentTabs
+              theme="vehicle"
+              tabs={vehicleTabs}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as any)}
+              activeSubTab={activeTab === 'list' ? vehicleSubTab : statsSubTab}
+              onSubChange={(id) => {
+                if (activeTab === 'list') setVehicleSubTab(id as any);
+                else if (activeTab === 'stats') setStatsSubTab(id as any);
+              }}
+              layoutId="vehicleMainTabSlide"
+              subTabsLayoutId="vehicleSubTabSlide"
+              fullWidth
+            />
           </div>
 
           {error && <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 flex items-start gap-3 rounded-r-lg shadow-sm shrink-0"><AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /><p>{error}</p></div>}
@@ -3652,47 +3551,81 @@ export default function VehiclePage() {
               <button onClick={() => setIsViewModalOpen(false)} className="text-blue-200 hover:text-white rounded-full p-1 transition-colors"><X className="w-6 h-6" /></button>
             </div>
 
-            <div className="p-4 md:p-6 overflow-y-auto flex-1 min-h-0 flex flex-col gap-5 md:gap-6 custom-scrollbar">
+            <div className="p-4 md:p-6 overflow-y-auto overflow-x-hidden flex-1 min-h-0 flex flex-col gap-5 md:gap-6 custom-scrollbar w-full">
 
               {/* Info Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5 md:pb-6 shrink-0">
-                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-50 text-[#05469B] rounded-2xl flex items-center justify-center border border-blue-100 shadow-inner shrink-0">
-                    <Car size={40} className="sm:w-12 sm:h-12" />
-                  </div>
-                  <div className="flex-1 text-center sm:text-left">
-                    <h2 className="text-2xl sm:text-3xl font-black text-gray-800 tracking-tight">{viewData.bien_so}</h2>
-                    <p className="text-base sm:text-xl font-bold text-[#05469B] mt-1">{viewData.hieu_xe} {viewData.loai_xe} {viewData.phien_ban ? `- ${viewData.phien_ban}` : ''}</p>
-                    <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-3">
-                      <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded text-xs font-bold uppercase">{viewData.loai_phuong_tien}</span>
-                      <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded text-xs font-bold">{viewData.muc_dich_su_dung}</span>
-                      <span className={`px-2.5 py-1 rounded text-xs font-bold border ${getStatusBadgeStyle(viewData.hien_trang)}`}>
-                        {getStatusEmoji(viewData.hien_trang)} {viewData.hien_trang}
-                      </span>
-                    </div>
-                  </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-gray-50/70 p-4 md:p-5 rounded-2xl border border-gray-100 shrink-0">
+                {/* Icon xe / Logo thương hiệu bên trái */}
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-2xl flex items-center justify-center border border-gray-200/80 shadow-xs shrink-0 p-2 overflow-hidden">
+                  {(() => {
+                    const cfg = getBrandConfig(viewData.hieu_xe);
+                    if (cfg?.logo) {
+                      const logoSrc = cfg.logo.startsWith('/') ? cfg.logo : `/${cfg.logo}`;
+                      return (
+                        <img
+                          src={logoSrc}
+                          alt={cfg.name || viewData.hieu_xe}
+                          className="w-full h-full object-contain"
+                        />
+                      );
+                    }
+                    if (cfg?.emoji) {
+                      return <span className="text-3xl sm:text-4xl select-none">{cfg.emoji}</span>;
+                    }
+                    return <Car size={34} className="sm:w-10 sm:h-10 text-[#05469B]" />;
+                  })()}
                 </div>
-                <div className="text-center sm:text-right shrink-0 mt-2 sm:mt-0">
-                  <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase mb-1">Đơn vị quản lý</p>
-                  <p className="text-sm sm:text-lg font-black text-gray-800">{getUnitFullName(viewData.id_don_vi)}</p>
+
+                {/* Các dòng đối diện bên phải */}
+                <div className="flex-1 min-w-0 w-full flex flex-col gap-2">
+                  {/* Dòng 1: Loại phương tiện | Mục đích sử dụng | Nhãn trạng thái */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-1 bg-gray-200/80 text-gray-700 rounded-md text-xs font-bold uppercase tracking-wider">
+                        {viewData.loai_phuong_tien || 'Phương tiện'}
+                      </span>
+                      {viewData.muc_dich_su_dung && (
+                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-bold border border-indigo-100">
+                          {viewData.muc_dich_su_dung}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-md text-xs font-bold border inline-flex items-center gap-1.5 shrink-0 ${getStatusBadgeStyle(viewData.hien_trang)}`}>
+                      <span>{getStatusEmoji(viewData.hien_trang)}</span>
+                      <span>{viewData.hien_trang}</span>
+                    </span>
+                  </div>
+
+                  {/* Dòng 2: Biển số | Hiệu xe - Loại xe */}
+                  <div className="flex flex-wrap items-baseline gap-2 sm:gap-3">
+                    <span className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight font-mono">
+                      {viewData.bien_so}
+                    </span>
+                    <span className="text-gray-300 hidden sm:inline">|</span>
+                    <span className="text-base sm:text-lg font-bold text-[#05469B] break-words">
+                      {viewData.hieu_xe} {viewData.loai_xe} {viewData.phien_ban ? `- ${viewData.phien_ban}` : ''}
+                    </span>
+                  </div>
+
+                  {/* Dòng 3: Địa điểm sử dụng (hiển thị đầy đủ các cấp có thông tin) */}
+                  {(() => {
+                    const loc = formatVehicleLocationDisplay(viewData.dia_diem_su_dung, donViMap);
+                    const locationText = loc.full || loc.main || 'Chưa cập nhật';
+                    return (
+                      <div className="flex items-start gap-1.5 text-xs text-gray-700 leading-relaxed bg-white/90 px-3 py-1.5 rounded-lg border border-gray-200/80 shadow-2xs">
+                        <MapPin size={14} className="text-blue-600 shrink-0 mt-0.5" />
+                        <span className="font-semibold text-gray-500 shrink-0">Địa điểm sử dụng:</span>
+                        <span className="font-bold text-gray-800 break-words">{locationText}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
               {/* Data Grid: Các thông số cơ bản */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-5 rounded-xl border border-gray-200 shrink-0">
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Chủ sở hữu</p><p className="font-semibold text-gray-800">{viewData.don_vi_chu_so_huu || '-'}</p></div>
-                <div>
-                  <p className="text-xs text-gray-500 font-bold mb-1">Địa điểm sử dụng</p>
-                  {(() => {
-                    const loc = formatVehicleLocationDisplay(viewData.dia_diem_su_dung, donViMap);
-                    return (
-                      <p className="font-bold text-gray-800 text-xs flex items-center gap-1" title={loc.full}>
-                        <MapPin size={12} className="text-blue-600 shrink-0" />
-                        <span className="truncate">{loc.full || loc.main || '-'}</span>
-                      </p>
-                    );
-                  })()}
-                </div>
+                <div><p className="text-xs text-gray-500 font-bold mb-1">Đơn vị quản lý</p><p className="font-semibold text-gray-800 text-xs sm:text-sm break-words">{getUnitFullName(viewData.id_don_vi) || '-'}</p></div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Số Khung</p><p className="font-semibold text-gray-800">{viewData.so_khung || '-'}</p></div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Số Máy</p><p className="font-semibold text-gray-800">{viewData.so_may || '-'}</p></div>
                 <div><p className="text-xs text-gray-500 font-bold mb-1">Định vị GPS</p><p className="font-semibold text-gray-800">{viewData.gps || '-'}</p></div>

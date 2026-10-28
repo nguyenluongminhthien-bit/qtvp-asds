@@ -1137,39 +1137,6 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
     }
   };
 
-  const renderUnitTree = (parent: DonVi, level: number = 1, visited = new Set<string>()) => {
-    if (!parent) return null;
-    const pId = String(parent.id || '');
-    if (level > 15 || visited.has(pId)) return null;
-    const nextVisited = new Set(visited).add(pId);
-
-    const children = getChildUnits(pId);
-    const isExpanded = expandedParents.includes(pId) || !!unitSearchTerm;
-    const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
-
-    return (
-      <div key={pId} className={level === 1 ? "mb-1" : "mt-1"}>
-        <button
-          onClick={() => {
-            setSelectedUnitFilter(pId);
-            if (children.length > 0) toggleParent(pId);
-            if (window.innerWidth < 768) setIsListCollapsed(true);
-          }}
-          className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${selectedUnitFilter === pId ? 'bg-blue-50 text-[#05469B]' : 'text-gray-700 hover:bg-gray-50'} ${isParentDimmed ? 'opacity-50' : ''}`}
-        >
-          {children.length > 0 ? (isExpanded ? <ChevronDown size={16} className="text-gray-400 shrink-0" /> : <ChevronRight size={16} className="text-gray-400 shrink-0" />) : <div className="w-4 shrink-0" />}
-          <span className="shrink-0">{getUnitEmoji(parent.loai_hinh)}</span>
-          <span className="truncate text-left">{parent.ten_don_vi}</span>
-        </button>
-
-        {isExpanded && children.length > 0 && (
-          <div className={`ml-${level === 1 ? '6' : '4'} mt-1 border-l-2 border-gray-100 pl-2 space-y-1`}>
-            {children.map(child => renderUnitTree(child, level + 1, nextVisited))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const getLinkedDocument = useCallback((refStr: string) => {
     if (!refStr) return null;
@@ -1187,72 +1154,33 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
 
       {/* 🟢 NÚT MỞ BỘ LỌC TRÊN PC */}
       {isListCollapsed && (
-        <button onClick={() => setIsListCollapsed(false)} className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all">
+        <button
+          onClick={() => setIsListCollapsed(false)}
+          className="hidden md:block absolute top-6 left-6 z-20 bg-white p-2.5 rounded-lg shadow-md border border-blue-200 text-[rgb(0,82,156)] hover:bg-[rgb(254,251,235)] transition-all cursor-pointer"
+          title="Mở bộ lọc đơn vị"
+        >
           <PanelLeftOpen size={20} />
         </button>
       )}
 
-      {/* 🟢 LỚP PHỦ BACKDROP CHO MOBILE KHI MỞ BỘ LỌC */}
-      {!isListCollapsed && (
-        <div
-          className="md:hidden absolute inset-0 bg-black/50 z-[60] transition-opacity"
-          onClick={() => setIsListCollapsed(true)}
-        ></div>
-      )}
-
-      {/* CỘT TRÁI: BỘ LỌC ĐƠN VỊ VÀ PHÂN LOẠI */}
-      <div className={`${isListCollapsed ? '-translate-x-full md:translate-x-0 md:w-0 opacity-0' : 'translate-x-0 w-[85%] max-w-[320px] md:w-80 opacity-100'} absolute md:relative inset-y-0 left-0 transition-all duration-300 ease-in-out bg-white border-r border-gray-200 flex flex-col h-full shadow-2xl md:shadow-sm z-[70] md:z-10 shrink-0 overflow-hidden`}>
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold text-[#05469B] flex items-center gap-2 whitespace-nowrap">
-              <Bookmark size={20} /> Bộ lọc Đơn vị
-            </h2>
-            <button onClick={() => setIsListCollapsed(true)} className="p-1.5 text-gray-400 hover:text-[#05469B] bg-gray-100 md:bg-transparent md:hover:bg-blue-50 rounded-md transition-colors">
-              <X size={18} className="md:hidden" />
-              <PanelLeftClose size={18} className="hidden md:block" />
-            </button>
-          </div>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Tìm đơn vị áp dụng..."
-              className="w-full pl-9 pr-4 py-2.5 bg-[#FFFFF0] border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#05469B] outline-none"
-              value={unitSearchTerm}
-              onChange={(e) => setUnitSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 min-w-[319px] custom-scrollbar pb-20 md:pb-2">
-          <button
-            onClick={() => { setSelectedUnitFilter(null); if (window.innerWidth < 768) setIsListCollapsed(true); }}
-            className={`w-full flex items-center gap-2 px-3 py-3 md:py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${selectedUnitFilter === null ? 'bg-blue-50 text-[#05469B] border border-blue-100' : 'text-gray-700 hover:bg-gray-50'}`}
-          >
-            <Building2 size={18} className={selectedUnitFilter === null ? 'text-[#05469B]' : 'text-gray-400'} /> Toàn Hệ Thống
-          </button>
-          <hr className="border-gray-100 mb-4 mx-2" />
-
-          {loading ? (
-            <div className="flex justify-center p-8"><Loader2 className="animate-spin text-[#05469B]" /></div>
-          ) : parentUnits.length === 0 ? (
-            <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
-          ) : (
-            <>
-              {vpdhUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">VPĐH</p>{vpdhUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {ctttNamUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Nam</p>{ctttNamUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {ctttBacUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-[#05469B] uppercase tracking-wider mb-2">CTTT Phía Bắc</p>{ctttBacUnits.map(dv => renderUnitTree(dv))}</div>)}
-              {otherUnits.length > 0 && (<div className="mb-6"><p className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-wider mb-2">Đơn vị khác</p>{otherUnits.map(dv => renderUnitTree(dv))}</div>)}
-            </>
-          )}
-        </div>
-
-        {/* Nút Xem Kết quả to bự trên Mobile */}
-        <div className="md:hidden absolute bottom-0 left-0 w-full p-4 border-t border-gray-200 bg-white">
-          <button onClick={() => setIsListCollapsed(true)} className="w-full py-3 bg-[#05469B] text-white rounded-xl font-bold shadow-md">Hiển thị kết quả</button>
-        </div>
-      </div>
+      {/* 🟢 BỘ LỌC ĐƠN VỊ VTLT - CHUẨN HOÁ MÀU NHẬN DIỆN rgb(254, 251, 235) & rgb(0, 82, 156) */}
+      <UnitFilterSidebar
+        donViList={donViList}
+        selectedUnitFilter={selectedUnitFilter}
+        setSelectedUnitFilter={setSelectedUnitFilter}
+        allowedDonViIds={allowedDonViIds}
+        unitSearchTerm={unitSearchTerm}
+        setUnitSearchTerm={setUnitSearchTerm}
+        expandedParents={expandedParents}
+        setExpandedParents={setExpandedParents}
+        isListCollapsed={isListCollapsed}
+        setIsListCollapsed={setIsListCollapsed}
+        themeColor="yellow"
+        title="Bộ lọc Đơn vị"
+        titleIcon={<Bookmark size={20} className="text-[rgb(0,82,156)]" />}
+        allUnitsLabel="Toàn Hệ Thống"
+        searchPlaceholder="Tìm đơn vị áp dụng..."
+      />
 
       {/* CỘT PHẢI: BẢNG DỮ LIỆU CHÍNH */}
       <div className="flex-1 min-w-0 max-w-full overflow-y-auto p-4 sm:p-6 relative transition-all duration-300 flex flex-col w-full">
@@ -1264,18 +1192,18 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
               {isListCollapsed && (
                 <button
                   onClick={() => setIsListCollapsed(false)}
-                  className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-gray-200 text-[#05469B] hover:bg-blue-50 transition-all flex items-center justify-center shrink-0"
+                  className="md:hidden bg-white p-2 rounded-lg shadow-sm border border-blue-200 text-[rgb(0,82,156)] hover:bg-[rgb(254,251,235)] transition-all flex items-center justify-center shrink-0 cursor-pointer"
                   title="Mở bộ lọc đơn vị"
                 >
                   <PanelLeftOpen size={18} />
                 </button>
               )}
               <div>
-                <h2 className="text-xl md:text-2xl font-bold text-[#05469B] flex items-center gap-2">
-                  <FileText className="w-6 h-6 md:w-7 md:h-7" /> Quản lý văn thư lưu trữ
+                <h2 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-6 h-6 md:w-7 md:h-7 text-[rgb(0,82,156)]" /> Quản lý văn thư lưu trữ
                 </h2>
                 <p className="text-sm font-medium text-gray-500 mt-1 hidden md:block">
-                  Lọc: <span className="text-emerald-600 font-bold">{selectedPhanLoai || 'Tất cả'}</span> • Khu vực: <span className="text-emerald-600 font-bold">{selectedUnitName}</span>
+                  Lọc: <span className="text-[rgb(0,82,156)] font-bold">{selectedPhanLoai || 'Tất cả'}</span> • Khu vực: <span className="text-[rgb(0,82,156)] font-bold">{selectedUnitName}</span>
                 </p>
               </div>
             </div>
@@ -1283,7 +1211,7 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
             {/* 🟢 Nút mở bộ lọc nhanh trên Mobile */}
             <button
               onClick={() => setIsListCollapsed(false)}
-              className="md:hidden p-2 bg-blue-50 text-[#05469B] rounded-lg border border-blue-100 flex items-center gap-2 shadow-sm shrink-0"
+              className="md:hidden p-2 bg-[rgb(254,251,235)] text-[rgb(0,82,156)] rounded-lg border border-blue-200 flex items-center gap-2 shadow-sm shrink-0 cursor-pointer"
             >
               <Filter size={18} /> <span className="text-sm font-bold hidden sm:inline">Bộ lọc</span>
             </button>
@@ -1473,6 +1401,7 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
         {/* 🟢 THANH TAB NGANG CHUYỂN ĐỔI PHÂN LOẠI VĂN BẢN (NẰM NGOÀI BOX ĐỂ THOÁT MẮT) */}
         <div className={`mb-4 shrink-0 transition-all duration-300 ${isListCollapsed ? 'md:ml-10' : ''}`}>
           <SegmentTabs
+            theme="vtlt"
             tabs={docTabs}
             activeTab={selectedPhanLoai === null ? 'all' : selectedPhanLoai}
             onChange={(id) => {
@@ -1480,7 +1409,6 @@ Anh/chị vui lòng gửi file scan đầy đủ chữ ký và mộc để phụ
               setCurrentPage(1);
             }}
             layoutId="docActiveTabBackground"
-            activeBgColor="#05469B"
             fullWidth
           />
         </div>

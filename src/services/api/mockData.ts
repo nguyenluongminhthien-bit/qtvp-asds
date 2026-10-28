@@ -652,5 +652,7 @@ export const INITIAL_MOCK_DATA: Record<string, any[]> = {
     { id: 'PB14', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3055194, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_KD',  id_bo_phan_cap2: 'BP2_TAIBUS', thu_tu: 14 },
     { id: 'PB15', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 3818992, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_DV',  id_bo_phan_cap2: 'BP2_TAIBUS', thu_tu: 15 },
     { id: 'PB16', dntt_id: 'DNTT1', dntt_chi_tiet_id: 'CT1', kieu_nhap: 'SO_TIEN', so_tien: 7637984, id_kmp: 'KMP1', thang: 8, nam: 2026, id_bo_phan_cap1: 'BP1_XSC', id_bo_phan_cap2: 'BP2_TAIBUS', thu_tu: 16 }
-  ]
+  ],
+
+  config_kham_suc_khoe: []
 };

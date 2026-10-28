@@ -16,13 +16,15 @@ export const EXCEL_TEMPLATES: Record<string, ExcelTemplateConfig> = {
       "Số TT", "Mã", "Họ tên", "Chức danh", "Chức vụ", "Bộ phận làm việc",
       "Đơn vị công tác", "Showroom", "Phía", "SDT Cty", "Giới tính", "Năm sinh", "Ngày nhận việc",
       "SDT CN", "Email", "Ngạch", "Nhóm", "Từ", "Đến", "Giá trị", "Khối",
-      "Địa điểm làm việc", "CCCD", "Thẻ thang (True/False)", "Thẻ xe (True/False)", "Hãng-Loại xe", "BKS"
+      "Địa điểm làm việc", "CCCD", "Thẻ thang (True/False)", "Thẻ xe (True/False)", "Hãng-Loại xe", "BKS",
+      "Địa chỉ", "Đơn vị chi lương"
     ],
     dummyRow: [
       "1", "2112277", "Nguyễn Văn A", "Chuyên viên", "Trưởng bộ phận", "QTVP",
       "THACO AUTO An Giang", "Showroom Kia An Giang", "Nam", "0901234567", "Nam", "1990", "01/01/2020",
       "0987654321", "nguyenvana@thaco.com.vn", "G2", "4", "", "", "", "Khối Văn phòng",
-      "VP Sadora (HCM)", "079090123456", "TRUE", "TRUE", "Yamaha Exciter", "66F118251"
+      "VP Sadora (HCM)", "079090123456", "TRUE", "TRUE", "Yamaha Exciter", "66F118251",
+      "Số 10 Mai Chí Thọ, P. An Lợi Đông, TP. Thủ Đức, TP.HCM", "Công ty Cổ phần Tập đoàn Trường Hải"
     ]
   },
   osh_training: {
@@ -256,7 +258,9 @@ export const getMostCompletePersonnelDummyRow = (items: any[], donViMap?: Record
     bestItem.the_thang !== undefined && bestItem.the_thang !== null ? String(bestItem.the_thang) : '',
     bestItem.the_xe || '',
     bestItem.hang_loai_xe || '',
-    bestItem.bks || bestItem.bien_kiem_soat || ''
+    bestItem.bks || bestItem.bien_kiem_soat || '',
+    bestItem.dia_chi || '',
+    bestItem.dv_chi_luong || ''
   ];
 };
 

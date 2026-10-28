@@ -13,6 +13,7 @@ export const TABLE_MAP: Record<string, string> = {
   'NhaCungCap': 'dm_ncc',
   'HS_KhamSucKhoe': 'hs_kham_suc_khoe',
   'NK_KhamSucKhoeCaNhan': 'nk_kham_suc_khoe_canhan',
+  'Config_KhamSucKhoe': 'config_kham_suc_khoe',
   'DM_KMP': 'dm_kmp',
   'DM_BoPhan': 'dm_bo_phan',
   'DM_BoPhanCap1': 'dm_bo_phan_cap1',
