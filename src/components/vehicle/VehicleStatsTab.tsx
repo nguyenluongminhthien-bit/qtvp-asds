@@ -114,13 +114,15 @@ export default function VehicleStatsTab({
   // Nếu chọn subTab là pivot, hiển thị Báo cáo Thống kê Đa chiều
   if (subTab === 'pivot') {
     return (
-      <VehiclePivotView
-        cars={filteredCars}
-        donViList={donViList}
-        donViMap={donViMap}
-        nhatKyData={nhatKyData}
-        chiPhiData={chiPhiData}
-      />
+      <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
+        <VehiclePivotView
+          cars={filteredCars}
+          donViList={donViList}
+          donViMap={donViMap}
+          nhatKyData={nhatKyData}
+          chiPhiData={chiPhiData}
+        />
+      </div>
     );
   }
 

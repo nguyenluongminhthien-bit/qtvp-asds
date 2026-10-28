@@ -55,7 +55,7 @@ export const CongVanDiTable: React.FC<DocumentTableProps> = ({
               paginatedDocs.map((item) => (
                 <tr 
                   key={item.id} 
-                  className={`transition-all duration-200 group ${isExpiredOrReplaced(item.hieu_luc) ? 'bg-gray-50/80 opacity-60 hover:opacity-100 hover:bg-gray-100 grayscale-[20%]' : 'bg-white hover:bg-blue-50/50'}`}
+                  className={`transition-all duration-200 group ${isExpiredOrReplaced(item.hieu_luc) ? 'bg-gray-50/80 opacity-60 hover:opacity-100 hover:bg-gray-100 grayscale-[20%]' : 'bg-white hover:bg-[rgb(254,251,235)]'}`}
                 >
                   <td className="py-2.5 px-3">
                     <div className="flex items-center flex-wrap gap-1 mb-1">

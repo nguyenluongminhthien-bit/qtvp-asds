@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   GraduationCap, Plus, Search, Edit2, Trash2, Calendar, MapPin,
   Users, CheckCircle2, ChevronLeft, ClipboardPaste, RefreshCw, AlertTriangle,
@@ -297,11 +297,16 @@ export default function KhoaHocTab({
     return Array.from(map.values());
   }, [filteredHvList, personnelList, selectedUnitFilter, activeUnitSubordinates, khoaHocList]);
 
+  const onTabCountsChangeRef = useRef(onTabCountsChange);
   useEffect(() => {
-    if (onTabCountsChange) {
-      onTabCountsChange(khoaHocList.length, groupedHocVienMatrix.length);
+    onTabCountsChangeRef.current = onTabCountsChange;
+  });
+
+  useEffect(() => {
+    if (onTabCountsChangeRef.current) {
+      onTabCountsChangeRef.current(khoaHocList.length, groupedHocVienMatrix.length);
     }
-  }, [khoaHocList.length, groupedHocVienMatrix.length, onTabCountsChange]);
+  }, [khoaHocList.length, groupedHocVienMatrix.length]);
 
   useEffect(() => {
     setSelectedKhoaHoc(null);

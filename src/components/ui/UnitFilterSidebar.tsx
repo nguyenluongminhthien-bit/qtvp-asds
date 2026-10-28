@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Search, MapPin, PanelLeftClose, ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { Search, MapPin, PanelLeftClose, ChevronRight, Users } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { DonVi } from '../../types';
 import { getUnitEmoji, sortDonViByThuTu, groupParentUnits } from '../../utils/hierarchy';
 
@@ -14,10 +15,14 @@ interface UnitFilterSidebarProps {
   setExpandedParents: React.Dispatch<React.SetStateAction<string[]>>;
   isListCollapsed: boolean;
   setIsListCollapsed: (collapsed: boolean) => void;
-  themeColor?: 'blue' | 'emerald' | 'red';
+  themeColor?: 'blue' | 'emerald' | 'red' | 'amber' | 'yellow';
   allUnitsLabel?: string;
   searchPlaceholder?: string;
   onDropDntt?: (dnttId: string, targetUnitId: string) => void;
+  title?: string;
+  titleIcon?: React.ReactNode;
+  hideAllUnitsButton?: boolean;
+  footerAction?: React.ReactNode;
 }
 
 export default function UnitFilterSidebar({
@@ -34,33 +39,66 @@ export default function UnitFilterSidebar({
   themeColor = 'blue',
   allUnitsLabel = 'Tất cả Đơn vị Toàn quốc',
   searchPlaceholder = 'Tìm tên showroom...',
-  onDropDntt
+  onDropDntt,
+  title = 'Bộ lọc Đơn vị',
+  titleIcon,
+  hideAllUnitsButton = false,
+  footerAction
 }: UnitFilterSidebarProps) {
   
-  // 🟢 HỆ THỐNG MÀU THEO CHỦ ĐỀ
+  // 🟢 HỆ THỐNG MÀU THEO CHỦ ĐỀ PHONG CÁCH FLYONUI
   const colors = {
     blue: {
       text: 'text-[#05469B]',
-      bgActive: 'bg-blue-50 text-[#05469B] border border-blue-100',
+      titleText: 'text-[#05469B]',
+      bgActive: 'bg-blue-50/90 text-[#05469B]',
+      borderLeft: 'border-[#05469B]',
       ring: 'focus:ring-[#05469B]',
       iconActive: 'text-[#05469B]',
-      hoverText: 'hover:text-[#05469B]'
+      hoverText: 'hover:text-[#05469B]',
+      hoverBg: 'hover:bg-blue-50/50'
     },
     emerald: {
       text: 'text-emerald-700',
-      bgActive: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+      titleText: 'text-emerald-700',
+      bgActive: 'bg-emerald-50/90 text-emerald-700',
+      borderLeft: 'border-emerald-600',
       ring: 'focus:ring-emerald-600',
       iconActive: 'text-emerald-700',
-      hoverText: 'hover:text-emerald-700'
+      hoverText: 'hover:text-emerald-700',
+      hoverBg: 'hover:bg-emerald-50/50'
     },
     red: {
       text: 'text-red-600',
-      bgActive: 'bg-red-50 text-red-600 border border-red-100',
+      titleText: 'text-red-600',
+      bgActive: 'bg-red-50/90 text-red-600',
+      borderLeft: 'border-red-600',
       ring: 'focus:ring-red-600',
       iconActive: 'text-red-600',
-      hoverText: 'hover:text-red-600'
+      hoverText: 'hover:text-red-600',
+      hoverBg: 'hover:bg-red-50/50'
+    },
+    amber: {
+      text: 'text-[#D97706]',
+      titleText: 'text-[#D97706]',
+      bgActive: 'bg-amber-50/90 text-[#D97706]',
+      borderLeft: 'border-[#D97706]',
+      ring: 'focus:ring-[#D97706]',
+      iconActive: 'text-[#D97706]',
+      hoverText: 'hover:text-[#D97706]',
+      hoverBg: 'hover:bg-amber-50/50'
+    },
+    yellow: {
+      text: 'text-[rgb(0,82,156)]',
+      titleText: 'text-[rgb(0,82,156)]',
+      bgActive: 'bg-[rgb(254,251,235)] text-[rgb(0,82,156)] font-black shadow-xs',
+      borderLeft: 'border-[rgb(0,82,156)]',
+      ring: 'focus:ring-[rgb(0,82,156)]',
+      iconActive: 'text-[rgb(0,82,156)]',
+      hoverText: 'hover:text-[rgb(0,82,156)]',
+      hoverBg: 'hover:bg-[rgb(254,251,235)]/70'
     }
-  }[themeColor];
+  }[themeColor || 'blue'];
 
   const filteredUnits = useMemo(() => {
     let baseUnits = donViList.filter(dv => allowedDonViIds.includes(dv.id));
@@ -116,6 +154,7 @@ export default function UnitFilterSidebar({
     const children = getChildUnits(parent.id);
     const isExpanded = expandedParents.includes(parent.id) || !!unitSearchTerm;
     const isParentDimmed = parent.trang_thai === 'Đại lý' || parent.trang_thai === 'Đầu tư mới';
+    const isSelected = selectedUnitFilter === parent.id;
     
     return (
       <div key={parent.id} className={level === 1 ? "mb-1" : "mt-1"}>
@@ -155,31 +194,50 @@ export default function UnitFilterSidebar({
               }
             }
           }}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+          className={`relative w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer select-none outline-none ${
             dragOverUnitId === parent.id
               ? 'ring-2 ring-[#D97706] bg-amber-50 text-[#D97706] font-bold shadow-md scale-[1.02]'
-              : selectedUnitFilter === parent.id
-              ? colors.bgActive
+              : isSelected
+              ? `${colors.text} font-bold`
               : 'text-gray-700 hover:bg-gray-50'
           } ${isParentDimmed ? 'opacity-50' : ''}`}
         >
-          {children.length > 0 ? (
-            isExpanded ? (
-              <ChevronDown size={16} className="text-gray-400 shrink-0 pointer-events-none" />
-            ) : (
-              <ChevronRight size={16} className="text-gray-400 shrink-0 pointer-events-none" />
-            )
-          ) : (
-            <div className="w-4 shrink-0 pointer-events-none" />
+          {isSelected && (
+            <motion.div
+              layoutId="flyonActiveUnitIndicator"
+              className={`absolute inset-0 rounded-lg ${colors.bgActive} border-l-[3px] ${colors.borderLeft} shadow-2xs z-0`}
+              transition={{ type: 'tween', ease: [0.4, 0, 0.2, 1], duration: 0.28 }}
+            />
           )}
-          <span className="shrink-0 pointer-events-none">{getUnitEmoji(parent.loai_hinh || (parent as any).phan_loai)}</span>
-          <span className="truncate text-left pointer-events-none">{parent.ten_don_vi}</span>
+
+          {children.length > 0 ? (
+            <motion.div
+              animate={{ rotate: isExpanded ? 90 : 0 }}
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              className="shrink-0 text-gray-400 pointer-events-none relative z-10 flex items-center justify-center"
+            >
+              <ChevronRight size={16} />
+            </motion.div>
+          ) : (
+            <div className="w-4 shrink-0 pointer-events-none relative z-10" />
+          )}
+          <span className="shrink-0 pointer-events-none relative z-10">{getUnitEmoji(parent.loai_hinh || (parent as any).phan_loai)}</span>
+          <span className="truncate text-left pointer-events-none relative z-10">{parent.ten_don_vi}</span>
         </button>
-        {isExpanded && children.length > 0 && (
-          <div className={`mt-1 border-l-2 border-gray-100 pl-2 space-y-1 ${level === 1 ? 'ml-6' : 'ml-4'}`}>
-            {children.map(child => renderUnitTree(child, level + 1))}
-          </div>
-        )}
+
+        <AnimatePresence initial={false}>
+          {isExpanded && children.length > 0 && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+              className={`overflow-hidden mt-1 border-l-2 border-gray-100 dark:border-slate-800 pl-2 space-y-1 ${level === 1 ? 'ml-6' : 'ml-4'}`}
+            >
+              {children.map(child => renderUnitTree(child, level + 1))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   };
@@ -199,12 +257,12 @@ export default function UnitFilterSidebar({
       >
         <div className="p-4 border-b border-gray-100">
           <div className="flex justify-between items-center mb-4">
-            <h2 className={`text-lg font-bold ${colors.text} flex items-center gap-2 whitespace-nowrap`}>
-              <MapPin size={20} /> Bộ lọc Đơn vị
+            <h2 className={`text-lg font-bold ${colors.titleText} flex items-center gap-2 whitespace-nowrap`}>
+              {titleIcon || <MapPin size={20} />} {title}
             </h2>
             <button
               onClick={() => setIsListCollapsed(true)}
-              className={`p-1.5 text-gray-400 ${colors.hoverText} hover:bg-blue-50/50 rounded-md transition-colors cursor-pointer`}
+              className={`p-1.5 text-gray-400 ${colors.hoverText} ${colors.hoverBg} rounded-md transition-colors cursor-pointer`}
             >
               <PanelLeftClose size={18} />
             </button>
@@ -222,19 +280,32 @@ export default function UnitFilterSidebar({
         </div>
 
         <div className="flex-1 overflow-y-auto p-2 min-w-[319px]">
-          <button
-            onClick={() => {
-              setSelectedUnitFilter(null);
-              if (window.innerWidth < 1024) setIsListCollapsed(true);
-            }}
-            className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors ${
-              selectedUnitFilter === null ? colors.bgActive : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Users size={18} className={selectedUnitFilter === null ? colors.iconActive : 'text-gray-400'} />
-            {allUnitsLabel}
-          </button>
-          <hr className="border-gray-100 mb-4 mx-2" />
+          {!hideAllUnitsButton && (
+            <>
+              <button
+                onClick={() => {
+                  setSelectedUnitFilter(null);
+                  if (window.innerWidth < 1024) setIsListCollapsed(true);
+                }}
+                className={`relative w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold mb-4 transition-colors duration-200 cursor-pointer select-none outline-none ${
+                  selectedUnitFilter === null ? colors.text : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {selectedUnitFilter === null && (
+                  <motion.div
+                    layoutId="flyonActiveUnitIndicator"
+                    className={`absolute inset-0 rounded-lg ${colors.bgActive} border-l-[3px] ${colors.borderLeft} shadow-2xs z-0`}
+                    transition={{ type: 'tween', ease: [0.4, 0, 0.2, 1], duration: 0.28 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-2">
+                  <Users size={18} className={selectedUnitFilter === null ? colors.iconActive : 'text-gray-400'} />
+                  <span>{allUnitsLabel}</span>
+                </span>
+              </button>
+              <hr className="border-gray-100 mb-4 mx-2" />
+            </>
+          )}
 
           {parentUnits.length === 0 ? (
             <div className="text-center p-4 text-sm text-gray-500">Không tìm thấy đơn vị.</div>
@@ -267,6 +338,12 @@ export default function UnitFilterSidebar({
             </>
           )}
         </div>
+
+        {footerAction && (
+          <div className="p-4 border-t border-gray-100 bg-gray-50 min-w-[319px]">
+            {footerAction}
+          </div>
+        )}
       </div>
     </>
   );

@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Layers, Columns3, Rows3, Calculator, Filter, X, Plus, 
   ChevronRight, ChevronDown, Lock, HelpCircle, ArrowUpDown, 
   Check, Sparkles, AlertTriangle, GripVertical, Calendar, 
-  Building2, Coins, SlidersHorizontal
+  Building2, Coins, SlidersHorizontal, Search
 } from 'lucide-react';
 import { PivotLayoutConfig } from '../../../types';
 import { 
@@ -36,6 +36,31 @@ export default function CostPivotBuilder({
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set());
   // Trạng thái mở popup bộ lọc cho từng field
   const [activeFilterField, setActiveFilterField] = useState<string | null>(null);
+  const [filterDropdownPos, setFilterDropdownPos] = useState<{
+    top: number;
+    right: number;
+    width: number;
+    openUpwards?: boolean;
+  } | null>(null);
+  const [filterSearchTerm, setFilterSearchTerm] = useState<string>('');
+
+  // Tự động đóng dropdown khi cuộn trang ngoài hoặc resize cửa sổ
+  useEffect(() => {
+    if (!activeFilterField) return;
+    const handleScrollOrResize = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest?.('.filter-dropdown-container')) return;
+      setActiveFilterField(null);
+      setFilterDropdownPos(null);
+      setFilterSearchTerm('');
+    };
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [activeFilterField]);
 
   // Trạng thái Kéo - Thả chuyên nghiệp
   const [draggedItem, setDraggedItem] = useState<DragItemState | null>(null);
@@ -116,6 +141,11 @@ export default function CostPivotBuilder({
     } else if (zone === 'cols') {
       clone.cols = clone.cols.filter(f => f !== fieldKey);
     } else if (zone === 'filters') {
+      if (activeFilterField === fieldKey) {
+        setActiveFilterField(null);
+        setFilterDropdownPos(null);
+        setFilterSearchTerm('');
+      }
       if (clone.filters) {
         delete clone.filters[fieldKey];
       }
@@ -183,16 +213,66 @@ export default function CostPivotBuilder({
     onChangeLayout(clone);
   };
 
-  // Lấy các giá trị duy nhất của một trường để hiển thị trong popup lọc
+  // Lấy các giá trị duy nhất của một trường để hiển thị trong popup lọc (kèm số lượng dòng dữ liệu và sắp xếp theo bảng chữ cái tiếng Việt)
   const getFieldUniqueOptions = (fieldKey: PivotFieldKey) => {
-    const map = new Map<string, string>();
+    const map = new Map<string, { label: string; count: number }>();
     records.forEach(r => {
       const { key, label } = getRecordFieldValue(r, fieldKey);
-      if (key && !map.has(key)) {
-        map.set(key, label);
+      if (key) {
+        if (!map.has(key)) {
+          map.set(key, { label: label || key, count: 1 });
+        } else {
+          map.get(key)!.count += 1;
+        }
       }
     });
-    return Array.from(map.entries()).map(([k, l]) => ({ key: k, label: l }));
+    return Array.from(map.entries())
+      .map(([k, v]) => ({ key: k, label: v.label, count: v.count }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  };
+
+  // Chọn tất cả hoặc Bỏ chọn tất cả giá trị lọc
+  const handleSelectAllFilter = (fieldKey: string, selectAll: boolean) => {
+    if (isLocked) return;
+    const allOptions = getFieldUniqueOptions(fieldKey as PivotFieldKey);
+    const clone = {
+      ...layout,
+      filters: {
+        ...(layout.filters || {}),
+        [fieldKey]: selectAll ? allOptions.map(o => o.key) : []
+      }
+    };
+    onChangeLayout(clone);
+  };
+
+  // Bật/tắt menu xổ xuống và tính toán vị trí nổi (floating dropdown không bị cắt xén)
+  const handleToggleFilterDropdown = (e: React.MouseEvent<HTMLElement>, fKey: string) => {
+    if (activeFilterField === fKey) {
+      setActiveFilterField(null);
+      setFilterDropdownPos(null);
+      setFilterSearchTerm('');
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const dropdownWidth = 320;
+      let right = window.innerWidth - rect.right;
+      if (right < 16) right = 16;
+      if (window.innerWidth - right < dropdownWidth) {
+        right = Math.max(16, window.innerWidth - dropdownWidth - 16);
+      }
+
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openUpwards = spaceBelow < 320 && rect.top > 320;
+      const top = openUpwards ? rect.top : rect.bottom + 6;
+
+      setFilterDropdownPos({
+        top,
+        right,
+        width: dropdownWidth,
+        openUpwards
+      });
+      setActiveFilterField(fKey);
+      setFilterSearchTerm('');
+    }
   };
 
   const handleToggleFilterOption = (fieldKey: string, optionKey: string) => {
@@ -296,15 +376,15 @@ export default function CostPivotBuilder({
                               isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:shadow-xs'
                             } ${
                               isBeingDragged
-                                ? 'opacity-40 ring-2 ring-[#D97706] scale-95'
+                                ? 'opacity-40 ring-2 ring-[#005698] scale-95'
                                 : isUsed
                                 ? 'bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 text-amber-900 dark:text-amber-200 shadow-2xs font-semibold'
-                                : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:border-[#D97706]'
+                                : 'bg-white dark:bg-slate-800 border border-[#005698] text-[#005698] hover:bg-sky-50/60 dark:hover:bg-slate-700/60 hover:border-[#00386b] font-medium'
                             }`}
                             title={isLocked ? f.label : `Kéo '${f.label}' thả vào Hàng, Cột hoặc Bộ lọc`}
                           >
                             {!isLocked && (
-                              <GripVertical size={11} className="text-gray-400 group-hover:text-[#D97706] transition-colors shrink-0 -ml-0.5" />
+                              <GripVertical size={11} className={`text-gray-400 shrink-0 -ml-0.5 transition-colors ${isUsed ? 'group-hover:text-[#D97706]' : 'group-hover:text-[#005698]'}`} />
                             )}
                             <span className="truncate">{f.label}</span>
 
@@ -592,60 +672,45 @@ export default function CostPivotBuilder({
                   return (
                     <div
                       key={fKey}
-                      className="relative flex items-center justify-between px-2 py-1 bg-white dark:bg-slate-800 rounded-lg border border-emerald-200 dark:border-slate-600 text-xs shadow-2xs font-semibold text-gray-800 dark:text-gray-200"
+                      className={`flex items-center justify-between px-2.5 py-1.5 bg-white dark:bg-slate-800 rounded-lg border text-xs shadow-2xs font-semibold text-gray-800 dark:text-gray-200 transition-all ${
+                        activeFilterField === fKey
+                          ? 'border-[#D97706] ring-2 ring-amber-200 dark:ring-amber-900/50 bg-amber-50/40'
+                          : 'border-emerald-200 dark:border-slate-600 hover:border-emerald-400'
+                      }`}
                     >
                       <button
                         type="button"
-                        onClick={() => setActiveFilterField(activeFilterField === fKey ? null : fKey)}
-                        className="flex items-center gap-1 text-left truncate flex-1 cursor-pointer"
+                        onClick={(e) => handleToggleFilterDropdown(e, fKey)}
+                        className="flex items-center gap-1.5 text-left truncate flex-1 cursor-pointer"
+                        title={`Bấm để chọn giá trị lọc cho ${meta?.label || fKey}`}
                       >
                         <span className="truncate">{meta?.label || fKey}</span>
-                        {isFiltered && (
-                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                        {isFiltered ? (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 shrink-0">
                             {selected.length}
                           </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 font-normal shrink-0">
+                            (Tất cả)
+                          </span>
                         )}
+                        <ChevronDown 
+                          size={12} 
+                          className={`text-gray-400 transition-transform shrink-0 ml-auto mr-1 ${
+                            activeFilterField === fKey ? 'rotate-180 text-[#D97706]' : ''
+                          }`} 
+                        />
                       </button>
 
                       {!isLocked && (
                         <button
                           type="button"
                           onClick={() => handleRemoveField(fKey, 'filters')}
-                          className="p-0.5 text-gray-400 hover:text-red-500 rounded cursor-pointer shrink-0 ml-1"
+                          className="p-0.5 text-gray-400 hover:text-red-500 rounded cursor-pointer shrink-0 ml-0.5"
                           title="Xóa bộ lọc"
                         >
                           <X size={12} />
                         </button>
-                      )}
-
-                      {/* Dropdown chọn giá trị lọc */}
-                      {activeFilterField === fKey && (
-                        <>
-                          <div className="fixed inset-0 z-30" onClick={() => setActiveFilterField(null)} />
-                          <div className="absolute left-0 top-full mt-1 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-600 p-2 z-40 max-h-52 overflow-y-auto custom-scrollbar">
-                            <div className="text-[11px] font-bold text-gray-500 mb-1.5 pb-1 border-b">
-                              Chọn {meta?.label}
-                            </div>
-                            {getFieldUniqueOptions(fKey as PivotFieldKey).map(opt => {
-                              const isChecked = (layout.filters?.[fKey] || []).includes(opt.key);
-                              return (
-                                <label
-                                  key={opt.key}
-                                  className="flex items-center gap-2 px-1.5 py-1 text-xs hover:bg-gray-50 dark:hover:bg-slate-700 rounded cursor-pointer"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    disabled={isLocked}
-                                    checked={isChecked}
-                                    onChange={() => handleToggleFilterOption(fKey, opt.key)}
-                                    className="rounded text-[#D97706] focus:ring-[#D97706]"
-                                  />
-                                  <span className="truncate">{opt.label}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </>
                       )}
                     </div>
                   );
@@ -734,6 +799,169 @@ export default function CostPivotBuilder({
           </table>
         </div>
       </div>
+
+      {/* 3. MENU DROPDOWN XỔ XUỐNG BỘ LỌC (FLOATING POPOVER KHÔNG BỊ TRÀN / CẮT KHUNG) */}
+      {activeFilterField && filterDropdownPos && (() => {
+        const meta = PIVOT_AVAILABLE_FIELDS.find(f => f.key === activeFilterField);
+        const allOptions = getFieldUniqueOptions(activeFilterField as PivotFieldKey);
+        const selectedList = layout.filters?.[activeFilterField] || [];
+        const filteredOptions = filterSearchTerm.trim() === ''
+          ? allOptions
+          : allOptions.filter(o => o.label.toLowerCase().includes(filterSearchTerm.toLowerCase().trim()));
+
+        return (
+          <div className="fixed inset-0 z-50 filter-dropdown-container">
+            {/* Backdrop đóng khi bấm ra ngoài */}
+            <div 
+              className="fixed inset-0 bg-black/10 dark:bg-black/30 backdrop-blur-[0.5px]" 
+              onClick={() => {
+                setActiveFilterField(null);
+                setFilterDropdownPos(null);
+                setFilterSearchTerm('');
+              }} 
+            />
+
+            {/* Menu xổ xuống nổi độc lập */}
+            <div
+              style={{
+                position: 'fixed',
+                ...(filterDropdownPos.openUpwards 
+                  ? { bottom: `${window.innerHeight - filterDropdownPos.top + 6}px` } 
+                  : { top: `${filterDropdownPos.top}px` }),
+                right: `${filterDropdownPos.right}px`,
+                width: `${filterDropdownPos.width}px`
+              }}
+              className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-600 p-3.5 z-50 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[420px]"
+            >
+              {/* Header của menu xổ xuống */}
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100 dark:border-slate-700">
+                <div className="flex items-center gap-1.5 truncate">
+                  <Filter size={14} className="text-[#D97706] shrink-0" />
+                  <span className="font-bold text-xs text-gray-900 dark:text-gray-100 truncate">
+                    Lọc: {meta?.label || activeFilterField}
+                  </span>
+                  {selectedList.length > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 shrink-0">
+                      Đã chọn {selectedList.length}/{allOptions.length}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterField(null);
+                    setFilterDropdownPos(null);
+                    setFilterSearchTerm('');
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg cursor-pointer"
+                  title="Đóng danh sách"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Ô tìm kiếm nhanh */}
+              <div className="relative mb-2">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={filterSearchTerm}
+                  onChange={(e) => setFilterSearchTerm(e.target.value)}
+                  placeholder={`Tìm ${meta?.label || 'giá trị'}...`}
+                  className="w-full pl-8 pr-7 py-1.5 bg-gray-50 dark:bg-slate-900/80 border border-gray-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-[#D97706] focus:border-[#D97706]"
+                  autoFocus
+                />
+                {filterSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterSearchTerm('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Hàng nút hành động nhanh: Chọn tất cả / Bỏ chọn tất cả */}
+              <div className="flex items-center justify-between text-xs px-1 mb-2 pb-1.5 border-b border-gray-100 dark:border-slate-700/60">
+                <button
+                  type="button"
+                  disabled={isLocked}
+                  onClick={() => handleSelectAllFilter(activeFilterField, true)}
+                  className="text-[#D97706] font-bold hover:underline cursor-pointer text-[11px] disabled:opacity-50"
+                >
+                  Chọn tất cả ({allOptions.length})
+                </button>
+                <button
+                  type="button"
+                  disabled={isLocked}
+                  onClick={() => handleSelectAllFilter(activeFilterField, false)}
+                  className="text-gray-500 hover:text-red-500 font-bold hover:underline cursor-pointer text-[11px] disabled:opacity-50"
+                >
+                  Bỏ chọn tất cả
+                </button>
+              </div>
+
+              {/* Danh sách các giá trị checkbox cuộn mượt */}
+              <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 space-y-0.5 divide-y divide-gray-50 dark:divide-slate-700/40">
+                {filteredOptions.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-gray-400 italic">
+                    Không tìm thấy giá trị phù hợp
+                  </div>
+                ) : (
+                  filteredOptions.map(opt => {
+                    const isChecked = selectedList.includes(opt.key);
+                    return (
+                      <label
+                        key={opt.key}
+                        className={`flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
+                          isChecked 
+                            ? 'bg-amber-50/80 dark:bg-amber-950/40 font-semibold text-amber-900 dark:text-amber-200' 
+                            : 'hover:bg-gray-50 dark:hover:bg-slate-700/60 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
+                          <input
+                            type="checkbox"
+                            disabled={isLocked}
+                            checked={isChecked}
+                            onChange={() => handleToggleFilterOption(activeFilterField, opt.key)}
+                            className="rounded border-gray-300 text-[#D97706] focus:ring-[#D97706] cursor-pointer shrink-0"
+                          />
+                          <span className="truncate" title={opt.label}>{opt.label}</span>
+                        </div>
+                        {opt.count !== undefined && (
+                          <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                            {opt.count}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Nút hoàn tất ở chân menu */}
+              <div className="mt-2.5 pt-2 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between">
+                <span className="text-[10.5px] text-gray-400 italic">
+                  {selectedList.length === 0 ? 'Đang hiển thị tất cả' : `Đã lọc ${selectedList.length} mục`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveFilterField(null);
+                    setFilterDropdownPos(null);
+                    setFilterSearchTerm('');
+                  }}
+                  className="px-3 py-1 bg-[#D97706] hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                >
+                  Xong
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

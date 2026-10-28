@@ -216,9 +216,43 @@ export default function AdminLegalTab({
     return Array.from(map.entries()).map(([ma, ten]) => ({ ma, ten }));
   }, [effectiveBoPhanList]);
 
-  // Bộ lọc danh sách Bộ phận
-  const filteredBoPhanList = useMemo(() => {
+  // Danh sách bộ phận thuộc phạm vi đơn vị đang chọn (chưa lọc theo Khối và từ khóa tìm kiếm)
+  const boPhanInSelectedUnit = useMemo(() => {
     return effectiveBoPhanList.filter(item => {
+      if (filterDonVi === 'GLOBAL') {
+        return !item.id_don_vi;
+      } else if (filterDonVi !== 'ALL') {
+        if (hasUnitCustomDepartments) {
+          return isUnitInBoPhan(item.id_don_vi, filterDonVi);
+        } else {
+          return !item.id_don_vi;
+        }
+      } else if (userPermittedUnitIds) {
+        if (item.id_don_vi) {
+          const ids = String(item.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
+          return ids.some(id => userPermittedUnitIds.has(id));
+        } else {
+          return true;
+        }
+      }
+      return true;
+    });
+  }, [effectiveBoPhanList, filterDonVi, hasUnitCustomDepartments, userPermittedUnitIds]);
+
+  // Thống kê số lượng bộ phận theo từng Khối phụ thuộc chính xác vào Đơn vị đang chọn
+  const khoiCountMap = useMemo(() => {
+    const counts: Record<string, number> = {};
+    boPhanInSelectedUnit.forEach(b => {
+      if (b.ma_cap1) {
+        counts[b.ma_cap1] = (counts[b.ma_cap1] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [boPhanInSelectedUnit]);
+
+  // Bộ lọc danh sách Bộ phận hoàn chỉnh (áp dụng thêm Khối và Search)
+  const filteredBoPhanList = useMemo(() => {
+    return boPhanInSelectedUnit.filter(item => {
       const q = searchTerm.toLowerCase().trim();
       const matchSearch = !q ||
         String(item.ma_cap1 || '').toLowerCase().includes(q) ||
@@ -228,29 +262,9 @@ export default function AdminLegalTab({
 
       const matchKhoi = filterKhoi === 'ALL' || item.ma_cap1 === filterKhoi;
 
-      // Lọc theo Đơn vị áp dụng
-      let matchDonVi = true;
-      if (filterDonVi === 'GLOBAL') {
-        matchDonVi = !item.id_don_vi;
-      } else if (filterDonVi !== 'ALL') {
-        if (hasUnitCustomDepartments) {
-          matchDonVi = isUnitInBoPhan(item.id_don_vi, filterDonVi);
-        } else {
-          matchDonVi = !item.id_don_vi;
-        }
-      } else if (userPermittedUnitIds) {
-        // Tài khoản cấp đơn vị khi chọn ALL: chỉ xem mẫu chung hoặc bộ phận của các đơn vị thuộc quyền
-        if (item.id_don_vi) {
-          const ids = String(item.id_don_vi).split(',').map(s => s.trim()).filter(Boolean);
-          matchDonVi = ids.some(id => userPermittedUnitIds.has(id));
-        } else {
-          matchDonVi = true;
-        }
-      }
-
-      return matchSearch && matchKhoi && matchDonVi;
+      return matchSearch && matchKhoi;
     }).sort((a, b) => (Number(a.thu_tu) || 0) - (Number(b.thu_tu) || 0));
-  }, [effectiveBoPhanList, searchTerm, filterKhoi, filterDonVi, hasUnitCustomDepartments, userPermittedUnitIds]);
+  }, [boPhanInSelectedUnit, searchTerm, filterKhoi]);
 
   // =========================================================================
   // HANDLERS CHO BỘ PHẬN
@@ -346,60 +360,36 @@ export default function AdminLegalTab({
 
     setSubmitting(true);
     try {
+      // Lưu toàn bộ danh sách đơn vị đã tick dưới dạng chuỗi phân tách bởi dấu phẩy
+      const formattedDonVi = selectedUnitIds.length > 0 ? selectedUnitIds.join(',') : null;
       const basePayload = {
         ma_cap1: boPhanForm.ma_cap1.trim().toUpperCase(),
         ten_cap1: boPhanForm.ten_cap1.trim(),
         ma_cap2: boPhanForm.ma_cap2.trim().toUpperCase(),
         ten_cap2: boPhanForm.ten_cap2.trim(),
         thu_tu: Number(boPhanForm.thu_tu) || 0,
+        id_don_vi: formattedDonVi,
         active: boPhanForm.active !== false
       };
 
       if (boPhanMode === 'create') {
-        const targetUnitIds = selectedUnitIds.length > 0 ? selectedUnitIds : [null];
-        for (let i = 0; i < targetUnitIds.length; i++) {
-          const uid = targetUnitIds[i];
-          const newPayload: any = {
-            ...basePayload,
-            id: targetUnitIds.length > 1 ? `BP_${Date.now()}_${i + 1}` : (boPhanForm.id || `BP_${Date.now()}`),
-            id_don_vi: uid
-          };
-          await apiService.save(newPayload, 'create', 'dm_bo_phan');
-        }
+        const newPayload: any = {
+          ...basePayload,
+          id: boPhanForm.id || `BP_${Date.now()}`
+        };
+        await apiService.save(newPayload, 'create', 'dm_bo_phan');
         toast.success(
-          targetUnitIds.length > 1
-            ? `Đã tạo Bộ phận mới cho ${targetUnitIds.length} đơn vị trực thuộc!`
+          selectedUnitIds.length > 1
+            ? `Đã tạo Bộ phận mới áp dụng cho ${selectedUnitIds.length} đơn vị!`
             : 'Đã thêm Bộ phận mới!'
         );
       } else {
-        // Mode update
-        const primaryUnitId = selectedUnitIds[0] || null;
+        // Mode update: Lưu trực tiếp toàn bộ các đơn vị đã tick vào bản ghi hiện tại
         const updatePayload: any = {
           ...basePayload,
-          id: boPhanForm.id,
-          id_don_vi: primaryUnitId
+          id: boPhanForm.id
         };
         await apiService.save(updatePayload, 'update', 'dm_bo_phan');
-
-        // Nếu người dùng chọn thêm các đơn vị khác trong lúc sửa:
-        if (selectedUnitIds.length > 1) {
-          for (let i = 1; i < selectedUnitIds.length; i++) {
-            const uid = selectedUnitIds[i];
-            const alreadyExists = effectiveBoPhanList.some(
-              b => String(b.id_don_vi) === String(uid) &&
-                   b.ma_cap1 === basePayload.ma_cap1 &&
-                   b.ma_cap2 === basePayload.ma_cap2
-            );
-            if (!alreadyExists) {
-              const newPayload: any = {
-                ...basePayload,
-                id: `BP_${Date.now()}_${i + 1}`,
-                id_don_vi: uid
-              };
-              await apiService.save(newPayload, 'create', 'dm_bo_phan');
-            }
-          }
-        }
         toast.success('Đã cập nhật Bộ phận thành công!');
       }
 
@@ -529,44 +519,18 @@ export default function AdminLegalTab({
         {activeSubTab === 'bophan' && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* Filter & Search Toolbar */}
-            <div className="p-3 border-b border-gray-200/80 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 bg-gray-50/50 dark:bg-slate-800">
-              <div className="flex flex-wrap items-center gap-2 flex-1">
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                  <input
-                    type="text"
-                    placeholder="Tìm theo Khối, Mã, Tên bộ phận..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-                  />
-                </div>
-
-                {/* Filter Khối / Nghiệp vụ */}
-                <div className="flex items-center gap-1.5">
-                  <Filter size={14} className="text-gray-400" />
-                  <select
-                    value={filterKhoi}
-                    onChange={(e) => setFilterKhoi(e.target.value)}
-                    className="py-1.5 px-2.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
-                  >
-                    <option value="ALL">Tất cả Khối ({effectiveBoPhanList.length})</option>
-                    {uniqueKhoiList.map(k => (
-                      <option key={k.ma} value={k.ma}>{k.ten} ({effectiveBoPhanList.filter(b => b.ma_cap1 === k.ma).length})</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Filter Đơn vị áp dụng */}
-                <div className="flex items-center gap-1.5">
-                  <Building2 size={14} className="text-gray-400" />
+            <div className="p-3 border-b border-gray-200/80 dark:border-slate-700 flex flex-col gap-2.5 bg-gray-50/50 dark:bg-slate-800">
+              {/* DÒNG 1: ĐƠN VỊ - KHỐI (STATS PHỤ THUỘC ĐƠN VỊ) - TÌM KIẾM */}
+              <div className="flex flex-wrap items-center gap-2.5 w-full">
+                {/* 1. Ô Lựa chọn Đơn vị */}
+                <div className="flex items-center gap-1.5 min-w-[200px] sm:min-w-[260px]">
+                  <Building2 size={14} className="text-[#D97706] shrink-0" />
                   <select
                     value={filterDonVi}
                     onChange={(e) => setFilterDonVi(e.target.value)}
-                    className="py-1.5 px-2.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+                    className="w-full py-1.5 px-2.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706] cursor-pointer"
                   >
-                    <option value="ALL">Tất cả Đơn vị ({allowedUnitsForDept.length})</option>
+                    <option value="ALL">🏢 Tất cả Đơn vị ({allowedUnitsForDept.length})</option>
                     <option value="GLOBAL">🌐 Mẫu dùng chung toàn quốc</option>
                     <optgroup label="🏢 Đơn vị phân quyền">
                       {hierarchicalUnitOptions.map(({ unit, prefix }) => (
@@ -577,16 +541,58 @@ export default function AdminLegalTab({
                     </optgroup>
                   </select>
                 </div>
+
+                {/* 2. Ô Bộ lọc Khối (Số thống kê phụ thuộc vào đơn vị phía trước) */}
+                <div className="flex items-center gap-1.5 min-w-[170px] sm:min-w-[210px]">
+                  <Filter size={14} className="text-[#D97706] shrink-0" />
+                  <select
+                    value={filterKhoi}
+                    onChange={(e) => setFilterKhoi(e.target.value)}
+                    className="w-full py-1.5 px-2.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 font-semibold text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706] cursor-pointer"
+                  >
+                    <option value="ALL">Tất cả Khối ({boPhanInSelectedUnit.length})</option>
+                    {uniqueKhoiList.map(k => {
+                      const count = khoiCountMap[k.ma] || 0;
+                      return (
+                        <option key={k.ma} value={k.ma}>
+                          {k.ten} ({count})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* 3. Khung Tìm kiếm theo Khối, Mã, Tên bộ phận */}
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Tìm theo Khối, Mã, Tên bộ phận..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-[#D97706]"
+                  />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* DÒNG 2: HƯỚNG DẪN & NÚT THÊM BỘ PHẬN (CANH PHẢI) */}
+              <div className="flex items-center justify-between gap-3 pt-1 border-t border-gray-200/50 dark:border-slate-700/50">
                 <div className="text-xs text-gray-500 dark:text-gray-400 italic hidden sm:block">
                   Cấp 1: <strong>Khối / Nghiệp vụ</strong> — Cấp 2: <strong>Thương hiệu / Phòng / Bộ phận</strong>
                 </div>
                 <button
                   type="button"
                   onClick={handleOpenAddBoPhan}
-                  className="px-3 py-1.5 bg-[#D97706] hover:bg-[#b45309] text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0"
+                  className="px-3.5 py-1.5 bg-[#D97706] hover:bg-[#b45309] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0 ml-auto"
                 >
                   <Plus size={14} />
                   <span>Thêm Bộ phận</span>

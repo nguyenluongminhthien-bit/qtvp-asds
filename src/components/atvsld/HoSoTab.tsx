@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, LayoutGroup } from 'motion/react';
 import {
   Building2, ShieldCheck, Users, Search, GraduationCap, ChevronDown, ChevronRight,
   Calendar, Layers, Store, Award, ChevronLeft, MapPin, CheckCircle, Clock,
@@ -651,81 +652,94 @@ export default function HoSoTab({
           </div>
 
           <div className="overflow-x-auto flex-1 max-h-[480px] custom-scrollbar">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-gray-50 border-b border-lime-100 font-bold text-gray-600 uppercase text-[10.5px]">
-                <tr>
-                  <th className="p-3">Đợt Huấn Luyện</th>
-                  <th className="p-3 text-center w-24">Sĩ Số (TT/DK)</th>
-                  <th className="p-3 text-center w-24">Kết Quả</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {campaignGroups.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="p-8 text-center text-gray-400 italic">
+            <div className="min-w-[400px]">
+              {/* Header danh sách đợt */}
+              <div className="grid grid-cols-[1fr_96px_96px] bg-gray-50 border-b border-lime-100 font-bold text-gray-600 uppercase text-[10.5px] px-3 py-2.5 select-none">
+                <div>Đợt Huấn Luyện</div>
+                <div className="text-center">Sĩ Số (TT/DK)</div>
+                <div className="text-center">Kết Quả</div>
+              </div>
+
+              {/* Danh sách các đợt với hiệu ứng trượt FlyonUI mượt mà */}
+              <LayoutGroup id="atvsldCampaignBatchesLayout">
+                <div className="divide-y divide-gray-100 relative p-0.5">
+                  {campaignGroups.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 italic">
                       Chưa có dữ liệu đợt huấn luyện nào.
-                    </td>
-                  </tr>
-                ) : (
-                  campaignGroups.map(campaign => {
-                    const isSelected = campaign.campaignName === selectedCampaignName;
-                    const fillPct = campaign.totalDuKien > 0 ? Math.round((campaign.totalThucTe / campaign.totalDuKien) * 100) : 0;
-                    const passPct = campaign.totalHocVien > 0 ? Math.round((campaign.totalDat / campaign.totalHocVien) * 100) : 0;
+                    </div>
+                  ) : (
+                    campaignGroups.map(campaign => {
+                      const isSelected = campaign.campaignName === selectedCampaignName;
+                      const fillPct = campaign.totalDuKien > 0 ? Math.round((campaign.totalThucTe / campaign.totalDuKien) * 100) : 0;
+                      const passPct = campaign.totalHocVien > 0 ? Math.round((campaign.totalDat / campaign.totalHocVien) * 100) : 0;
 
-                    return (
-                      <tr
-                        key={campaign.campaignName}
-                        onClick={() => setSelectedCampaignName(campaign.campaignName)}
-                        className={`cursor-pointer transition-all ${
-                          isSelected
-                            ? 'bg-lime-100/70 border-l-4 border-lime-600 shadow-2xs font-semibold'
-                            : 'hover:bg-lime-50/30'
-                        }`}
-                      >
-                        <td className="p-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`font-black text-xs uppercase ${isSelected ? 'text-lime-950 font-black' : 'text-gray-800'}`}>
-                                {campaign.campaignName}
-                              </span>
-                              <span className="text-[9.5px] font-bold text-lime-800 bg-lime-100 px-1.5 py-0.2 rounded border border-lime-200">
-                                {campaign.totalClasses} Lớp
-                              </span>
-                              <span className={`text-[9.5px] font-black px-1.5 py-0.2 rounded ${
-                                campaign.trangThai === 'Hoàn thành' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                              }`}>
-                                {campaign.trangThai}
-                              </span>
+                      return (
+                        <div
+                          key={campaign.campaignName}
+                          onClick={() => setSelectedCampaignName(campaign.campaignName)}
+                          className={`relative cursor-pointer transition-colors duration-150 select-none ${
+                            isSelected ? 'font-semibold' : 'hover:bg-lime-50/50'
+                          }`}
+                        >
+                          {/* Thanh trượt FlyonUI cho đợt được chọn */}
+                          {isSelected && (
+                            <motion.div
+                              layoutId="activeCampaignIndicator"
+                              className="absolute inset-x-1 inset-y-0.5 bg-lime-100/90 border-l-[3.5px] border-lime-600 rounded-r-lg shadow-xs z-0 pointer-events-none"
+                              transition={{
+                                type: 'tween',
+                                ease: [0.4, 0, 0.2, 1],
+                                duration: 0.28,
+                              }}
+                            />
+                          )}
+
+                          <div className="relative z-10 grid grid-cols-[1fr_96px_96px] items-center px-3 py-2.5">
+                            {/* Cột 1: Thông tin đợt */}
+                            <div className="space-y-1 pr-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`font-black text-xs uppercase ${isSelected ? 'text-lime-950 font-black' : 'text-gray-800'}`}>
+                                  {campaign.campaignName}
+                                </span>
+                                <span className="text-[9.5px] font-bold text-lime-800 bg-lime-100 px-1.5 py-0.2 rounded border border-lime-200">
+                                  {campaign.totalClasses} Lớp
+                                </span>
+                                <span className={`text-[9.5px] font-black px-1.5 py-0.2 rounded ${
+                                  campaign.trangThai === 'Hoàn thành' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {campaign.trangThai}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                                <Calendar size={11} className="text-gray-400 shrink-0" />
+                                <span>
+                                  {campaign.minDate ? new Date(campaign.minDate).toLocaleDateString('vi-VN') : '---'} →{' '}
+                                  {campaign.maxDate ? new Date(campaign.maxDate).toLocaleDateString('vi-VN') : '---'}
+                                </span>
+                              </p>
                             </div>
-                            <p className="text-[10px] text-gray-500 flex items-center gap-1">
-                              <Calendar size={11} className="text-gray-400" />
-                              {campaign.minDate ? new Date(campaign.minDate).toLocaleDateString('vi-VN') : '---'} →{' '}
-                              {campaign.maxDate ? new Date(campaign.maxDate).toLocaleDateString('vi-VN') : '---'}
-                            </p>
-                          </div>
-                        </td>
 
-                        <td className="p-3 text-center">
-                          <div className="space-y-0.5">
-                            <span className="font-bold text-gray-800 text-[11px]">
-                              <span className="text-lime-700 font-black">{campaign.totalThucTe}</span> / {campaign.totalDuKien}
-                            </span>
-                            <span className="text-[9.5px] text-gray-400 block font-medium">({fillPct}%)</span>
-                          </div>
-                        </td>
+                            {/* Cột 2: Sĩ số */}
+                            <div className="text-center space-y-0.5">
+                              <span className="font-bold text-gray-800 text-[11px] block">
+                                <span className="text-lime-700 font-black">{campaign.totalThucTe}</span> / {campaign.totalDuKien}
+                              </span>
+                              <span className="text-[9.5px] text-gray-400 block font-medium">({fillPct}%)</span>
+                            </div>
 
-                        <td className="p-3 text-center">
-                          <div className="space-y-0.5">
-                            <span className="font-black text-emerald-700 text-[11px]">{campaign.totalDat} Đạt</span>
-                            <span className="text-[9.5px] text-emerald-600 block font-bold">({passPct}%)</span>
+                            {/* Cột 3: Kết quả */}
+                            <div className="text-center space-y-0.5">
+                              <span className="font-black text-emerald-700 text-[11px] block">{campaign.totalDat} Đạt</span>
+                              <span className="text-[9.5px] text-emerald-600 block font-bold">({passPct}%)</span>
+                            </div>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </LayoutGroup>
+            </div>
           </div>
         </div>
 
@@ -779,15 +793,15 @@ export default function HoSoTab({
                 }
 
                 // Xây dựng class dải highlight thanh lịch:
-                let rangeClass = 'text-gray-700 hover:bg-lime-50 rounded-lg';
+                let rangeClass = 'text-gray-700 hover:bg-lime-50 rounded-md my-0.5';
                 if (item.isRangeStart && item.isRangeEnd) {
-                  rangeClass = 'bg-lime-700 text-white font-black rounded-lg shadow-xs ring-2 ring-lime-400 z-10';
+                  rangeClass = 'bg-lime-600 text-white font-bold rounded-md shadow-2xs ring-1 ring-lime-400/60 my-0.5 z-10';
                 } else if (item.isRangeStart) {
-                  rangeClass = 'bg-lime-700 text-white font-black rounded-l-lg shadow-xs ring-2 ring-lime-400 z-10';
+                  rangeClass = 'bg-lime-600 text-white font-bold rounded-l-md shadow-2xs ring-1 ring-lime-400/60 my-0.5 z-10';
                 } else if (item.isRangeEnd) {
-                  rangeClass = 'bg-lime-700 text-white font-black rounded-r-lg shadow-xs ring-2 ring-lime-400 z-10';
+                  rangeClass = 'bg-lime-600 text-white font-bold rounded-r-md shadow-2xs ring-1 ring-lime-400/60 my-0.5 z-10';
                 } else if (item.isInRange) {
-                  rangeClass = 'bg-lime-100 text-lime-900 font-bold rounded-none';
+                  rangeClass = 'bg-lime-100/90 text-lime-900 font-semibold rounded-none my-0.5';
                 }
 
                 const tooltip = item.userUnitClassTitle
@@ -824,7 +838,7 @@ export default function HoSoTab({
             <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1.5 px-0.5 border-t border-lime-100 flex-wrap gap-2">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-xs bg-lime-700 inline-block"></span>
+                  <span className="w-2.5 h-2.5 rounded-xs bg-lime-600 ring-1 ring-lime-400/60 inline-block"></span>
                   <span>Bắt đầu / Kết thúc đợt</span>
                 </span>
                 <span className="flex items-center gap-1">
