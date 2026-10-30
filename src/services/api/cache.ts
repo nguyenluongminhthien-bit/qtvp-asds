@@ -25,8 +25,8 @@ export const TABLE_MAP: Record<string, string> = {
 
 export const resolveTable = (name: string) => TABLE_MAP[name] || name.toLowerCase();
 
-// Thời gian sống của bộ đệm (TTL - 5 phút)
-export const CACHE_DURATION = 5 * 60 * 1000;
+// Thời gian sống của bộ đệm (TTL - tăng lên 30 phút để chặn đứng tràn Egress Supabase)
+export const CACHE_DURATION = 30 * 60 * 1000;
 
 export interface CacheEntry {
   data: any;
@@ -117,8 +117,9 @@ export function invalidateCache(tableName: string): void {
 }
 
 // Smart Two-Layer Fetch với thuật toán Tải song song phân trang (Parallel Batch Fetching)
-export async function fetchWithCache(tableName: string, forceRefresh = false) {
+export async function fetchWithCache(tableName: string, forceRefresh = false, columns = '*') {
   const resolved = resolveTable(tableName);
+  const selectParam = columns && columns.trim() ? columns.trim() : '*';
 
   // 1. Kiểm tra Layer 1: In-Memory Cache
   if (!forceRefresh && apiCache[resolved] && (Date.now() - apiCache[resolved].timestamp < CACHE_DURATION)) {
@@ -139,7 +140,7 @@ export async function fetchWithCache(tableName: string, forceRefresh = false) {
     const batchSize = 1000;
 
     // Lần tải đầu tiên (0 - 999) + Đọc header Content-Range để lấy tổng số dòng
-    const firstRes = await fetch(`${SUPABASE_URL}/rest/v1/${resolved}?select=*`, {
+    const firstRes = await fetch(`${SUPABASE_URL}/rest/v1/${resolved}?select=${selectParam}`, {
       method: 'GET',
       headers: {
         ...HEADERS,
@@ -166,7 +167,7 @@ export async function fetchWithCache(tableName: string, forceRefresh = false) {
       for (let from = batchSize; from < totalCount; from += batchSize) {
         const to = Math.min(from + batchSize - 1, totalCount - 1);
         remainingPromises.push(
-          fetch(`${SUPABASE_URL}/rest/v1/${resolved}?select=*`, {
+          fetch(`${SUPABASE_URL}/rest/v1/${resolved}?select=${selectParam}`, {
             method: 'GET',
             headers: {
               ...HEADERS,
@@ -190,7 +191,7 @@ export async function fetchWithCache(tableName: string, forceRefresh = false) {
       let from = batchSize;
       let hasMore = true;
       while (hasMore) {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/${resolved}?select=*`, {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${resolved}?select=${selectParam}`, {
           method: 'GET',
           headers: {
             ...HEADERS,

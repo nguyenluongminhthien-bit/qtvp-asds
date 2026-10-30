@@ -387,14 +387,6 @@ export default function DashboardPage() {
         console.error("Lỗi tải dữ liệu Dashboard:", error);
       } finally {
         setLoading(false);
-        // 🟢 TỰ ĐỘNG LÀM ẤM BỘ ĐỆM NGẦM (BACKGROUND PRE-FETCHING)
-        // Tải trước dữ liệu ATVSLĐ chuyên sâu 1.2s sau khi Dashboard đã tải xong
-        setTimeout(() => {
-          apiService.getKhoaHuanLuyen?.().catch(() => {});
-          apiService.getHocVienKhoaHuanLuyen?.().catch(() => {});
-          apiService.getThietBiNghiemNgat?.().catch(() => {});
-          apiService.getKiemDinhTBNN?.().catch(() => {});
-        }, 1200);
       }
     };
     loadData();

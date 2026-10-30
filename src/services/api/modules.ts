@@ -7,17 +7,26 @@ import { currentUser } from './auth';
 import { getAllSubordinateIds, getUserPermittedUnitIds, isUserAdminOrAllAccess } from '../../utils/hierarchy';
 
 // Helper wrapper cho tất cả GET requests có chế độ fallback
-async function getWithFallback<T>(tableName: string, forceRefresh = false): Promise<T[]> {
+async function getWithFallback<T>(tableName: string, forceRefresh = false, columns = '*'): Promise<T[]> {
   if (API_MODE === 'MOCK') {
     return getLocalRecords(tableName) as T[];
   }
   try {
-    return await fetchWithCache(tableName, forceRefresh) as T[];
+    return await fetchWithCache(tableName, forceRefresh, columns) as T[];
   } catch (err) {
     console.warn(`⚠️ Không thể tải dữ liệu bảng ${tableName} từ Supabase. Tự động dùng dữ liệu offline Local!`);
     return getLocalRecords(tableName) as T[];
   }
 }
+
+// Danh sách các cột tối ưu cho từng bảng dữ liệu lớn (giảm Egress và tăng tốc độ load)
+export const DNTT_SELECT_COLUMNS = 'id,so_dntt,ngay_lap,id_phap_nhan,id_don_vi,nguoi_de_nghi,bo_phan_hien_thi,noi_dung_thanh_toan,tong_so_tien,so_tien_bang_chu,hinh_thuc_thanh_toan,ten_tai_khoan,so_tai_khoan,ten_ngan_hang,chi_nhanh_ngan_hang,trang_thai,created_at,updated_at,don_vi_hien_thi,hien_thi_phan_bo,ky_chuc_danh_1,ky_chuc_danh_2,ky_chuc_danh_3,ky_chuc_danh_4,ky_ho_ten_1,ky_ho_ten_2,ky_ho_ten_3,ky_ho_ten_4,so_hoa_don,ngay_hoa_don,noi_dung_chuyen_khoan,ghi_chu,hien_thi_nd_ck,hien_thi_ghi_chu,dia_diem_ky,ngay_ky_ngay,hien_thi_hoa_don,ngay_ky_nam,ngay_ky_thang,mo_khoa_chinh_sua,hien_thi_cau_dan,cau_dan';
+export const DNTT_CHI_TIET_COLUMNS = 'id,dntt_id,stt,noi_dung,so_tien';
+export const DNTT_PHAN_BO_COLUMNS = 'id,dntt_id,dntt_chi_tiet_id,kieu_nhap,phan_tram,so_tien,id_kmp,thang,nam,id_bo_phan,id_bo_phan_cap1,id_bo_phan_cap2,thu_tu,ghi_chu,created_at';
+export const CHI_PHI_CHOT_KY_COLUMNS = 'id,thang,nam,trang_thai,chot_boi,chot_luc,huy_boi,huy_luc,ghi_chu,id_don_vi,ten_don_vi,danh_sach_don_vi_ap_dung,danh_sach_don_vi_mo_khoa,mo_khoa_toan_bo,han_mo_khoa,ly_do_mo_khoa';
+export const HS_KHOA_HUAN_LUYEN_COLUMNS = 'id,id_don_vi,ten_khoa_hoc,don_vi_dao_tao,ngay_bat_dau,ngay_ket_thuc,dia_diem,si_so_du_kien,si_so_thuc_te,trang_thai,link_ho_so,ghi_chu,created_at,updated_at';
+export const HS_HOC_VIEN_COLUMNS = 'id,id_khoa_hoc,stt,msnv,ho_ten,ngay_sinh,gioi_tinh,so_cccd,quoc_tich,chuc_vu,don_vi_text,id_don_vi,nhom,noi_dung_huan_luyen,thoi_gian_text,diem_ly_thuyet,diem_thuc_hanh,ket_qua,ghi_chu,da_dong_bo_nhan_su,created_at';
+export const NK_KHAM_SUC_KHOE_CANHAN_COLUMNS = 'id,ma_so_nhan_vien,ho_ten,id_don_vi,nam_kham,id_dot_ksk,ma_goi_kham,ten_goi_kham,loai_suc_khoe,ket_luan_bnn,ten_benh_nghe_nghiep,ngay_kham,ghi_chu_suc_khoe,created_at,nam_sinh,gioi_tinh,hon_nhan,chieu_cao,can_nang';
 
 export const getPersonnel = (forceRefresh = false) => getWithFallback<Personnel>('ns_dich_vu', forceRefresh);
 export const getDonVi = (forceRefresh = false) => getWithFallback<DonVi>('dm_don_vi', forceRefresh);
@@ -40,8 +49,8 @@ export const getUsers = () => getWithFallback<User>('config_users');
 export const getLogs = () => getWithFallback<SysLog>('sys_logs');
 export const getThueBao = () => getWithFallback<ThueBao>('dm_thue_bao');
 export const getCuocThang = () => getWithFallback<CuocThang>('cp_cuoc_thang');
-export const getKhoaHuanLuyen = (forceRefresh = false) => getWithFallback<any>('hs_khoa_huan_luyen', forceRefresh);
-export const getHocVienKhoaHuanLuyen = (forceRefresh = false) => getWithFallback<any>('hs_hoc_vien_khoa_huan_luyen', forceRefresh);
+export const getKhoaHuanLuyen = (forceRefresh = false) => getWithFallback<any>('hs_khoa_huan_luyen', forceRefresh, HS_KHOA_HUAN_LUYEN_COLUMNS);
+export const getHocVienKhoaHuanLuyen = (forceRefresh = false) => getWithFallback<any>('hs_hoc_vien_khoa_huan_luyen', forceRefresh, HS_HOC_VIEN_COLUMNS);
 export const getChuKyATVSLD = (forceRefresh = false) => getWithFallback<any>('dm_chu_ky_atvsld', forceRefresh);
 export const getThietBiNghiemNgat = (forceRefresh = false) => getWithFallback<any>('ts_thiet_bi_nghiem_ngat', forceRefresh);
 export const getKiemDinhTBNN = (forceRefresh = false) => getWithFallback<any>('nk_kiem_dinh_tbnn', forceRefresh);
@@ -87,10 +96,10 @@ export const getDmBoPhanCap2 = async (forceRefresh = false): Promise<BoPhanCap2[
   });
   return list;
 };
-export const getDntt = (forceRefresh = false) => getWithFallback<DNTT>('dntt', forceRefresh);
-export const getDnttChiTiet = (forceRefresh = false) => getWithFallback<DnttChiTiet>('dntt_chi_tiet', forceRefresh);
-export const getDnttPhanBo = (forceRefresh = false) => getWithFallback<DnttPhanBo>('dntt_phan_bo', forceRefresh);
-export const getChiPhiChotKy = (forceRefresh = false) => getWithFallback<ChiPhiChotKy>('chi_phi_chot_ky', forceRefresh);
+export const getDntt = (forceRefresh = false) => getWithFallback<DNTT>('dntt', forceRefresh, DNTT_SELECT_COLUMNS);
+export const getDnttChiTiet = (forceRefresh = false) => getWithFallback<DnttChiTiet>('dntt_chi_tiet', forceRefresh, DNTT_CHI_TIET_COLUMNS);
+export const getDnttPhanBo = (forceRefresh = false) => getWithFallback<DnttPhanBo>('dntt_phan_bo', forceRefresh, DNTT_PHAN_BO_COLUMNS);
+export const getChiPhiChotKy = (forceRefresh = false) => getWithFallback<ChiPhiChotKy>('chi_phi_chot_ky', forceRefresh, CHI_PHI_CHOT_KY_COLUMNS);
 export const getChiPhiThongKe = (forceRefresh = false) => getWithFallback<ChiPhiThongKe>('chi_phi_thong_ke', forceRefresh);
 
 const DEFAULT_PIVOT_CONFIG: ChiPhiPivotConfig = {
@@ -320,7 +329,7 @@ export async function save(data: any, action: 'create' | 'update', tableName: st
 
     if (action === 'create' && !cleanedData.id) {
       const prefix = realTableName.substring(0, 2).toUpperCase();
-      cleanedData.id = `${prefix}${Date.now()}${Math.floor(Math.random() * 100)}`;
+      cleanedData.id = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     }
 
     let url = `${SUPABASE_URL}/rest/v1/${realTableName}`;
@@ -446,8 +455,8 @@ export async function restoreRecord(tableName: string, recordData: any): Promise
 }
 
 // 🟢 HELPER KHÁM SỨC KHỎE ĐỊNH KỲ & BỆNH NGHỀ NGHIỆP
-export async function getKhamSucKhoeCampaigns(): Promise<any[]> {
-  return getWithFallback('hs_kham_suc_khoe');
+export async function getKhamSucKhoeCampaigns(forceRefresh = false): Promise<any[]> {
+  return getWithFallback('hs_kham_suc_khoe', forceRefresh);
 }
 
 export async function saveKhamSucKhoeCampaign(data: any, action: 'create' | 'update'): Promise<any> {
@@ -479,8 +488,8 @@ export async function deleteConfigKhamSucKhoe(id: string): Promise<boolean> {
   return deleteRecord(id, 'config_kham_suc_khoe');
 }
 
-export async function getKhamSucKhoeCaNhan(): Promise<any[]> {
-  return getWithFallback('nk_kham_suc_khoe_canhan');
+export async function getKhamSucKhoeCaNhan(forceRefresh = false): Promise<any[]> {
+  return getWithFallback('nk_kham_suc_khoe_canhan', forceRefresh, NK_KHAM_SUC_KHOE_CANHAN_COLUMNS);
 }
 
 export async function saveKhamSucKhoeCaNhanBatch(records: any[]): Promise<any[]> {

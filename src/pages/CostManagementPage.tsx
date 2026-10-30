@@ -221,22 +221,22 @@ export default function CostManagementPage() {
   }, [thongKeList, userPermittedUnitIds]);
 
   // Tải dữ liệu toàn bộ module
-  const loadAllData = async (silent = false) => {
+  const loadAllData = async (forceRefresh = false, silent = false) => {
     if (!silent) setLoading(true);
     try {
       const [
         dvRes, pnRes, kmpRes, bpRes, dnttRes, ctRes, pbRes, ckRes, tkRes, ncpRes
       ] = await Promise.all([
-        apiService.getDonVi ? apiService.getDonVi().catch(() => []) : Promise.resolve([]),
-        apiService.getPhapNhan ? apiService.getPhapNhan().catch(() => []) : Promise.resolve([]),
-        apiService.getDmKmp ? apiService.getDmKmp(true).catch(() => []) : Promise.resolve([]),
-        apiService.getDmBoPhan ? apiService.getDmBoPhan(true).catch(() => []) : Promise.resolve([]),
-        apiService.getDntt ? apiService.getDntt(true).catch(() => []) : Promise.resolve([]),
-        apiService.getDnttChiTiet ? apiService.getDnttChiTiet(true).catch(() => []) : Promise.resolve([]),
-        apiService.getDnttPhanBo ? apiService.getDnttPhanBo(true).catch(() => []) : Promise.resolve([]),
-        apiService.getChiPhiChotKy ? apiService.getChiPhiChotKy(true).catch(() => []) : Promise.resolve([]),
-        apiService.getChiPhiThongKe ? apiService.getChiPhiThongKe(true).catch(() => []) : Promise.resolve([]),
-        apiService.getDmNhomChiPhi ? apiService.getDmNhomChiPhi().catch(() => []) : Promise.resolve([])
+        apiService.getDonVi ? apiService.getDonVi(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getPhapNhan ? apiService.getPhapNhan(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getDmKmp ? apiService.getDmKmp(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getDmBoPhan ? apiService.getDmBoPhan(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getDntt ? apiService.getDntt(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getDnttChiTiet ? apiService.getDnttChiTiet(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getDnttPhanBo ? apiService.getDnttPhanBo(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getChiPhiChotKy ? apiService.getChiPhiChotKy(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getChiPhiThongKe ? apiService.getChiPhiThongKe(forceRefresh).catch(() => []) : Promise.resolve([]),
+        apiService.getDmNhomChiPhi ? apiService.getDmNhomChiPhi(forceRefresh).catch(() => []) : Promise.resolve([])
       ]);
 
       setDonViList(dvRes || []);
