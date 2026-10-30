@@ -330,20 +330,12 @@ export default function SucKhoeTab({
     const loadData = async () => {
       setLoading(true);
       try {
-        // Dọn bộ nhớ đệm cũ để đảm bảo dữ liệu thông báo định mức luôn cập nhật mới nhất từ Supabase
-        try {
-          localStorage.removeItem('SMART_CACHE_config_kham_suc_khoe');
-          localStorage.removeItem('mock_config_kham_suc_khoe');
-        } catch (e) {
-          // Bỏ qua lỗi trình duyệt nếu có
-        }
-
         const [cData, cnData, nccData, nsData, cfgData] = await Promise.all([
           getKhamSucKhoeCampaigns().catch(() => []),
           getKhamSucKhoeCaNhan().catch(() => []),
           getNhaCungCap().catch(() => []),
           getPersonnel().catch(() => []),
-          getConfigKhamSucKhoe(true).catch(() => [])
+          getConfigKhamSucKhoe().catch(() => [])
         ]);
 
         setCampaigns(Array.isArray(cData) ? cData : []);

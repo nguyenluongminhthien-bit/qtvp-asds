@@ -19,6 +19,7 @@ import DnttAllocationModal from './DnttAllocationModal';
 import { exportDnttToPdf, generateBangKePhanBoHtml, printBangKePhanBo, ExportDnttData } from './exportDnttPdf';
 import PnModal from '../department/PnModal';
 import RichTextInput from '../ui/RichTextInput';
+import TablePaginationFooter from '../common/TablePaginationFooter';
 
 interface Props {
   dnttList: DNTT[];
@@ -261,6 +262,14 @@ export default function DnttTab({
   const [selectedDnttIds, setSelectedDnttIds] = useState<Set<string>>(new Set());
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Phân trang (Pagination)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedUnitFilter, externalSearchTerm]);
 
   // =========================================================================
   // 1. XÁC ĐỊNH ĐƠN VỊ & GIA ĐÌNH ĐƠN VỊ ĐƯỢC CHỌN BÊN NGOÀI
@@ -1075,8 +1084,8 @@ export default function DnttTab({
 
   // Mở Form tạo DNTT mới
   const handleStartCreateNew = () => {
-    const defaultDnttId = `DNTT_${Date.now()}`;
-    const defaultItemId = `CT_${Date.now()}_1`;
+    const defaultDnttId = `DNTT_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const defaultItemId = `CT_${Date.now()}_1_${Math.random().toString(36).slice(2, 7)}`;
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const targetPnId = defaultPhapNhan?.id || selectedPnId || '';
@@ -1217,11 +1226,12 @@ export default function DnttTab({
 
   // Thao tác nhân đôi đề nghị thanh toán (Duplicate)
   const handleDuplicateDntt = async (sourceDntt: DNTT) => {
+    if (submitting) return;
     try {
       setSubmitting(true);
       toast.info('Đang nhân đôi Đề nghị thanh toán...');
 
-      const newDnttId = `DNTT_${Date.now()}`;
+      const newDnttId = `DNTT_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
       const dayStr = String(today.getDate()).padStart(2, '0');
@@ -1349,6 +1359,7 @@ export default function DnttTab({
   // mode = 'draft': Lưu nháp (cho phép lưu dở dang, không ép buộc phân bổ 100%, không tính vào thống kê)
   // mode = 'official': Lưu và ghi nhận chi phí (kiểm tra nghiêm ngặt, phân bổ khớp 100%)
   const handleSaveDntt = async (mode: 'draft' | 'official' = 'official') => {
+    if (submitting) return false;
     if (isDnttLocked(currentDntt as DNTT)) {
       const p = getDnttLockedPeriod(currentDntt as DNTT) || 'kỳ đã chốt';
       toast.error(`Kỳ chi phí (${p}) đã được Admin chốt số liệu đóng băng. Không thể lưu thay đổi!`);
@@ -1686,6 +1697,13 @@ export default function DnttTab({
         return String(b.so_dntt || '').localeCompare(String(a.so_dntt || ''));
       });
   }, [dnttList, searchTerm, selectedUnitFilter, fullDonViList, currentUnit, userPermittedUnitIds]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredDnttList.length / pageSize));
+
+  const paginatedDnttList = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredDnttList.slice(start, start + pageSize);
+  }, [filteredDnttList, currentPage, pageSize]);
 
   // Cho phép chọn tất cả các phiếu trong danh sách lọc để xóa hàng loạt (chỉ chọn các phiếu có quyền xóa)
   const deletableFilteredList = useMemo(() => {
@@ -2046,7 +2064,8 @@ export default function DnttTab({
                     </td>
                   </tr>
                 ) : (
-                  filteredDnttList.map((d, index) => {
+                  paginatedDnttList.map((d, index) => {
+                    const itemIndex = (currentPage - 1) * pageSize + index + 1;
                     const locked = isDnttLocked(d);
                     const lockedPeriod = getDnttLockedPeriod(d);
                     const isChecked = selectedDnttIds.has(d.id);
@@ -2068,7 +2087,7 @@ export default function DnttTab({
                           />
                         </td>
                         <td className="p-2 text-center text-gray-400 font-mono text-[11px]">
-                          {index + 1}
+                          {itemIndex}
                         </td>
                         <td className="p-1 font-mono font-bold text-[11px] text-[#D97706] text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -2268,6 +2287,19 @@ export default function DnttTab({
               )}
             </div>
           </div>
+
+          <TablePaginationFooter
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredDnttList.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+            pageSizeOptions={[15, 25, 50, 100]}
+          />
         </div>
 
         {/* Floating Bulk Action Bar - Chỉ dùng cho Xóa hàng loạt */}
@@ -2795,11 +2827,13 @@ export default function DnttTab({
                     <div className="absolute right-0 mt-1.5 w-76 sm:w-84 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                       <button
                         type="button"
+                        disabled={submitting}
                         onClick={() => {
+                          if (submitting) return;
                           setShowSaveMenu(false);
                           handleSaveDntt('draft');
                         }}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-start gap-3 transition-colors cursor-pointer group"
+                        className="w-full text-left px-3.5 py-2.5 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-start gap-3 transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 group-hover:scale-105 transition-transform mt-0.5">
                           <FileEdit size={16} />
@@ -2818,11 +2852,13 @@ export default function DnttTab({
 
                       <button
                         type="button"
+                        disabled={submitting}
                         onClick={() => {
+                          if (submitting) return;
                           setShowSaveMenu(false);
                           handleSaveDntt('official');
                         }}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 flex items-start gap-3 transition-colors cursor-pointer group"
+                        className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 flex items-start gap-3 transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 group-hover:scale-105 transition-transform mt-0.5">
                           <CheckCircle2 size={16} />
