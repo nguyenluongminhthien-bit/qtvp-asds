@@ -102,6 +102,46 @@ export const getDnttPhanBo = (forceRefresh = false) => getWithFallback<DnttPhanB
 export const getChiPhiChotKy = (forceRefresh = false) => getWithFallback<ChiPhiChotKy>('chi_phi_chot_ky', forceRefresh, CHI_PHI_CHOT_KY_COLUMNS);
 export const getChiPhiThongKe = (forceRefresh = false) => getWithFallback<ChiPhiThongKe>('chi_phi_thong_ke', forceRefresh);
 
+// Helper truy vấn số ĐNTT mới nhất duy nhất toàn hệ thống (không bị giới hạn bởi quyền đơn vị hay bộ lọc UI)
+export async function getNextUniqueSoDntt(year?: number): Promise<string> {
+  const currentYear = year || new Date().getFullYear();
+  const prefix = `DNTT-${currentYear}-`;
+
+  if (API_MODE === 'MOCK') {
+    const allDntt = (getLocalRecords('dntt') || []) as DNTT[];
+    let maxSeq = 0;
+    allDntt.forEach(d => {
+      if (d.so_dntt && d.so_dntt.startsWith(prefix)) {
+        const num = parseInt(d.so_dntt.slice(prefix.length).trim(), 10);
+        if (!isNaN(num) && num > maxSeq) maxSeq = num;
+      }
+    });
+    return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+  }
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/dntt?select=so_dntt&so_dntt=like.${encodeURIComponent(prefix + '*')}&order=so_dntt.desc&limit=1`, {
+      method: 'GET',
+      headers: HEADERS
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0 && data[0]?.so_dntt) {
+        const lastSo = String(data[0].so_dntt).trim();
+        const numPart = lastSo.slice(prefix.length).trim();
+        const num = parseInt(numPart, 10);
+        if (!isNaN(num) && num > 0) {
+          return `${prefix}${String(num + 1).padStart(4, '0')}`;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Lỗi khi lấy số DNTT mới nhất từ Supabase:', err);
+  }
+
+  return `${prefix}0001`;
+}
+
 const DEFAULT_PIVOT_CONFIG: ChiPhiPivotConfig = {
   id: 'PVC_DEFAULT_CPHC',
   ten_cau_hinh: 'Báo cáo Quản trị CPHC',
