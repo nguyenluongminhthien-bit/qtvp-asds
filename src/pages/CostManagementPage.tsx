@@ -741,6 +741,7 @@ export default function CostManagementPage() {
               {activeTab === 'dntt' && (
                 <DnttTab
                   dnttList={advancedFilteredDnttList}
+                  allDnttList={dnttList}
                   chiTietList={chiTietList}
                   phanBoList={phanBoList}
                   kmpList={kmpList}
