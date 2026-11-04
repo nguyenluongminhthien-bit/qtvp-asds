@@ -23,6 +23,7 @@ import TablePaginationFooter from '../common/TablePaginationFooter';
 
 interface Props {
   dnttList: DNTT[];
+  allDnttList?: DNTT[];
   chiTietList: DnttChiTiet[];
   phanBoList: DnttPhanBo[];
   kmpList: DmKmp[];
@@ -45,6 +46,7 @@ interface Props {
 
 export default function DnttTab({
   dnttList,
+  allDnttList,
   chiTietList,
   phanBoList,
   kmpList,
@@ -1040,14 +1042,15 @@ export default function DnttTab({
     cap2List
   }), [currentDntt, calculatedTotal, textAmount, items, allocationsMap, activePhapNhan, fullDonViList, currentUnit, defaultDonViDisplay, kmpList, boPhanList, cap1List, cap2List]);
 
-  // Helper sinh số ĐNTT duy nhất không trùng lặp
+  // Helper sinh số ĐNTT duy nhất không trùng lặp (quét trên toàn bộ kho DNTT chưa qua bộ lọc)
   const generateUniqueSoDntt = (existingList: DNTT[], year?: number): string => {
+    const sourceList = (allDnttList && allDnttList.length > 0) ? allDnttList : existingList;
     const currentYear = year || new Date().getFullYear();
     const prefix = `DNTT-${currentYear}-`;
     let maxSeq = 0;
     const existingSet = new Set<string>();
 
-    existingList.forEach(d => {
+    sourceList.forEach(d => {
       if (d.so_dntt) {
         const trimmed = d.so_dntt.trim();
         existingSet.add(trimmed);
@@ -1083,7 +1086,7 @@ export default function DnttTab({
   };
 
   // Mở Form tạo DNTT mới
-  const handleStartCreateNew = () => {
+  const handleStartCreateNew = async () => {
     const defaultDnttId = `DNTT_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const defaultItemId = `CT_${Date.now()}_1_${Math.random().toString(36).slice(2, 7)}`;
     const now = new Date();
@@ -1094,9 +1097,17 @@ export default function DnttTab({
     const initialUnit = currentUnit || selectableUnits[0] || null;
     const initialUnitDisplay = getUnitDisplayName(initialUnit) || defaultDonViDisplay;
 
+    // Lấy số ĐNTT duy nhất thực tế từ hệ thống (tránh trùng lặp do phân quyền hay bộ lọc)
+    let nextSoDntt = '';
+    try {
+      nextSoDntt = await apiService.getNextUniqueSoDntt(now.getFullYear());
+    } catch (e) {
+      nextSoDntt = generateUniqueSoDntt(dnttList, now.getFullYear());
+    }
+
     setCurrentDntt({
       id: defaultDnttId,
-      so_dntt: generateUniqueSoDntt(dnttList, now.getFullYear()),
+      so_dntt: nextSoDntt || generateUniqueSoDntt(dnttList, now.getFullYear()),
       ngay_lap: dateStr,
       id_phap_nhan: targetPnId,
       id_don_vi: initialUnit?.id || '',
@@ -1238,18 +1249,30 @@ export default function DnttTab({
       const monthStr = String(today.getMonth() + 1).padStart(2, '0');
       const yearStr = String(today.getFullYear());
       const targetYearNum = Number(yearStr) || today.getFullYear();
-      const newSoDntt = generateUniqueSoDntt(dnttList, targetYearNum);
+      
+      // Lấy số ĐNTT duy nhất thực tế từ hệ thống (tránh trùng lặp do phân quyền hay bộ lọc)
+      let newSoDntt = '';
+      try {
+        newSoDntt = await apiService.getNextUniqueSoDntt(targetYearNum);
+      } catch (e) {
+        newSoDntt = generateUniqueSoDntt(dnttList, targetYearNum);
+      }
 
       // 1. Tạo Header mới ở trạng thái Lưu nháp với Số ĐNTT mới tự động
       const newDntt: DNTT = {
         ...sourceDntt,
         id: newDnttId,
-        so_dntt: newSoDntt,
+        so_dntt: newSoDntt || generateUniqueSoDntt(dnttList, targetYearNum),
         ngay_lap: todayStr,
         ngay_ky_ngay: dayStr,
         ngay_ky_thang: monthStr,
         ngay_ky_nam: yearStr,
         trang_thai: 'Lưu nháp',
+        mo_khoa_chinh_sua: false,
+        ly_do_mo_khoa: undefined,
+        nguoi_mo_khoa: undefined,
+        ngay_mo_khoa: undefined,
+        created_at: today.toISOString(),
         updated_at: today.toISOString()
       };
 
@@ -1259,33 +1282,64 @@ export default function DnttTab({
         .sort((a, b) => (a.stt || 0) - (b.stt || 0));
 
       const idMap = new Map<string, string>(); // oldCtId -> newCtId
-      const newChiTietList: DnttChiTiet[] = matchingDetails.map((ct, idx) => {
-        const newCtId = `CT_${Date.now()}_${idx + 1}_${Math.random().toString(36).slice(2, 6)}`;
-        idMap.set(ct.id, newCtId);
-        return {
-          ...ct,
-          id: newCtId,
-          dntt_id: newDnttId
-        };
-      });
+      let newChiTietList: DnttChiTiet[] = [];
+
+      if (matchingDetails.length > 0) {
+        newChiTietList = matchingDetails.map((ct, idx) => {
+          const newCtId = `CT_${Date.now()}_${idx + 1}_${Math.random().toString(36).slice(2, 6)}`;
+          idMap.set(ct.id, newCtId);
+          return {
+            ...ct,
+            id: newCtId,
+            dntt_id: newDnttId
+          };
+        });
+      } else {
+        const defaultCtId = `CT_${Date.now()}_1_${Math.random().toString(36).slice(2, 6)}`;
+        newChiTietList = [{
+          id: defaultCtId,
+          dntt_id: newDnttId,
+          stt: 1,
+          noi_dung: sourceDntt.noi_dung_thanh_toan || 'Chi phí',
+          so_tien: sourceDntt.tong_so_tien || 0
+        }];
+      }
 
       // 3. Nhân đôi danh sách phân bổ chi phí
       const matchingPhanBo = phanBoList.filter(pb => pb.dntt_id === sourceDntt.id);
       const newPhanBoList: DnttPhanBo[] = matchingPhanBo.map((pb, idx) => {
         const newPbId = `PB_${Date.now()}_${idx + 1}_${Math.random().toString(36).slice(2, 6)}`;
-        const mappedItemId = idMap.get(pb.dntt_chi_tiet_id) || pb.dntt_chi_tiet_id;
+        const mappedItemId = idMap.get(pb.dntt_chi_tiet_id) || newChiTietList[0]?.id || pb.dntt_chi_tiet_id;
         return {
           ...pb,
           id: newPbId,
           dntt_id: newDnttId,
           dntt_chi_tiet_id: mappedItemId,
           thang: Number(monthStr),
-          nam: Number(yearStr)
+          nam: Number(yearStr),
+          created_at: today.toISOString()
         };
       });
 
-      // 4. Lưu đồng bộ vào Supabase
-      await apiService.save(newDntt, 'create', 'dntt');
+      // 4. Lưu đồng bộ vào Supabase (tự động thử lại nếu có xung đột số ĐNTT do race condition)
+      let saveSuccess = false;
+      let attempts = 0;
+      while (!saveSuccess && attempts < 5) {
+        try {
+          await apiService.save(newDntt, 'create', 'dntt');
+          saveSuccess = true;
+        } catch (saveErr: any) {
+          attempts++;
+          if (saveErr?.message?.includes('23505') || saveErr?.message?.includes('so_dntt')) {
+            console.warn(`Phát hiện trùng số ĐNTT (${newDntt.so_dntt}), đang lấy số tiếp theo (lần ${attempts})...`);
+            newSoDntt = await apiService.getNextUniqueSoDntt(targetYearNum);
+            newDntt.so_dntt = newSoDntt;
+          } else {
+            throw saveErr;
+          }
+        }
+      }
+
       for (const ct of newChiTietList) {
         await apiService.save(ct, 'create', 'dntt_chi_tiet');
       }
@@ -1297,7 +1351,7 @@ export default function DnttTab({
 
       // 5. Mở ngay form chỉnh sửa cho phiếu nháp mới nhân đôi
       handleOpenEditDntt(newDntt, newChiTietList, newPhanBoList);
-      toast.success('Đã nhân đôi phiếu thành công dưới dạng "Lưu nháp"!');
+      toast.success(`Đã nhân đôi phiếu thành công với số: ${newDntt.so_dntt}!`);
     } catch (err: any) {
       console.error('Lỗi khi nhân đôi DNTT:', err);
       toast.error('Nhân đôi phiếu thất bại: ' + (err?.message || 'Lỗi không xác định'));
@@ -1428,7 +1482,14 @@ export default function DnttTab({
         : ((isUpdate && currentDntt.trang_thai !== 'Lưu nháp') ? 'Lưu cập nhật' : 'Đã lưu');
 
       // Đảm bảo số ĐNTT luôn tồn tại hợp lệ (tự động cấp mới nếu đang rỗng)
-      const validSoDntt = (currentDntt.so_dntt && currentDntt.so_dntt.trim()) || generateUniqueSoDntt(dnttList);
+      let validSoDntt = (currentDntt.so_dntt && currentDntt.so_dntt.trim()) || '';
+      if (!validSoDntt) {
+        try {
+          validSoDntt = await apiService.getNextUniqueSoDntt();
+        } catch (e) {
+          validSoDntt = generateUniqueSoDntt(dnttList);
+        }
+      }
 
       // 1. Lưu Header DNTT
       const dnttPayload = {
@@ -1466,7 +1527,29 @@ export default function DnttTab({
         updated_at: new Date().toISOString()
       };
 
-      await apiService.save(dnttPayload, isUpdate ? 'update' : 'create', 'dntt');
+      // Tự động thử lại nếu có xung đột số ĐNTT do race condition
+      let dnttSaved = false;
+      let dnttAttempts = 0;
+      while (!dnttSaved && dnttAttempts < 5) {
+        try {
+          await apiService.save(dnttPayload, isUpdate ? 'update' : 'create', 'dntt');
+          dnttSaved = true;
+        } catch (saveErr: any) {
+          dnttAttempts++;
+          if (!isUpdate && (saveErr?.message?.includes('23505') || saveErr?.message?.includes('so_dntt'))) {
+            console.warn(`Phát hiện trùng số ĐNTT (${dnttPayload.so_dntt}), đang lấy số tiếp theo (lần ${dnttAttempts})...`);
+            try {
+              validSoDntt = await apiService.getNextUniqueSoDntt();
+            } catch (e) {
+              validSoDntt = generateUniqueSoDntt(dnttList);
+            }
+            dnttPayload.so_dntt = validSoDntt;
+          } else {
+            throw saveErr;
+          }
+        }
+      }
+
       setFormMode('update');
       setCurrentDntt(prev => ({ ...prev, id: dnttId, so_dntt: validSoDntt, trang_thai: nextStatus }));
 
