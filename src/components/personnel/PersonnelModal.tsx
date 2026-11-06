@@ -196,6 +196,8 @@ export default function PersonnelModal({
       'Khối KD Xe & DV SBH Xe DL',
       'Khối KD Xe & DV SBH Xe TM',
       'Khối Bán lẻ',
+      'KCN Chu Lai',
+      'KCN Bình Cơ',
       'NVQT Chuyên ngành',
       'NVQT Cơ bản',
       'Nghiệp vụ'
