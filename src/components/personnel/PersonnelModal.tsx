@@ -192,6 +192,7 @@ export default function PersonnelModal({
       'Khối Thu mua',
       'Khối KD Xuất khẩu',
       'Khối KD Cơ khí và CNHT',
+      'TCT Điện cơ chuyên dụng',
       'Khối KD Xe & DV SBH Xe DL',
       'Khối KD Xe & DV SBH Xe TM',
       'Khối Bán lẻ',
