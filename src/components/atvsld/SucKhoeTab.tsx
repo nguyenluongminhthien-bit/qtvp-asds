@@ -11,6 +11,7 @@ import { formatCurrency, formatCurrencySpace } from '../../utils/formatters';
 import { getAllSubordinateIds, groupParentUnits, getUnitEmoji } from '../../utils/hierarchy';
 import { toast } from '../../utils/toast';
 import PasteImportModal, { ColumnMapItem } from '../ui/PasteImportModal';
+import Pagination from '../ui/Pagination';
 import { EXCEL_TEMPLATES } from '../../utils/excelTemplates';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -499,6 +500,26 @@ export default function SucKhoeTab({
     return Array.from(map.values());
   }, [filteredCaNhanList, nhanSuList]);
 
+  // Phân trang danh sách KSK cá nhân chuẩn hóa (50 bản ghi/trang)
+  const [currentPageCaNhan, setCurrentPageCaNhan] = useState(1);
+  const [rowsPerPageCaNhan, setRowsPerPageCaNhan] = useState(50);
+
+  useEffect(() => {
+    setCurrentPageCaNhan(1);
+  }, [selectedNam, searchTerm, targetUnitIds, caNhanViewMode]);
+
+  const totalPagesCaNhan = Math.ceil(filteredCaNhanList.length / rowsPerPageCaNhan) || 1;
+  const paginatedCaNhanList = useMemo(() => {
+    const start = (currentPageCaNhan - 1) * rowsPerPageCaNhan;
+    return filteredCaNhanList.slice(start, start + rowsPerPageCaNhan);
+  }, [filteredCaNhanList, currentPageCaNhan, rowsPerPageCaNhan]);
+
+  const totalPagesMatrix = Math.ceil(groupedEmployeeMatrix.length / rowsPerPageCaNhan) || 1;
+  const paginatedEmployeeMatrix = useMemo(() => {
+    const start = (currentPageCaNhan - 1) * rowsPerPageCaNhan;
+    return groupedEmployeeMatrix.slice(start, start + rowsPerPageCaNhan);
+  }, [groupedEmployeeMatrix, currentPageCaNhan, rowsPerPageCaNhan]);
+
   // Tổng hợp chỉ số KPI
   const kpiStats = useMemo(() => {
     let totalDangKy = 0;
@@ -745,12 +766,6 @@ export default function SucKhoeTab({
 
     setSavingConfig(true);
     try {
-      // Xóa cache trình duyệt để chống dữ liệu cũ còn tồn đọng
-      try {
-        localStorage.removeItem('SMART_CACHE_config_kham_suc_khoe');
-        localStorage.removeItem('mock_config_kham_suc_khoe');
-      } catch (e) { }
-
       // Chuẩn hóa và làm sạch toàn bộ dữ liệu cấu hình trước khi gửi lên Supabase
       const curYear = Number(editingConfig.nam) || new Date().getFullYear();
       const payloadToSave: ConfigKhamSucKhoeRecord = {
@@ -798,22 +813,14 @@ export default function SucKhoeTab({
 
       const saved = await saveConfigKhamSucKhoe(payloadToSave, isUpdate ? 'update' : 'create');
 
-      // Tải lại danh sách mới nhất từ Supabase (forceRefresh = true)
-      const freshConfigs = await getConfigKhamSucKhoe(true).catch(() => []);
-      if (Array.isArray(freshConfigs) && freshConfigs.length > 0) {
-        setConfigs(freshConfigs);
-        const savedId = saved?.id || payloadToSave.id;
-        const savedItem = freshConfigs.find(c => c.id === savedId) || freshConfigs[0];
-        setEditingConfig(JSON.parse(JSON.stringify(savedItem)));
+      // Cập nhật state trực tiếp tại chỗ thay vì ép tải lại toàn bộ từ máy chủ (tiết kiệm băng thông Egress)
+      const itemToKeep = saved || payloadToSave;
+      if (isUpdate) {
+        setConfigs(prev => prev.map(c => c.id === itemToKeep.id ? itemToKeep : c));
       } else {
-        const itemToKeep = saved || payloadToSave;
-        if (isUpdate) {
-          setConfigs(prev => prev.map(c => c.id === itemToKeep.id ? itemToKeep : c));
-        } else {
-          setConfigs(prev => [itemToKeep, ...prev]);
-        }
-        setEditingConfig(JSON.parse(JSON.stringify(itemToKeep)));
+        setConfigs(prev => [itemToKeep, ...prev]);
       }
+      setEditingConfig(JSON.parse(JSON.stringify(itemToKeep)));
 
       toast.success(isUpdate ? "Đã cập nhật Cấu hình Thông báo!" : "Đã thêm mới Cấu hình Thông báo!");
     } catch (err: any) {
@@ -827,11 +834,6 @@ export default function SucKhoeTab({
   const handleDeleteConfig = async (id: string) => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa Cấu hình Thông báo này?")) return;
     try {
-      try {
-        localStorage.removeItem('SMART_CACHE_config_kham_suc_khoe');
-        localStorage.removeItem('mock_config_kham_suc_khoe');
-      } catch (e) { }
-
       await deleteConfigKhamSucKhoe(id);
       const remaining = configs.filter(c => c.id !== id);
       setConfigs(remaining);
@@ -2121,9 +2123,10 @@ export default function SucKhoeTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {groupedEmployeeMatrix.map((emp, idx) => {
+                  {paginatedEmployeeMatrix.map((emp, idx) => {
                     const uObj = donViMap.get(emp.id_don_vi);
                     const isExpanded = expandedMsnv === emp.msnv;
+                    const rowIdx = (currentPageCaNhan - 1) * rowsPerPageCaNhan + idx + 1;
 
                     // Tính toán xu hướng sức khỏe từ quá khứ -> hiện tại
                     const sortedYearsDesc = Array.from(emp.recordsByYear.keys()).sort((a, b) => Number(b) - Number(a));
@@ -2135,7 +2138,7 @@ export default function SucKhoeTab({
                     return (
                       <React.Fragment key={emp.msnv}>
                         <tr className={`hover:bg-lime-50/40 transition-colors ${isExpanded ? 'bg-lime-50/60' : ''}`}>
-                          <td className="p-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                          <td className="p-3 text-center font-bold text-gray-500">{rowIdx}</td>
                           <td className="p-3 font-mono font-bold text-gray-800">{emp.msnv}</td>
                           <td className="p-3 font-bold text-lime-950">{emp.ho_ten}</td>
                           <td className="p-3 text-gray-700">{uObj?.ten_don_vi || '—'}</td>
@@ -2290,11 +2293,12 @@ export default function SucKhoeTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredCaNhanList.map((item, idx) => {
+                  {paginatedCaNhanList.map((item, idx) => {
                     const uObj = donViMap.get(item.id_don_vi);
+                    const rowIdx = (currentPageCaNhan - 1) * rowsPerPageCaNhan + idx + 1;
                     return (
                       <tr key={item.id} className="hover:bg-lime-50/30 transition-colors">
-                        <td className="p-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                        <td className="p-3 text-center font-bold text-gray-500">{rowIdx}</td>
                         <td className="p-3 font-mono font-bold text-gray-800">{item.ma_so_nhan_vien}</td>
                         <td className="p-3 font-bold text-lime-950">{item.ho_ten}</td>
                         <td className="p-3 text-gray-700">{uObj?.ten_don_vi || '—'}</td>
@@ -2338,6 +2342,21 @@ export default function SucKhoeTab({
               </table>
             </div>
           )}
+
+          <div className="mt-3">
+            <Pagination
+              currentPage={currentPageCaNhan}
+              totalPages={caNhanViewMode === 'matrix' ? totalPagesMatrix : totalPagesCaNhan}
+              rowsPerPage={rowsPerPageCaNhan}
+              totalRows={caNhanViewMode === 'matrix' ? groupedEmployeeMatrix.length : filteredCaNhanList.length}
+              onPageChange={setCurrentPageCaNhan}
+              onRowsPerPageChange={(rows) => {
+                setRowsPerPageCaNhan(rows);
+                setCurrentPageCaNhan(1);
+              }}
+              itemName={caNhanViewMode === 'matrix' ? 'nhân sự' : 'hồ sơ cá nhân'}
+            />
+          </div>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Loader2, Save, Image as ImageIcon, ShieldCheck, Info, Heart, Activity } from 'lucide-react';
+import { X, Loader2, Save, Image as ImageIcon, ShieldCheck, Info, Heart, Activity, Plane } from 'lucide-react';
 import { DonVi } from '../../types';
 import { formatPhoneNumber } from '../../utils/formatters';
 import { buildHierarchicalOptions, getUnitEmoji } from '../../utils/hierarchy';
@@ -184,20 +184,16 @@ export default function PersonnelModal({
 
   const khoiOptions = useMemo(() => {
     const base = [
-      'Trung tâm R&D',
-      'Khối SX Cơ khí và TBCD',
-      'Khối Công nghiệp nặng',
-      'Khối Công nghệ và Giải pháp số hoá',
-      'Khối SX Ô tô, Đầu máy & Toa xe và LKPT',
+      'Khối Bán lẻ',
       'Khối Thu mua',
       'Khối KD Xuất khẩu',
       'Khối KD Cơ khí và CNHT',
-      'TCT Điện cơ chuyên dụng',
-      'Khối KD Xe & DV SBH Xe DL',
-      'Khối KD Xe & DV SBH Xe TM',
-      'Khối Bán lẻ',
-      'KCN Chu Lai',
-      'KCN Bình Cơ',
+      'Khối KD xe & DV SBH xe DL',
+      'Khối KD xe & DV SBH xe Thương mại',
+      'Khối Sản xuất Cơ khí và TBCD',
+      'Khối Công nghiệp nặng',
+      'Khối Công nghệ và Giải pháp số hoá',
+      'Khối SX Ô tô, Đầu máy & Toa xe và LKPT',
       'NVQT Chuyên ngành',
       'NVQT Cơ bản',
       'Nghiệp vụ'
@@ -691,6 +687,116 @@ export default function PersonnelModal({
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* 🟢 KHUNG: CHÍNH SÁCH VỀ PHÉP & ĐI LẠI (VÉ MÁY BAY / TÀU HỎA) */}
+            <div className="bg-sky-50/50 p-4 sm:p-5 rounded-xl border border-sky-200/80">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-3 border-b border-sky-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-6 bg-sky-600 rounded-full"></div>
+                  <Plane className="w-5 h-5 text-sky-600 shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-sky-950 text-sm leading-tight">Chính sách Về phép & Đi lại</h4>
+                    <p className="text-[11px] text-sky-700 font-medium">Áp dụng chế độ vé máy bay, tàu hỏa về phép cho CBNV theo quy định</p>
+                  </div>
+                </div>
+
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none bg-white px-3 py-1.5 rounded-xl border border-sky-200 shadow-2xs hover:bg-sky-50/50 transition-colors">
+                  <input
+                    type="checkbox"
+                    name="huong_chinh_sach_ve_phep"
+                    checked={Boolean(formData.huong_chinh_sach_ve_phep)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData(prev => ({
+                        ...prev,
+                        huong_chinh_sach_ve_phep: checked,
+                        dinh_muc_ve_phep_nam: checked ? (Number(prev.dinh_muc_ve_phep_nam) || 12) : 0,
+                        hinh_thuc_ve_phep: checked ? (prev.hinh_thuc_ve_phep || 'Vé máy bay') : ''
+                      }));
+                    }}
+                    className="w-4 h-4 text-sky-600 rounded border-gray-300 focus:ring-sky-500 cursor-pointer"
+                  />
+                  <span className={`text-xs font-bold ${formData.huong_chinh_sach_ve_phep ? 'text-sky-800' : 'text-gray-500'}`}>
+                    {formData.huong_chinh_sach_ve_phep ? '✓ Đang hưởng chính sách' : 'Không thuộc diện'}
+                  </span>
+                </label>
+              </div>
+
+              {Boolean(formData.huong_chinh_sach_ve_phep) ? (
+                <div className="pt-1 animate-in fade-in slide-in-from-top-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Hạn mức về phép / năm (lần) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="36"
+                        required
+                        name="dinh_muc_ve_phep_nam"
+                        value={formData.dinh_muc_ve_phep_nam ?? 12}
+                        onChange={handleInputChange}
+                        placeholder="VD: 12"
+                        className="w-full p-2.5 border border-sky-300 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-sky-500 font-black text-sky-900"
+                      />
+                      <p className="text-[10px] text-sky-600 mt-1 font-semibold">Bắt buộc &gt; 0 theo quy định</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Tiêu chuẩn về phép
+                      </label>
+                      <input
+                        type="text"
+                        name="ghi_chu_ve_phep"
+                        value={formData.ghi_chu_ve_phep || ''}
+                        onChange={handleInputChange}
+                        placeholder="VD: Hạng phổ thông, 20kg hành lý..."
+                        className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-sky-500 font-medium text-gray-800"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">Hạng vé, tiêu chuẩn áp dụng</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Phương tiện mặc định
+                      </label>
+                      <select
+                        name="hinh_thuc_ve_phep"
+                        value={formData.hinh_thuc_ve_phep || 'Vé máy bay'}
+                        onChange={handleInputChange}
+                        className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-sky-500 font-semibold text-gray-800"
+                      >
+                        <option value="Vé máy bay">Vé máy bay</option>
+                        <option value="Tàu hỏa">Tàu hỏa (Đường sắt)</option>
+                        <option value="Cả hai">Cả hai (Máy bay / Tàu)</option>
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1">Loại phương tiện ưu tiên</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Tuyến về phép mặc định
+                      </label>
+                      <input
+                        type="text"
+                        name="tuyen_ve_phep"
+                        value={formData.tuyen_ve_phep || ''}
+                        onChange={handleInputChange}
+                        placeholder="VD: Sài Gòn - Hà Nội"
+                        className="w-full p-2.5 border border-gray-200 rounded-lg bg-[#FFFFF0] outline-none focus:ring-2 focus:ring-sky-500 font-medium text-gray-800"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">Chặng đi lại thường xuyên</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-sky-800/60 italic">
+                  Nhân sự này hiện chưa bật chính sách về phép. Tích vào ô bên trên để thiết lập hạn mức và đưa vào phân hệ Quản lý về phép.
+                </p>
+              )}
             </div>
             <div className="bg-emerald-50/40 p-4 sm:p-5 rounded-xl border border-emerald-100">
               <h4 className="font-bold text-emerald-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-emerald-500 rounded-full"></div> Bằng cấp & Chứng chỉ chuyên môn</h4>

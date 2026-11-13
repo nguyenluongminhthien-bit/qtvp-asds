@@ -11,6 +11,7 @@ import { toast } from '../../utils/toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { DonVi, Personnel, KhoaHuanLuyen, HocVienKhoaHuanLuyen, ChuKyATVSLD, NhaCungCap } from '../../types';
 import PasteImportModal, { ColumnMapItem } from '../ui/PasteImportModal';
+import Pagination from '../ui/Pagination';
 import { getChungNhanByNhom, calcGiaTriDen } from '../../utils/atvsld';
 import { getAllSubordinateIds, buildHierarchicalOptions, getUnitEmoji } from '../../utils/hierarchy';
 
@@ -360,6 +361,55 @@ export default function KhoaHocTab({
       return status === statusMatrixFilter;
     });
   }, [groupedHocVienMatrix, statusMatrixFilter, personnelList]);
+
+  // 🟢 PHÂN TRANG CHUẨN HÓA CHO CÁC BẢNG TRONG KHOAHOC TAB
+  // 1. Phân trang Khóa học
+  const [currentPageKhoaHoc, setCurrentPageKhoaHoc] = useState(1);
+  const [rowsPerPageKhoaHoc, setRowsPerPageKhoaHoc] = useState(25);
+
+  useEffect(() => {
+    setCurrentPageKhoaHoc(1);
+  }, [searchTerm, selectedUnitFilter, timeSortOrder]);
+
+  const totalPagesKhoaHoc = Math.ceil(filteredKhoaHoc.length / rowsPerPageKhoaHoc) || 1;
+  const paginatedKhoaHoc = useMemo(() => {
+    const start = (currentPageKhoaHoc - 1) * rowsPerPageKhoaHoc;
+    return filteredKhoaHoc.slice(start, start + rowsPerPageKhoaHoc);
+  }, [filteredKhoaHoc, currentPageKhoaHoc, rowsPerPageKhoaHoc]);
+
+  // 2. Phân trang Học viên của khóa học được chọn
+  const [currentPageHvInCourse, setCurrentPageHvInCourse] = useState(1);
+  const [rowsPerPageHvInCourse, setRowsPerPageHvInCourse] = useState(50);
+
+  useEffect(() => {
+    setCurrentPageHvInCourse(1);
+  }, [selectedKhoaHoc, hvSearchTerm]);
+
+  const totalPagesHvInCourse = Math.ceil(filteredHocVien.length / rowsPerPageHvInCourse) || 1;
+  const paginatedHocVienInCourse = useMemo(() => {
+    const start = (currentPageHvInCourse - 1) * rowsPerPageHvInCourse;
+    return filteredHocVien.slice(start, start + rowsPerPageHvInCourse);
+  }, [filteredHocVien, currentPageHvInCourse, rowsPerPageHvInCourse]);
+
+  // 3. Phân trang Lịch sử Đào tạo Cá nhân (Ma trận & Chi tiết)
+  const [currentPageCaNhan, setCurrentPageCaNhan] = useState(1);
+  const [rowsPerPageCaNhan, setRowsPerPageCaNhan] = useState(50);
+
+  useEffect(() => {
+    setCurrentPageCaNhan(1);
+  }, [selectedNam, searchTerm, selectedUnitFilter, statusMatrixFilter, caNhanViewMode]);
+
+  const totalPagesMatrix = Math.ceil(filteredMatrixData.length / rowsPerPageCaNhan) || 1;
+  const paginatedMatrixData = useMemo(() => {
+    const start = (currentPageCaNhan - 1) * rowsPerPageCaNhan;
+    return filteredMatrixData.slice(start, start + rowsPerPageCaNhan);
+  }, [filteredMatrixData, currentPageCaNhan, rowsPerPageCaNhan]);
+
+  const totalPagesHv = Math.ceil(filteredHvList.length / rowsPerPageCaNhan) || 1;
+  const paginatedHvList = useMemo(() => {
+    const start = (currentPageCaNhan - 1) * rowsPerPageCaNhan;
+    return filteredHvList.slice(start, start + rowsPerPageCaNhan);
+  }, [filteredHvList, currentPageCaNhan, rowsPerPageCaNhan]);
 
   // Hàm xuất Excel đợt học tiếp theo chuẩn cấu trúc cột yêu cầu
   const handleExportNextCourse = () => {
@@ -1210,9 +1260,9 @@ export default function KhoaHocTab({
                         </td>
                       </tr>
                     ) : (
-                      filteredKhoaHoc.map((kh, idx) => (
+                      paginatedKhoaHoc.map((kh, idx) => (
                         <tr key={kh.id} className="hover:bg-lime-50/20 transition-colors">
-                          <td className="p-3 text-center text-gray-400 font-semibold">{idx + 1}</td>
+                          <td className="p-3 text-center text-gray-400 font-semibold">{(currentPageKhoaHoc - 1) * rowsPerPageKhoaHoc + idx + 1}</td>
                           <td className="p-3">
                             <button
                               onClick={() => setSelectedKhoaHoc(kh)}
@@ -1296,6 +1346,17 @@ export default function KhoaHocTab({
                   </tbody>
                 </table>
               </div>
+
+              {/* Phân trang danh sách khóa học */}
+              <Pagination
+                currentPage={currentPageKhoaHoc}
+                totalPages={totalPagesKhoaHoc}
+                rowsPerPage={rowsPerPageKhoaHoc}
+                totalRows={filteredKhoaHoc.length}
+                onPageChange={setCurrentPageKhoaHoc}
+                onRowsPerPageChange={setRowsPerPageKhoaHoc}
+                itemName="khóa học"
+              />
             </div>
           ) : (
             /* VIEW CHI TIẾT HỌC VIÊN CỦA KHÓA */
@@ -1414,7 +1475,7 @@ export default function KhoaHocTab({
                           </td>
                         </tr>
                       ) : (
-                        filteredHocVien.map((hv, idx) => {
+                        paginatedHocVienInCourse.map((hv, idx) => {
                           const kqNormalized = String(hv.ket_qua || '').trim().toLowerCase().normalize('NFC');
                           const isDat = kqNormalized === 'đạt' || kqNormalized === 'dat';
                           const isChecked = selectedHvIds.includes(hv.id);
@@ -1430,7 +1491,7 @@ export default function KhoaHocTab({
                                   />
                                 </td>
                               )}
-                              <td className="p-3 text-center text-gray-450 font-semibold">{hv.stt || (idx + 1)}</td>
+                              <td className="p-3 text-center text-gray-450 font-semibold">{hv.stt || ((currentPageHvInCourse - 1) * rowsPerPageHvInCourse + idx + 1)}</td>
                               <td className="p-3 font-bold text-gray-700">{hv.msnv}</td>
                               <td className="p-3 font-bold text-lime-800 whitespace-nowrap">{hv.ho_ten}</td>
                               <td className="p-3">
@@ -1496,6 +1557,17 @@ export default function KhoaHocTab({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Phân trang danh sách học viên trong khóa */}
+                <Pagination
+                  currentPage={currentPageHvInCourse}
+                  totalPages={totalPagesHvInCourse}
+                  rowsPerPage={rowsPerPageHvInCourse}
+                  totalRows={filteredHocVien.length}
+                  onPageChange={setCurrentPageHvInCourse}
+                  onRowsPerPageChange={setRowsPerPageHvInCourse}
+                  itemName="học viên"
+                />
               </div>
             </div>
           )}
@@ -1662,7 +1734,7 @@ export default function KhoaHocTab({
                         </td>
                       </tr>
                     ) : (
-                      filteredMatrixData.map((emp, idx) => {
+                      paginatedMatrixData.map((emp, idx) => {
                         const isExpanded = expandedMsnv === emp.msnv;
                         const matchedPerson = personnelList.find(p => p.ma_so_nhan_vien === emp.msnv);
 
@@ -1678,7 +1750,7 @@ export default function KhoaHocTab({
                         return (
                           <React.Fragment key={emp.msnv}>
                             <tr className={`hover:bg-lime-50/20 transition-colors h-[40px] ${isExpanded ? 'bg-lime-50/40 font-semibold' : ''}`}>
-                              <td className="px-3 text-center text-gray-400 font-bold whitespace-nowrap h-[40px] align-middle">{idx + 1}</td>
+                              <td className="px-3 text-center text-gray-400 font-bold whitespace-nowrap h-[40px] align-middle">{(currentPageCaNhan - 1) * rowsPerPageCaNhan + idx + 1}</td>
                               <td className="px-3 font-mono font-bold text-gray-700 whitespace-nowrap h-[40px] align-middle">{emp.msnv}</td>
                               <td className="px-3 font-bold text-lime-900 whitespace-nowrap h-[40px] align-middle">{emp.ho_ten}</td>
                               <td className="px-3 text-gray-600 whitespace-nowrap h-[40px] align-middle">{donViMap[emp.id_don_vi] || emp.id_don_vi || '---'}</td>
@@ -1768,6 +1840,17 @@ export default function KhoaHocTab({
                   </tbody>
                 </table>
               </div>
+
+              {/* Phân trang Ma trận Đào tạo cá nhân */}
+              <Pagination
+                currentPage={currentPageCaNhan}
+                totalPages={totalPagesMatrix}
+                rowsPerPage={rowsPerPageCaNhan}
+                totalRows={filteredMatrixData.length}
+                onPageChange={setCurrentPageCaNhan}
+                onRowsPerPageChange={setRowsPerPageCaNhan}
+                itemName="nhân sự"
+              />
             </div>
           ) : (
             /* 🟢 LIST VIEW HỌC VIÊN CHI TIẾT */
@@ -1795,13 +1878,13 @@ export default function KhoaHocTab({
                         </td>
                       </tr>
                     ) : (
-                      filteredHvList.map((item, idx) => {
+                      paginatedHvList.map((item, idx) => {
                         const kh = khoaHocList.find(k => k.id === item.id_khoa_hoc);
                         const isDat = String(item.ket_qua || '').trim().toLowerCase().normalize('NFC') === 'đạt' || String(item.ket_qua || '').trim().toLowerCase().normalize('NFC') === 'dat';
 
                         return (
                           <tr key={item.id} className="hover:bg-lime-50/20 transition-colors h-[35px]">
-                            <td className="px-3 text-center text-gray-450 font-bold whitespace-nowrap h-[35px] align-middle">{idx + 1}</td>
+                            <td className="px-3 text-center text-gray-450 font-bold whitespace-nowrap h-[35px] align-middle">{(currentPageCaNhan - 1) * rowsPerPageCaNhan + idx + 1}</td>
                             <td className="px-3 font-mono font-bold text-gray-700 whitespace-nowrap h-[35px] align-middle">{item.msnv}</td>
                             <td className="px-3 font-bold text-lime-900 whitespace-nowrap h-[35px] align-middle">{item.ho_ten}</td>
                             <td className="px-3 text-gray-650 whitespace-nowrap h-[35px] align-middle">{donViMap[item.id_don_vi] || item.id_don_vi || '---'}</td>
@@ -1823,6 +1906,17 @@ export default function KhoaHocTab({
                   </tbody>
                 </table>
               </div>
+
+              {/* Phân trang danh sách học viên cá nhân */}
+              <Pagination
+                currentPage={currentPageCaNhan}
+                totalPages={totalPagesHv}
+                rowsPerPage={rowsPerPageCaNhan}
+                totalRows={filteredHvList.length}
+                onPageChange={setCurrentPageCaNhan}
+                onRowsPerPageChange={setRowsPerPageCaNhan}
+                itemName="lượt huấn luyện"
+              />
             </div>
           )}
         </div>

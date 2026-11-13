@@ -100,7 +100,7 @@ export default function CostPivotView({
     try {
       let serverConfigs: ChiPhiPivotConfig[] = [];
       if (apiService.getChiPhiPivotConfig) {
-        serverConfigs = await apiService.getChiPhiPivotConfig(true);
+        serverConfigs = await apiService.getChiPhiPivotConfig(false);
       }
 
       // Đọc các cấu hình đã lưu ở LocalStorage theo user/đơn vị
