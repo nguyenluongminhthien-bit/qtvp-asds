@@ -12,6 +12,7 @@ import { toast } from '../utils/toast';
 import { stripAccents, formatPhoneNumber } from '../utils/formatters';
 import { PageWithFilterSkeleton } from '../components/SkeletonLoader';
 import UnitFilterSidebar from '../components/ui/UnitFilterSidebar';
+import Pagination from '../components/ui/Pagination';
 import { useAllowedUnits } from '../hooks/useAllowedUnits';
 import { getExpiryStatus } from '../utils/expiryStatus';
 import {
@@ -42,7 +43,7 @@ const NHOM_DICH_VU_NCC = [
   "An ninh - Bảo vệ", "Xăng dầu", "Văn phòng phẩm & Ấn vật phẩm", "Tạp phẩm",
   "Trang trí VP, quầy lễ tân", "Tiếp khách (Phòng chờ KH)", "Công cụ dụng cụ",
   "Sửa chữa, bảo trì", "Thiết bị CNTT & Văn phòng", "Viễn thông",
-  "Đào tạo, Chứng nhận & Kiểm định", "Bảo hiểm", "Sức khỏe", "Khác"
+  "Đào tạo, Chứng nhận & Kiểm định", "Bảo hiểm", "Sức khỏe", "Vé máy bay", "Khác"
 ];
 
 const TRANG_THAI_LIST = ["Đang hợp tác", "Ngừng hợp tác"];
@@ -344,6 +345,20 @@ export default function SupplierPage() {
 
     return result;
   }, [nccData, selectedUnitFilter, currentSubordinateIds, selectedNhomDichVu, selectedTrangThai, searchTerm]);
+
+  // Phân trang chuẩn hóa (25 dòng/trang)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedUnitFilter, selectedNhomDichVu, selectedTrangThai, searchTerm]);
+
+  const totalPages = Math.ceil(filteredSuppliers.length / rowsPerPage) || 1;
+  const paginatedSuppliers = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredSuppliers.slice(start, start + rowsPerPage);
+  }, [filteredSuppliers, currentPage, rowsPerPage]);
 
   const openModal = (mode: 'create' | 'update', item?: NhaCungCap) => {
     if (mode === 'create') {
@@ -693,7 +708,7 @@ export default function SupplierPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredSuppliers.length === 0 ? (
+                {paginatedSuppliers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-16 text-center text-gray-500">
                       <Handshake size={48} className="mx-auto text-gray-300 mb-4" />
@@ -701,7 +716,7 @@ export default function SupplierPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSuppliers.map((item) => {
+                  paginatedSuppliers.map((item) => {
                     const effectiveExpiry = getEffectiveExpiryDate(item.ngay_het_han_hd, item.gia_han_tu_dong);
                     const expStatus = effectiveExpiry ? getExpiryStatus(effectiveExpiry) : null;
                     return (
@@ -839,12 +854,12 @@ export default function SupplierPage() {
 
           {/* Mobile Card View */}
           <div className="block md:hidden flex-1 min-h-0 overflow-y-auto pb-4 space-y-4 custom-scrollbar">
-            {filteredSuppliers.length === 0 ? (
+            {paginatedSuppliers.length === 0 ? (
               <div className="bg-white p-8 rounded-2xl border border-gray-200 text-center text-gray-400 italic">
                 Không tìm thấy đối tác, nhà cung cấp nào.
               </div>
             ) : (
-              filteredSuppliers.map((item) => (
+              paginatedSuppliers.map((item) => (
                 <SupplierMobileCard
                   key={item.id}
                   item={item}
@@ -859,6 +874,18 @@ export default function SupplierPage() {
             )}
           </div>
 
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            rowsPerPage={rowsPerPage}
+            totalRows={filteredSuppliers.length}
+            onPageChange={setCurrentPage}
+            onRowsPerPageChange={(rows) => {
+              setRowsPerPage(rows);
+              setCurrentPage(1);
+            }}
+            itemName="nhà cung cấp"
+          />
         </div>
       </div>
 

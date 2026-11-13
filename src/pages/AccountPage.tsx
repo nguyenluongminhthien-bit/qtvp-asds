@@ -12,6 +12,7 @@ import { toast } from '../utils/toast';
 import { stripAccents } from '../utils/formatters';
 import { useAuth } from '../contexts/AuthContext';
 import { RecycleBinModal } from '../components/ui';
+import Pagination from '../components/ui/Pagination';
 import { 
   MODULE_MATRIX_CONFIG, 
   ModuleCrudState, 
@@ -355,6 +356,20 @@ export default function AccountPage() {
       stripAccents(item.id || '').includes(cleanSearch)
     );
   }, [visibleAccounts, searchTerm]);
+
+  // Phân trang chuẩn hóa (25 tài khoản/trang)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.ceil(filteredData.length / rowsPerPage) || 1;
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredData.slice(start, start + rowsPerPage);
+  }, [filteredData, currentPage, rowsPerPage]);
 
   const allowedModalDonViList = useMemo(() => {
     if (isHOAdmin) return donViList || [];
@@ -989,8 +1004,8 @@ export default function AccountPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (<tr><td colSpan={5} className="p-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-[#05469B] mb-2"/> Đang tải...</td></tr>) 
-              : filteredData.length === 0 ? (<tr><td colSpan={5} className="p-12 text-center text-gray-400"><UserCog size={40} className="mx-auto mb-3 opacity-50"/> Không có dữ liệu tài khoản.</td></tr>) 
-              : filteredData.map(user => (
+              : paginatedData.length === 0 ? (<tr><td colSpan={5} className="p-12 text-center text-gray-400"><UserCog size={40} className="mx-auto mb-3 opacity-50"/> Không có dữ liệu tài khoản.</td></tr>) 
+              : paginatedData.map(user => (
                 <tr key={user.id} className="hover:bg-blue-50/50 transition-colors group">
                   <td className="p-4 font-bold text-gray-700">{user.id}</td>
                   <td className="p-4">
@@ -1154,6 +1169,18 @@ export default function AccountPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          rowsPerPage={rowsPerPage}
+          totalRows={filteredData.length}
+          onPageChange={setCurrentPage}
+          onRowsPerPageChange={(rows) => {
+            setRowsPerPage(rows);
+            setCurrentPage(1);
+          }}
+          itemName="tài khoản"
+        />
       </div>
 
       {isModalOpen && (

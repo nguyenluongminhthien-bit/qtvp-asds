@@ -4,6 +4,8 @@ import { getLocalRecords } from './localStore';
 
 export let currentUser: User | null = null;
 
+export const CONFIG_USERS_AUTH_COLUMNS = 'id,user_name,password,ho_ten,id_don_vi,quyen,quyen_truy_cap,quyen_chi_tiet,can_view,can_create,can_update,can_delete,can_delete_unit,can_lock_period';
+
 export const setCurrentUser = (user: User | null) => {
   currentUser = user;
 };
@@ -16,7 +18,7 @@ export async function login(username: string, password: string): Promise<User> {
 
   // 2. Chế độ SUPABASE
   try {
-    const url = `${SUPABASE_URL}/rest/v1/config_users?user_name=eq.${username}&password=eq.${password}&select=*`;
+    const url = `${SUPABASE_URL}/rest/v1/config_users?user_name=eq.${username}&password=eq.${password}&select=${CONFIG_USERS_AUTH_COLUMNS}`;
     const response = await fetch(url, { method: 'GET', headers: HEADERS });
     if (!response.ok) {
       const errorText = await response.text();
@@ -41,7 +43,7 @@ export async function validateAndRefreshUser(id: string): Promise<User | null> {
 
   // 2. Chế độ SUPABASE
   try {
-    const url = `${SUPABASE_URL}/rest/v1/config_users?id=eq.${id}&select=*`;
+    const url = `${SUPABASE_URL}/rest/v1/config_users?id=eq.${id}&select=${CONFIG_USERS_AUTH_COLUMNS}`;
     const response = await fetch(url, { method: 'GET', headers: HEADERS });
     if (!response.ok) return null;
     

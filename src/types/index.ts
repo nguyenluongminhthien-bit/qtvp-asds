@@ -135,7 +135,50 @@ export interface Personnel {
   bks?: string;
   to_chuc?: string;
   bo_phan?: string;
+  huong_chinh_sach_ve_phep?: boolean;
+  dinh_muc_ve_phep_nam?: number;
+  ngach_ve_phep?: string;
+  tuyen_ve_phep?: string;
+  hinh_thuc_ve_phep?: string;
+  ghi_chu_ve_phep?: string;
   [key: string]: any;
+}
+
+export interface VeMayBay {
+  id: string;
+  id_nhan_su?: string;
+  ma_so_nhan_vien: string;
+  ho_ten: string;
+  id_don_vi?: string;
+  loai_phuong_tien: string; // 'Vé máy bay' | 'Tàu hỏa' | 'Khác'
+  hang_van_chuyen?: string;
+  id_ncc?: string;
+  ten_ncc?: string;
+  code_ve_di?: string;
+  chuyen_bay_di?: string;
+  ngay_di?: string;
+  chang_di?: string;
+  gia_ve_di?: number;
+  code_ve_ve?: string;
+  chuyen_bay_ve?: string;
+  ngay_ve?: string;
+  chang_ve?: string;
+  gia_ve_ve?: number;
+  phi_doi_ve?: number;
+  phi_hanh_ly?: number;
+  nv_tu_tra?: number;
+  cty_thanh_toan?: number;
+  tong_tien?: number;
+  thang: number;
+  nam: number;
+  lan_ve_phep?: number;
+  muc_dich?: string; // 'Về phép' | 'Công tác'
+  trang_thai_doi_chieu?: string; // 'Chưa đối chiếu' | 'Khớp' | 'Lệch tiền' | 'Không tìm thấy'
+  tien_ncc_ke?: number;
+  ghi_chu_doi_chieu?: string;
+  ghi_chu?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AnNinh {

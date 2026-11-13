@@ -2,6 +2,7 @@ import { setCurrentUser, login, validateAndRefreshUser } from './auth';
 import { writeLog, cleanOldLogs } from './logs';
 import {
   getPersonnel,
+  getVeMayBay,
   getDonVi,
   getNhaCungCap,
   getAnNinh,
@@ -64,6 +65,7 @@ export const apiService = {
   login,
   validateAndRefreshUser,
   getPersonnel,
+  getVeMayBay,
   getDonVi,
   getNhaCungCap,
   getAnNinh,

@@ -88,6 +88,7 @@ export default function AtvsldPage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isFeaturesDropdownOpen, setIsFeaturesDropdownOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Tab Kế hoạch ATVSLĐ (Mới)
   const [safetySearchTerm, setSafetySearchTerm] = useState('');
@@ -279,7 +280,7 @@ export default function AtvsldPage() {
   };
 
   const confirmDelete = async () => {
-    if (!deleteTargetId) return;
+    if (!deleteTargetId || submitting) return;
     const target = atvsldData.find(item => item.id === deleteTargetId);
     if (!canDelete('ATVSLD', target?.id_don_vi)) {
       toast.error("Bạn không có quyền xóa hồ sơ ATVSLĐ tại đơn vị này!");
@@ -287,6 +288,7 @@ export default function AtvsldPage() {
       setDeleteTargetId(null);
       return;
     }
+    setSubmitting(true);
     try {
       await apiService.delete(deleteTargetId, 'hs_an_toan_lao_dong');
       setAtvsldData(prev => prev.filter(item => item.id !== deleteTargetId));
@@ -294,6 +296,7 @@ export default function AtvsldPage() {
     } catch (err) {
       toast.error('Lỗi khi xóa hồ sơ.');
     } finally {
+      setSubmitting(false);
       setIsConfirmOpen(false);
       setDeleteTargetId(null);
     }
@@ -770,8 +773,10 @@ export default function AtvsldPage() {
             <h3 className="text-xl font-bold text-gray-900 mb-2">Xác nhận xóa?</h3>
             <p className="text-gray-500 text-sm mb-6">Bạn có chắc chắn muốn xóa hồ sơ báo cáo ATVSLĐ của đơn vị này? Hành động này không thể hoàn tác.</p>
             <div className="flex gap-3">
-              <button onClick={() => setIsConfirmOpen(false)} className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors">Hủy</button>
-              <button onClick={confirmDelete} className="flex-1 py-3 text-white bg-lime-600 hover:bg-lime-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors"><Trash2 className="w-5 h-5" /> Xóa</button>
+              <button onClick={() => setIsConfirmOpen(false)} disabled={submitting} className="flex-1 py-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl font-bold transition-colors disabled:opacity-50">Hủy</button>
+              <button onClick={confirmDelete} disabled={submitting} className="flex-1 py-3 text-white bg-lime-600 hover:bg-lime-700 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors disabled:opacity-50">
+                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />} Xóa
+              </button>
             </div>
           </div>
         </div>

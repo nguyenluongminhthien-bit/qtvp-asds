@@ -3,6 +3,7 @@ import { ClipboardList, Search, Loader2, Clock, User, Activity, AlertCircle, Cal
 import { apiService } from '../services/api';
 import { SysLog } from '../types';
 import { stripAccents } from '../utils/formatters';
+import Pagination from '../components/ui/Pagination';
 
 export default function LogPage() {
   const [logs, setLogs] = useState<SysLog[]>([]);
@@ -62,6 +63,20 @@ export default function LogPage() {
     });
   }, [logs, searchTerm, userMap]);
 
+  // Phân trang chuẩn hóa (50 dòng/trang)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.ceil(filteredLogs.length / rowsPerPage) || 1;
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredLogs.slice(start, start + rowsPerPage);
+  }, [filteredLogs, currentPage, rowsPerPage]);
+
   const getActionColor = (action: string) => {
     const act = action?.toUpperCase();
     if (act?.includes('THÊM')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -116,8 +131,8 @@ export default function LogPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (<tr><td colSpan={5} className="p-12 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-[#05469B] mb-2" /> Đang tải log...</td></tr>)
-                : filteredLogs.length === 0 ? (<tr><td colSpan={5} className="p-12 text-center text-gray-400"><ClipboardList size={40} className="mx-auto mb-3 opacity-50" /> Không có nhật ký nào.</td></tr>)
-                  : filteredLogs.map((log, idx) => {
+                : paginatedLogs.length === 0 ? (<tr><td colSpan={5} className="p-12 text-center text-gray-400"><ClipboardList size={40} className="mx-auto mb-3 opacity-50" /> Không có nhật ký nào.</td></tr>)
+                  : paginatedLogs.map((log, idx) => {
 
                     const { dateStr, timeStr } = formatLogTime(log.thoi_gian);
 
@@ -147,6 +162,18 @@ export default function LogPage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          rowsPerPage={rowsPerPage}
+          totalRows={filteredLogs.length}
+          onPageChange={setCurrentPage}
+          onRowsPerPageChange={(rows) => {
+            setRowsPerPage(rows);
+            setCurrentPage(1);
+          }}
+          itemName="nhật ký"
+        />
       </div>
     </div>
   );

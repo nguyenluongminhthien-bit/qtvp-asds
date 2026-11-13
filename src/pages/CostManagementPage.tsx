@@ -292,6 +292,24 @@ export default function CostManagementPage() {
     }
   };
 
+  // Làm mới giao dịch DNTT mục tiêu (chỉ tải lại các bảng phiếu khi Lưu/Xóa thay vì tải lại toàn bộ 10 bảng)
+  const refreshCostTransactions = async () => {
+    try {
+      const [dnttRes, ctRes, pbRes, ckRes] = await Promise.all([
+        apiService.getDntt ? apiService.getDntt(false).catch(() => []) : Promise.resolve([]),
+        apiService.getDnttChiTiet ? apiService.getDnttChiTiet(false).catch(() => []) : Promise.resolve([]),
+        apiService.getDnttPhanBo ? apiService.getDnttPhanBo(false).catch(() => []) : Promise.resolve([]),
+        apiService.getChiPhiChotKy ? apiService.getChiPhiChotKy(false).catch(() => []) : Promise.resolve([])
+      ]);
+      setDnttList(dnttRes || []);
+      setChiTietList(ctRes || []);
+      setPhanBoList(pbRes || []);
+      setChotKyList(ckRes || []);
+    } catch (err) {
+      console.error('Lỗi khi làm mới phiếu DNTT:', err);
+    }
+  };
+
   useEffect(() => {
     void loadAllData();
   }, []);
@@ -753,7 +771,7 @@ export default function CostManagementPage() {
                   phapNhanList={phapNhanList}
                   chotKyList={chotKyList}
                   selectedUnitFilter={selectedUnitFilter}
-                  onRefresh={() => loadAllData(true)}
+                  onRefresh={refreshCostTransactions}
                   loading={loading}
                   externalSearchTerm={costSearchTerm}
                   createTrigger={dnttCreateTrigger}
@@ -779,7 +797,7 @@ export default function CostManagementPage() {
                     fullDonViList={donViList}
                     phapNhanList={phapNhanList}
                     selectedUnitFilter={selectedUnitFilter}
-                    onRefresh={() => loadAllData(true)}
+                    onRefresh={() => loadAllData(false)}
                     loading={loading}
                     activeSubTab={activeThongKeSubTab}
                     onSubTabChange={setActiveThongKeSubTab}
@@ -791,7 +809,7 @@ export default function CostManagementPage() {
               {activeTab === 'kmp' && (
                 <KmpConfigTab
                   kmpList={kmpList}
-                  onRefresh={() => loadAllData(true)}
+                  onRefresh={() => loadAllData(false)}
                   loading={loading}
                 />
               )}
@@ -805,7 +823,7 @@ export default function CostManagementPage() {
                   allDonViList={donViList}
                   phapNhanList={phapNhanList}
                   selectedUnitFilter={selectedUnitFilter}
-                  onRefresh={() => loadAllData(true)}
+                  onRefresh={() => loadAllData(false)}
                   loading={loading}
                   activeSubTab={activeAdminSubTab}
                   setActiveSubTab={setActiveAdminSubTab}

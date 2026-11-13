@@ -5,7 +5,7 @@ import {
   Dumbbell, Car, Utensils, Coffee, Languages, Monitor, Copy, Eye, EyeOff, User as UserIcon,
   Building2, Phone, Mail, Info, MapPin, ChevronDown, ChevronRight, ChevronLeft, PanelLeftClose, PanelLeftOpen, CheckCheck, Briefcase,
   LogOut, AlertTriangle, Image as ImageIcon, RotateCcw, Download, FileSpreadsheet, ClipboardPaste,
-  BarChart3, PieChart as PieChartIcon, TrendingUp, Cake, Filter, Layers, Tag, Sparkles, Wrench, Settings2, UserPlus, UserCheck, ArrowRightLeft
+  BarChart3, PieChart as PieChartIcon, TrendingUp, Cake, Filter, Layers, Tag, Sparkles, Wrench, Settings2, UserPlus, UserCheck, ArrowRightLeft, Plane, Lock
 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Personnel, DonVi, ThietBi } from '../types';
@@ -29,6 +29,7 @@ import { CERTIFICATES } from '../constants/certificates';
 import { getKhamSucKhoeCaNhan } from '../services/api/modules';
 import PersonnelDashboardTab from '../components/personnel/PersonnelDashboardTab';
 import PersonnelNgachLuongTab from '../components/personnel/PersonnelNgachLuongTab';
+import VePhepTab from '../components/personnel/VePhepTab';
 
 const extractStartDateFromMaNV = (maNV: string) => {
   if (!maNV || maNV.length < 4) return null;
@@ -461,8 +462,9 @@ export default function PersonnelPage() {
   const [phapNhanList, setPhapNhanList] = useState<any[]>([]);
   const [chuKyList, setChuKyList] = useState<any[]>([]);
 
-  const [activeTab, setActiveTab] = useState<'info' | 'stats' | 'cuoc'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'stats' | 'cuoc' | 've_phep'>('info');
   const [activeSubTabPersonnel, setActiveSubTabPersonnel] = useState<'ACTIVE' | 'OFFBOARD'>('ACTIVE');
+  const [activeSubTabVePhep, setActiveSubTabVePhep] = useState<'TONG_HOP' | 'SO_THEO_DOI' | 'DOI_CHIEU_NCC'>('TONG_HOP');
 
   const [modal, setModal] = useState<{ isOpen: boolean; mode: 'create' | 'update'; formData: any; }>({ isOpen: false, mode: 'create', formData: {} });
 
@@ -1102,6 +1104,10 @@ export default function PersonnelPage() {
     return groupedOffboardPersonnel.length;
   }, [groupedOffboardPersonnel]);
 
+  const countVePhep = useMemo(() => {
+    return filteredPersonnel.filter(p => p.huong_chinh_sach_ve_phep && p.trang_thai !== 'Đã nghỉ việc').length;
+  }, [filteredPersonnel]);
+
   const personnelTabs = useMemo(() => [
     {
       id: 'info',
@@ -1111,6 +1117,17 @@ export default function PersonnelPage() {
       subTabs: [
         { id: 'ACTIVE', label: 'Đang làm việc', icon: <UserCheck className="w-4 h-4" />, count: countActive },
         { id: 'OFFBOARD', label: 'Đã nghỉ việc / Điều chuyển', icon: <LogOut className="w-4 h-4" />, count: countOffboard }
+      ]
+    },
+    {
+      id: 've_phep',
+      label: 'Quản lý về phép',
+      icon: <Plane size={18} />,
+      count: countVePhep,
+      subTabs: [
+        { id: 'TONG_HOP', label: 'Tổng hợp về phép', icon: <Layers className="w-4 h-4" /> },
+        { id: 'SO_THEO_DOI', label: 'Sổ theo dõi vé', icon: <Plane className="w-4 h-4" /> },
+        { id: 'DOI_CHIEU_NCC', label: 'Đối chiếu NCC', icon: <ArrowRightLeft className="w-4 h-4" /> }
       ]
     },
     { id: 'cuoc', label: 'Cước điện thoại', icon: <Phone size={18} /> },
@@ -1123,7 +1140,7 @@ export default function PersonnelPage() {
         { id: 'DASHBOARD', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" /> }
       ]
     }
-  ], [countActive, countOffboard]);
+  ], [countActive, countOffboard, countVePhep]);
 
   const displayPersonnelList = useMemo(() => {
     if (activeSubTabPersonnel === 'ACTIVE') {
@@ -1661,6 +1678,14 @@ export default function PersonnelPage() {
     e.preventDefault();
     if (!formData.id_don_vi) return toast.warning("Vui lòng chọn Đơn vị công tác!");
 
+    // Kiểm tra ràng buộc chính sách về phép
+    if (formData.huong_chinh_sach_ve_phep) {
+      const quota = Number(formData.dinh_muc_ve_phep_nam);
+      if (!quota || isNaN(quota) || quota <= 0) {
+        return toast.warning("Khi áp dụng chính sách về phép, bắt buộc phải thiết lập Hạn mức về phép / năm (> 0)!");
+      }
+    }
+
     // Kiểm tra trùng MSNV khi THÊM MỚI nhân sự
     if (modal.mode === 'create' && formData.ma_so_nhan_vien) {
       const dup = data.find(item =>
@@ -1707,6 +1732,13 @@ export default function PersonnelPage() {
           finalDataToSave.huan_luyen_den = null;
           finalDataToSave.gia_tri_den = null;
         }
+
+        finalDataToSave.huong_chinh_sach_ve_phep = Boolean(formData.huong_chinh_sach_ve_phep);
+        finalDataToSave.dinh_muc_ve_phep_nam = formData.huong_chinh_sach_ve_phep ? (Number(formData.dinh_muc_ve_phep_nam) || 0) : 0;
+        finalDataToSave.ngach_ve_phep = finalDataToSave.ngach_luong || formData.ngach_luong || formData.ngach_ve_phep || '';
+        finalDataToSave.tuyen_ve_phep = formData.huong_chinh_sach_ve_phep ? (formData.tuyen_ve_phep || '') : '';
+        finalDataToSave.hinh_thuc_ve_phep = formData.huong_chinh_sach_ve_phep ? (formData.hinh_thuc_ve_phep || 'Vé máy bay') : '';
+        finalDataToSave.ghi_chu_ve_phep = formData.huong_chinh_sach_ve_phep ? (formData.ghi_chu_ve_phep || '') : '';
 
         setDupConfirmModal({
           isOpen: true,
@@ -1767,6 +1799,13 @@ export default function PersonnelPage() {
       finalDataToSave.huan_luyen_den = null;
       finalDataToSave.gia_tri_den = null;
     }
+
+    finalDataToSave.huong_chinh_sach_ve_phep = Boolean(formData.huong_chinh_sach_ve_phep);
+    finalDataToSave.dinh_muc_ve_phep_nam = formData.huong_chinh_sach_ve_phep ? (Number(formData.dinh_muc_ve_phep_nam) || 0) : 0;
+    finalDataToSave.ngach_ve_phep = finalDataToSave.ngach_luong || formData.ngach_luong || formData.ngach_ve_phep || '';
+    finalDataToSave.tuyen_ve_phep = formData.huong_chinh_sach_ve_phep ? (formData.tuyen_ve_phep || '') : '';
+    finalDataToSave.hinh_thuc_ve_phep = formData.huong_chinh_sach_ve_phep ? (formData.hinh_thuc_ve_phep || 'Vé máy bay') : '';
+    finalDataToSave.ghi_chu_ve_phep = formData.huong_chinh_sach_ve_phep ? (formData.ghi_chu_ve_phep || '') : '';
 
     await executeSave(finalDataToSave);
   };
@@ -3288,9 +3327,14 @@ export default function PersonnelPage() {
               tabs={personnelTabs}
               activeTab={activeTab}
               onChange={(id) => setActiveTab(id as any)}
-              activeSubTab={activeTab === 'info' ? activeSubTabPersonnel : activeSubTabStats}
+              activeSubTab={
+                activeTab === 'info' ? activeSubTabPersonnel :
+                activeTab === 've_phep' ? activeSubTabVePhep :
+                activeSubTabStats
+              }
               onSubChange={(id) => {
                 if (activeTab === 'info') setActiveSubTabPersonnel(id as any);
+                else if (activeTab === 've_phep') setActiveSubTabVePhep(id as any);
                 else if (activeTab === 'stats') setActiveSubTabStats(id as any);
               }}
               layoutId="personnelMainTabSlide"
@@ -3700,6 +3744,20 @@ export default function PersonnelPage() {
               <PersonnelNgachLuongTab personnelList={filteredPersonnel} />
             </div>
           </div>
+        )}
+
+        {activeTab === 've_phep' && (
+          <VePhepTab
+            personnel={data}
+            donViList={donViList}
+            phapNhanList={phapNhanList}
+            allowedDonViIds={allowedDonViIds}
+            selectedUnitFilter={selectedUnitFilter}
+            selectedUnitSubordinates={selectedUnitFilter ? getAllSubordinateIds(selectedUnitFilter, donViList) : []}
+            activeSubTab={activeSubTabVePhep}
+            onSubTabChange={setActiveSubTabVePhep}
+            onEditPersonnel={(p) => openModal('update', p)}
+          />
         )}
 
         {activeTab === 'cuoc' && (
@@ -4541,6 +4599,33 @@ export default function PersonnelPage() {
                   </div>
                 )}
               </div>
+
+              {/* 🟢 KHỐI HIỂN THỊ CHÍNH SÁCH VỀ PHÉP */}
+              {viewData.huong_chinh_sach_ve_phep && (
+                <div className="mt-2 p-4 bg-sky-50/70 rounded-xl border border-sky-200 shadow-2xs w-full flex flex-col gap-3">
+                  <h5 className="font-bold text-sky-950 text-sm border-b border-sky-200/80 pb-2 flex items-center gap-2">
+                    <Plane className="w-4 h-4 text-sky-600" /> Chính Sách Về Phép & Đi Lại
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div className="bg-white p-2.5 rounded-lg border border-sky-100">
+                      <span className="text-gray-400 block text-[10px] font-bold uppercase">Hạn mức quy định</span>
+                      <span className="font-black text-sky-900 text-sm">{viewData.dinh_muc_ve_phep_nam || 0} lần / năm</span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-sky-100">
+                      <span className="text-gray-400 block text-[10px] font-bold uppercase">Tiêu chuẩn về phép</span>
+                      <span className="font-bold text-gray-800">{viewData.ghi_chu_ve_phep || 'Theo quy chế'}</span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-sky-100">
+                      <span className="text-gray-400 block text-[10px] font-bold uppercase">Phương tiện</span>
+                      <span className="font-bold text-gray-800">{viewData.hinh_thuc_ve_phep || 'Vé máy bay'}</span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-sky-100">
+                      <span className="text-gray-400 block text-[10px] font-bold uppercase">Tuyến mặc định</span>
+                      <span className="font-bold text-gray-800">{viewData.tuyen_ve_phep || '---'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 🟢 HÀNG GHI CHÚ (Chuyển xuống dưới cùng) */}
               <div className="mt-2">

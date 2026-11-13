@@ -1,5 +1,5 @@
-import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmNhomChiPhi, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe, ChiPhiPivotConfig, ConfigKhamSucKhoeRecord } from '../../types';
-import { fetchWithCache, resolveTable, invalidateCache } from './cache';
+import { Personnel, DonVi, User, SysLog, ThueBao, CuocThang, NhaCungCap, DmKmp, DmNhomChiPhi, DmBoPhan, BoPhanCap1, BoPhanCap2, DNTT, DnttChiTiet, DnttPhanBo, ChiPhiChotKy, ChiPhiThongKe, ChiPhiPivotConfig, ConfigKhamSucKhoeRecord, VeMayBay } from '../../types';
+import { fetchWithCache, resolveTable, invalidateCache, TABLE_DEFAULT_COLUMNS } from './cache';
 import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { writeLog } from './logs';
 import { getLocalRecords, saveLocalRecord, deleteLocalRecord } from './localStore';
@@ -19,36 +19,53 @@ async function getWithFallback<T>(tableName: string, forceRefresh = false, colum
   }
 }
 
-// Danh sách các cột tối ưu cho từng bảng dữ liệu lớn (giảm Egress và tăng tốc độ load)
-export const DNTT_SELECT_COLUMNS = 'id,so_dntt,ngay_lap,id_phap_nhan,id_don_vi,nguoi_de_nghi,bo_phan_hien_thi,noi_dung_thanh_toan,tong_so_tien,so_tien_bang_chu,hinh_thuc_thanh_toan,ten_tai_khoan,so_tai_khoan,ten_ngan_hang,chi_nhanh_ngan_hang,trang_thai,created_at,updated_at,don_vi_hien_thi,hien_thi_phan_bo,ky_chuc_danh_1,ky_chuc_danh_2,ky_chuc_danh_3,ky_chuc_danh_4,ky_ho_ten_1,ky_ho_ten_2,ky_ho_ten_3,ky_ho_ten_4,so_hoa_don,ngay_hoa_don,noi_dung_chuyen_khoan,ghi_chu,hien_thi_nd_ck,hien_thi_ghi_chu,dia_diem_ky,ngay_ky_ngay,hien_thi_hoa_don,ngay_ky_nam,ngay_ky_thang,mo_khoa_chinh_sua,hien_thi_cau_dan,cau_dan';
-export const DNTT_CHI_TIET_COLUMNS = 'id,dntt_id,stt,noi_dung,so_tien';
-export const DNTT_PHAN_BO_COLUMNS = 'id,dntt_id,dntt_chi_tiet_id,kieu_nhap,phan_tram,so_tien,id_kmp,thang,nam,id_bo_phan,id_bo_phan_cap1,id_bo_phan_cap2,thu_tu,ghi_chu,created_at';
-export const CHI_PHI_CHOT_KY_COLUMNS = 'id,thang,nam,trang_thai,chot_boi,chot_luc,huy_boi,huy_luc,ghi_chu,id_don_vi,ten_don_vi,danh_sach_don_vi_ap_dung,danh_sach_don_vi_mo_khoa,mo_khoa_toan_bo,han_mo_khoa,ly_do_mo_khoa';
-export const HS_KHOA_HUAN_LUYEN_COLUMNS = 'id,id_don_vi,ten_khoa_hoc,don_vi_dao_tao,ngay_bat_dau,ngay_ket_thuc,dia_diem,si_so_du_kien,si_so_thuc_te,trang_thai,link_ho_so,ghi_chu,created_at,updated_at';
-export const HS_HOC_VIEN_COLUMNS = 'id,id_khoa_hoc,stt,msnv,ho_ten,ngay_sinh,gioi_tinh,so_cccd,quoc_tich,chuc_vu,don_vi_text,id_don_vi,nhom,noi_dung_huan_luyen,thoi_gian_text,diem_ly_thuyet,diem_thuc_hanh,ket_qua,ghi_chu,da_dong_bo_nhan_su,created_at';
-export const NK_KHAM_SUC_KHOE_CANHAN_COLUMNS = 'id,ma_so_nhan_vien,ho_ten,id_don_vi,nam_kham,id_dot_ksk,ma_goi_kham,ten_goi_kham,loai_suc_khoe,ket_luan_bnn,ten_benh_nghe_nghiep,ngay_kham,ghi_chu_suc_khoe,created_at,nam_sinh,gioi_tinh,hon_nhan,chieu_cao,can_nang';
+// Danh sách các cột tối ưu cho từng bảng dữ liệu lớn (triệt tiêu triệt để select=*, sử dụng bảng mapping đã xác thực)
+export const DNTT_SELECT_COLUMNS = TABLE_DEFAULT_COLUMNS['dntt'];
+export const DNTT_CHI_TIET_COLUMNS = TABLE_DEFAULT_COLUMNS['dntt_chi_tiet'];
+export const DNTT_PHAN_BO_COLUMNS = TABLE_DEFAULT_COLUMNS['dntt_phan_bo'];
+export const CHI_PHI_CHOT_KY_COLUMNS = TABLE_DEFAULT_COLUMNS['chi_phi_chot_ky'];
+export const HS_KHOA_HUAN_LUYEN_COLUMNS = TABLE_DEFAULT_COLUMNS['hs_khoa_huan_luyen'];
+export const HS_HOC_VIEN_COLUMNS = TABLE_DEFAULT_COLUMNS['hs_hoc_vien_khoa_huan_luyen'];
+export const NK_KHAM_SUC_KHOE_CANHAN_COLUMNS = TABLE_DEFAULT_COLUMNS['nk_kham_suc_khoe_canhan'];
+export const NS_VE_MAY_BAY_COLUMNS = TABLE_DEFAULT_COLUMNS['ns_ve_may_bay'];
+export const HS_KHAM_SUC_KHOE_COLUMNS = TABLE_DEFAULT_COLUMNS['hs_kham_suc_khoe'];
+export const CONFIG_KHAM_SUC_KHOE_COLUMNS = TABLE_DEFAULT_COLUMNS['config_kham_suc_khoe'];
+export const NS_DICH_VU_COLUMNS = TABLE_DEFAULT_COLUMNS['ns_dich_vu'];
+export const TS_THIET_BI_COLUMNS = TABLE_DEFAULT_COLUMNS['ts_thiet_bi'];
+export const NK_THIET_BI_COLUMNS = TABLE_DEFAULT_COLUMNS['nk_thiet_bi'];
+export const TS_XE_COLUMNS = TABLE_DEFAULT_COLUMNS['ts_xe'];
+export const CP_HOAT_DONG_XE_COLUMNS = TABLE_DEFAULT_COLUMNS['cp_hoat_dong_xe'];
+export const HS_ATVSLD_COLUMNS = TABLE_DEFAULT_COLUMNS['hs_an_toan_lao_dong'];
+export const TS_PCCC_COLUMNS = TABLE_DEFAULT_COLUMNS['ts_pccc'];
+export const HS_PCCC_COLUMNS = TABLE_DEFAULT_COLUMNS['hs_pccc'];
+export const VB_TB_COLUMNS = TABLE_DEFAULT_COLUMNS['vb_tb'];
+export const SYS_LOGS_COLUMNS = TABLE_DEFAULT_COLUMNS['sys_logs'];
+export const CP_CUOC_THANG_COLUMNS = TABLE_DEFAULT_COLUMNS['cp_cuoc_thang'];
+export const DM_THUE_BAO_COLUMNS = TABLE_DEFAULT_COLUMNS['dm_thue_bao'];
+export const CONFIG_USERS_SELECT_COLUMNS = TABLE_DEFAULT_COLUMNS['config_users'];
 
-export const getPersonnel = (forceRefresh = false) => getWithFallback<Personnel>('ns_dich_vu', forceRefresh);
+export const getPersonnel = (forceRefresh = false) => getWithFallback<Personnel>('ns_dich_vu', forceRefresh, NS_DICH_VU_COLUMNS);
+export const getVeMayBay = (forceRefresh = false) => getWithFallback<VeMayBay>('ns_ve_may_bay', forceRefresh, NS_VE_MAY_BAY_COLUMNS);
 export const getDonVi = (forceRefresh = false) => getWithFallback<DonVi>('dm_don_vi', forceRefresh);
 export const getNhaCungCap = (forceRefresh = false) => getWithFallback<NhaCungCap>('dm_ncc', forceRefresh);
 export const getAnNinh = () => getWithFallback<any>('hs_an_ninh');
-export const getXe = () => getWithFallback<any>('ts_xe');
-export const getChiPhiXe = () => getWithFallback<any>('cp_hoat_dong_xe');
+export const getXe = () => getWithFallback<any>('ts_xe', false, TS_XE_COLUMNS);
+export const getChiPhiXe = () => getWithFallback<any>('cp_hoat_dong_xe', false, CP_HOAT_DONG_XE_COLUMNS);
 export const getPhapNhan = (forceRefresh = false) => getWithFallback<any>('dm_phap_nhan', forceRefresh);
 export const getPhongHop = () => getWithFallback<any>('dm_phong_hop');
 export const getQuyDinh = () => getWithFallback<any>('qd_qt');
-export const getThietBi = () => getWithFallback<any>('ts_thiet_bi');
-export const getNhatKyThietBi = () => getWithFallback<any>('nk_thiet_bi');
-export const getVanBan = () => getWithFallback<any>('vb_tb');
+export const getThietBi = () => getWithFallback<any>('ts_thiet_bi', false, TS_THIET_BI_COLUMNS);
+export const getNhatKyThietBi = () => getWithFallback<any>('nk_thiet_bi', false, NK_THIET_BI_COLUMNS);
+export const getVanBan = () => getWithFallback<any>('vb_tb', false, VB_TB_COLUMNS);
 export const getPVHC = () => getWithFallback<any>('hs_pvhc');
-export const getATVSLD = (forceRefresh = false) => getWithFallback<any>('hs_an_toan_lao_dong', forceRefresh);
+export const getATVSLD = (forceRefresh = false) => getWithFallback<any>('hs_an_toan_lao_dong', forceRefresh, HS_ATVSLD_COLUMNS);
 export const getPCTT = () => getWithFallback<any>('hs_pctt');
-export const getPCCC = () => getWithFallback<any>('hs_pccc');
-export const getTsPCCC = () => getWithFallback<any>('ts_pccc');
-export const getUsers = () => getWithFallback<User>('config_users');
-export const getLogs = () => getWithFallback<SysLog>('sys_logs');
-export const getThueBao = () => getWithFallback<ThueBao>('dm_thue_bao');
-export const getCuocThang = () => getWithFallback<CuocThang>('cp_cuoc_thang');
+export const getPCCC = () => getWithFallback<any>('hs_pccc', false, HS_PCCC_COLUMNS);
+export const getTsPCCC = () => getWithFallback<any>('ts_pccc', false, TS_PCCC_COLUMNS);
+export const getUsers = () => getWithFallback<User>('config_users', false, CONFIG_USERS_SELECT_COLUMNS);
+export const getLogs = () => getWithFallback<SysLog>('sys_logs', false, SYS_LOGS_COLUMNS);
+export const getThueBao = () => getWithFallback<ThueBao>('dm_thue_bao', false, DM_THUE_BAO_COLUMNS);
+export const getCuocThang = () => getWithFallback<CuocThang>('cp_cuoc_thang', false, CP_CUOC_THANG_COLUMNS);
 export const getKhoaHuanLuyen = (forceRefresh = false) => getWithFallback<any>('hs_khoa_huan_luyen', forceRefresh, HS_KHOA_HUAN_LUYEN_COLUMNS);
 export const getHocVienKhoaHuanLuyen = (forceRefresh = false) => getWithFallback<any>('hs_hoc_vien_khoa_huan_luyen', forceRefresh, HS_HOC_VIEN_COLUMNS);
 export const getChuKyATVSLD = (forceRefresh = false) => getWithFallback<any>('dm_chu_ky_atvsld', forceRefresh);
@@ -231,6 +248,10 @@ function extractRecordSummary(data: any, tableName: string): string {
   if (table.includes('ns_dich_vu')) {
     if (data.ho_ten) parts.push(`Họ tên: ${data.ho_ten}`);
     if (data.ma_so_nhan_vien) parts.push(`MSNV: ${data.ma_so_nhan_vien}`);
+  } else if (table.includes('ns_ve_may_bay')) {
+    if (data.ho_ten) parts.push(`Họ tên: ${data.ho_ten}`);
+    if (data.ma_so_nhan_vien) parts.push(`MSNV: ${data.ma_so_nhan_vien}`);
+    if (data.code_ve_di || data.code_ve_ve) parts.push(`Code: ${[data.code_ve_di, data.code_ve_ve].filter(Boolean).join('/')}`);
   } else if (table.includes('ts_xe')) {
     if (data.bien_so) parts.push(`Biển số: ${data.bien_so}`);
     if (data.hieu_xe || data.loai_xe) parts.push(`Xe: ${[data.hieu_xe, data.loai_xe].filter(Boolean).join(' ')}`);
@@ -306,182 +327,262 @@ async function checkUnitPermission(item: any, tableName: string) {
   }
 }
 
-export async function save(data: any, action: 'create' | 'update', tableName: string): Promise<any> {
-  // Thực hiện kiểm tra phạm vi ghi (Chặn thật ở Bước B)
+// 🟢 BỘ ĐỆM KHÓA TRÙNG LẶP REQUEST (In-Flight Request Deduplication)
+// Chặn đứng hoàn toàn Double-Click và lỗi trùng khóa PostgreSQL 23505
+const inFlightSaves = new Map<string, Promise<any>>();
+const inFlightDeletes = new Map<string, Promise<boolean>>();
+
+function getSaveLockKey(action: string, tableName: string, data: any): string {
   if (Array.isArray(data)) {
-    for (const item of data) {
-      await checkUnitPermission(item, tableName);
-    }
-  } else {
-    await checkUnitPermission(data, tableName);
+    return `${action}:${tableName}:batch:${data.length}:${data[0]?.id || ''}`;
+  }
+  const recordId = data?.id || data?.ID || data?.ID_Xe || data?.ID_User || data?.ma_so_nhan_vien || '';
+  return `${action}:${tableName}:${recordId || (typeof data === 'object' ? JSON.stringify(data).slice(0, 80) : '')}`;
+}
+
+export async function save(data: any, action: 'create' | 'update', tableName: string): Promise<any> {
+  const realTableName = resolveTable(tableName);
+  const lockKey = getSaveLockKey(action, realTableName, data);
+
+  // 1. Chống Double-Click ở tầng API: Nếu request tương tự đang chạy, tái sử dụng Promise đó
+  if (inFlightSaves.has(lockKey)) {
+    console.warn(`⏳ [Anti-DoubleClick] Đang xử lý yêu cầu lưu bảng ${realTableName}, ngăn chặn request trùng lặp!`);
+    return inFlightSaves.get(lockKey);
   }
 
-  if (API_MODE === 'MOCK') {
-    return saveLocalRecord(data, action, tableName);
-  }
-
-  try {
-    const realTableName = resolveTable(tableName);
-
-    // Xử lý lưu nhiều dòng (Mảng)
+  const savePromise = (async () => {
+    // Thực hiện kiểm tra phạm vi ghi (Chặn thật ở Bước B)
     if (Array.isArray(data)) {
-      const cleanArray = data.map(item => {
-        const cleaned = sanitizePayload(item, false, realTableName);
-        if (realTableName === 'ns_dich_vu') {
-          delete cleaned.phan_loai;
+      for (const item of data) {
+        await checkUnitPermission(item, tableName);
+      }
+    } else {
+      await checkUnitPermission(data, tableName);
+    }
+
+    if (API_MODE === 'MOCK') {
+      return saveLocalRecord(data, action, tableName);
+    }
+
+    try {
+      // Xử lý lưu nhiều dòng (Mảng)
+      if (Array.isArray(data)) {
+        const cleanArray = data.map(item => {
+          const cleaned = sanitizePayload(item, false, realTableName);
+          if (realTableName === 'ns_dich_vu') {
+            delete cleaned.phan_loai;
+          }
+          return cleaned;
+        });
+
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify(cleanArray)
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Lỗi Supabase: ${errText}`);
         }
-        return cleaned;
+        invalidateCache(realTableName);
+        let arraySummary = '';
+        if (Array.isArray(data) && data.length > 0) {
+          const samples = data.slice(0, 3).map(item => {
+            const detail = extractRecordSummary(item, realTableName);
+            return `{${detail}}`;
+          }).join(', ');
+          arraySummary = ` | Chi tiết mẫu: [${samples}${data.length > 3 ? '...' : ''}]`;
+        }
+        void writeLog('CẬP NHẬT MẢNG', `Bảng: ${realTableName} | Lưu ${data.length} bản ghi${arraySummary}`);
+        return response.json();
+      }
+
+      // Làm sạch dữ liệu Object (biến "" thành null, loại bỏ trường UI-only)
+      const cleanedData = sanitizePayload(data, action === 'update', realTableName);
+      if (realTableName === 'ns_dich_vu') {
+        delete cleanedData.phan_loai;
+        delete cleanedData.ten_don_vi;
+        delete cleanedData.ten_phap_nhan;
+        delete cleanedData.id_phap_nhan;
+        delete cleanedData.ngay_sinh;
+        delete cleanedData.email_ca_nhan;
+        delete cleanedData.ngay_nhan_viec;
+      }
+
+      if (action === 'create' && !cleanedData.id) {
+        if (realTableName === 'ns_ve_may_bay') {
+          cleanedData.id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = (Math.random() * 16) | 0;
+                const v = c === 'x' ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+              });
+        } else {
+          const prefix = realTableName.substring(0, 2).toUpperCase();
+          cleanedData.id = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+      }
+
+      let url = `${SUPABASE_URL}/rest/v1/${realTableName}`;
+      let method = 'POST';
+
+      if (action === 'update') {
+        const recordId = data.id || data.ID || data.ID_Xe || data.ID_User;
+        url = `${url}?id=eq.${recordId}`;
+        method = 'PATCH';
+      }
+
+      const response = await fetch(url, {
+        method: method,
+        headers: HEADERS,
+        body: JSON.stringify(cleanedData)
       });
 
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}`, {
-        method: 'POST',
-        headers: HEADERS,
-        body: JSON.stringify(cleanArray)
-      });
       if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Lỗi Supabase: ${errText}`);
+        const errorText = await response.text();
+        let errorMsg = errorText;
+        let errorCode = '';
+        try {
+          const errJson = JSON.parse(errorText);
+          errorMsg = errJson.message || errJson.details || errorText;
+          errorCode = errJson.code || '';
+        } catch (e) { }
+
+        // 🟢 XỬ LÝ TRIỆT ĐỂ LỖI 23505 (duplicate key value violates unique constraint do Double-Click hoặc trùng ID):
+        if (errorCode === '23505' || errorText.includes('23505') || errorText.includes('duplicate key')) {
+          console.warn(`⚠️ [PostgreSQL 23505 Handled] Bảng ${realTableName} bị trùng khóa. Tự động chuyển hướng sang PATCH cập nhật!`);
+          const recordId = data?.id || data?.ID || data?.ID_Xe || data?.ID_User || cleanedData?.id;
+          if (recordId) {
+            const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}?id=eq.${recordId}`, {
+              method: 'PATCH',
+              headers: HEADERS,
+              body: JSON.stringify(sanitizePayload(data, true, realTableName))
+            });
+            if (patchRes.ok) {
+              invalidateCache(realTableName);
+              void writeLog('CẬP NHẬT (23505 AUTO-RESOLVE)', `Bảng: ${realTableName} | ID: ${recordId}`);
+              try {
+                const patchedData = await patchRes.json();
+                return Array.isArray(patchedData) ? patchedData[0] : (patchedData || data);
+              } catch {
+                return data;
+              }
+            }
+          }
+        }
+
+        console.error(`🔴 LỖI TỪ SUPABASE (Bảng ${realTableName}):`, errorMsg);
+        throw new Error(errorMsg);
       }
+
       invalidateCache(realTableName);
-      let arraySummary = '';
-      if (Array.isArray(data) && data.length > 0) {
-        const samples = data.slice(0, 3).map(item => {
-          const detail = extractRecordSummary(item, realTableName);
-          return `{${detail}}`;
-        }).join(', ');
-        arraySummary = ` | Chi tiết mẫu: [${samples}${data.length > 3 ? '...' : ''}]`;
+      const tenHanhDong = action === 'create' ? 'THÊM MỚI' : 'CẬP NHẬT';
+      const detailSummary = extractRecordSummary(data, realTableName);
+      void writeLog(tenHanhDong, `Bảng: ${realTableName} | ${detailSummary}`);
+
+      const resultData = await response.json();
+      if (action === 'update' && Array.isArray(resultData) && resultData.length === 0) {
+        // Nếu PATCH không tìm thấy bản ghi (vd bị xóa trực tiếp trên Supabase), tự động fallback tạo mới (UPSERT)
+        const recordId = data.id || data.ID || data.ID_Xe || data.ID_User;
+        const postRes = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({ ...cleanedData, id: recordId })
+        });
+        if (postRes.ok) {
+          const postData = await postRes.json();
+          return Array.isArray(postData) ? postData[0] : postData;
+        }
       }
-      void writeLog('CẬP NHẬT MẢNG', `Bảng: ${realTableName} | Lưu ${data.length} bản ghi${arraySummary}`);
-      return response.json();
+      return Array.isArray(resultData) ? (resultData[0] || data) : (resultData || data);
+    } catch (err: any) {
+      console.error(`🔴 Giao tiếp Supabase thất bại cho bảng ${tableName}:`, err.message);
+      throw err;
     }
+  })();
 
-    // Làm sạch dữ liệu Object (biến "" thành null, loại bỏ trường UI-only)
-    const cleanedData = sanitizePayload(data, action === 'update', realTableName);
-    if (realTableName === 'ns_dich_vu') {
-      delete cleanedData.phan_loai;
-      delete cleanedData.ten_don_vi;
-      delete cleanedData.ten_phap_nhan;
-      delete cleanedData.id_phap_nhan;
-      delete cleanedData.ngay_sinh;
-      delete cleanedData.email_ca_nhan;
-      delete cleanedData.ngay_nhan_viec;
-    }
-
-    if (action === 'create' && !cleanedData.id) {
-      const prefix = realTableName.substring(0, 2).toUpperCase();
-      cleanedData.id = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    }
-
-    let url = `${SUPABASE_URL}/rest/v1/${realTableName}`;
-    let method = 'POST';
-
-    if (action === 'update') {
-      const recordId = data.id || data.ID || data.ID_Xe || data.ID_User;
-      url = `${url}?id=eq.${recordId}`;
-      method = 'PATCH';
-    }
-
-    const response = await fetch(url, {
-      method: method,
-      headers: HEADERS,
-      body: JSON.stringify(cleanedData)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMsg = errorText;
-      try {
-        const errJson = JSON.parse(errorText);
-        errorMsg = errJson.message || errJson.details || errorText;
-      } catch (e) { }
-
-      console.error(`🔴 LỖI TỪ SUPABASE (Bảng ${realTableName}):`, errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    invalidateCache(realTableName);
-    const tenHanhDong = action === 'create' ? 'THÊM MỚI' : 'CẬP NHẬT';
-    const detailSummary = extractRecordSummary(data, realTableName);
-    void writeLog(tenHanhDong, `Bảng: ${realTableName} | ${detailSummary}`);
-
-    const resultData = await response.json();
-    if (action === 'update' && Array.isArray(resultData) && resultData.length === 0) {
-      // Nếu PATCH không tìm thấy bản ghi (vd bị xóa trực tiếp trên Supabase), tự động fallback tạo mới (UPSERT)
-      const recordId = data.id || data.ID || data.ID_Xe || data.ID_User;
-      const postRes = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}`, {
-        method: 'POST',
-        headers: HEADERS,
-        body: JSON.stringify({ ...cleanedData, id: recordId })
-      });
-      if (postRes.ok) {
-        const postData = await postRes.json();
-        return Array.isArray(postData) ? postData[0] : postData;
-      }
-    }
-    return Array.isArray(resultData) ? (resultData[0] || data) : (resultData || data);
-  } catch (err: any) {
-    console.error(`🔴 Giao tiếp Supabase thất bại cho bảng ${tableName}:`, err.message);
-    throw err;
+  inFlightSaves.set(lockKey, savePromise);
+  try {
+    return await savePromise;
+  } finally {
+    inFlightSaves.delete(lockKey);
   }
 }
 
 export async function deleteRecord(id: string, tableName: string, snapshotData?: any): Promise<boolean> {
   const realTableName = resolveTable(tableName);
+  const deleteKey = `${realTableName}:${id}`;
 
-  // 1. Chốt an toàn: Kiểm tra quyền XÓA của tài khoản trước khi thực hiện
-  if (currentUser && !isUserAdminOrAllAccess(currentUser)) {
-    const isUnitTable = realTableName.includes('dm_don_vi') || realTableName.includes('don_vi');
-    if (isUnitTable) {
-      if ((currentUser as any).can_delete_unit === false) {
-        throw new Error('Bạn không có quyền XÓA Đơn vị / Showroom! Vui lòng liên hệ Admin.');
-      }
-    } else {
-      const hasDelete = (currentUser as any).can_delete === true ||
-        String((currentUser as any).quyen_chi_tiet || '').includes(':D') ||
-        String((currentUser as any).quyen_chi_tiet || '').includes('|D');
-      if (!hasDelete && (currentUser as any).can_delete === false) {
-        throw new Error('Bạn không có quyền XÓA dữ liệu! Vui lòng liên hệ Admin cấp quyền thao tác.');
-      }
-    }
+  // 1. Chống Double-Click xóa lặp
+  if (inFlightDeletes.has(deleteKey)) {
+    console.warn(`⏳ [Anti-DoubleClick] Đang xử lý yêu cầu xóa ID ${id} trên bảng ${realTableName}, ngăn chặn request trùng lặp!`);
+    return inFlightDeletes.get(deleteKey)!;
   }
 
-  // 2. Chụp Snapshot dữ liệu gốc trước khi xóa để lưu vào Thùng rác (sys_logs)
-  let snapshot = snapshotData;
-  if (!snapshot) {
+  const deletePromise = (async () => {
+    // 1. Chốt an toàn: Kiểm tra quyền XÓA của tài khoản trước khi thực hiện
+    if (currentUser && !isUserAdminOrAllAccess(currentUser)) {
+      const isUnitTable = realTableName.includes('dm_don_vi') || realTableName.includes('don_vi');
+      if (isUnitTable) {
+        if ((currentUser as any).can_delete_unit === false) {
+          throw new Error('Bạn không có quyền XÓA Đơn vị / Showroom! Vui lòng liên hệ Admin.');
+        }
+      } else {
+        const hasDelete = (currentUser as any).can_delete === true ||
+          String((currentUser as any).quyen_chi_tiet || '').includes(':D') ||
+          String((currentUser as any).quyen_chi_tiet || '').includes('|D');
+        if (!hasDelete && (currentUser as any).can_delete === false) {
+          throw new Error('Bạn không có quyền XÓA dữ liệu! Vui lòng liên hệ Admin cấp quyền thao tác.');
+        }
+      }
+    }
+
+    // 2. Chụp Snapshot dữ liệu gốc trước khi xóa để lưu vào Thùng rác (sys_logs)
+    let snapshot = snapshotData;
+    if (!snapshot) {
+      try {
+        const records = getLocalRecords(realTableName);
+        snapshot = records.find((r: any) => String(r.id || r.ID || r.ID_Xe || r.id_dntt) === String(id));
+      } catch (e) {}
+    }
+
+    const detailSummary = snapshot ? extractRecordSummary(snapshot, realTableName) : `ID ${id}`;
+    const snapStr = snapshot ? ` | SNAPSHOT: ${JSON.stringify(snapshot)}` : '';
+
+    if (API_MODE === 'MOCK') {
+      const success = deleteLocalRecord(id, tableName);
+      if (success) {
+        void writeLog('XÓA DỮ LIỆU', `Bảng: ${realTableName} | ID: ${id} | ${detailSummary}${snapStr}`);
+      }
+      return success;
+    }
+
     try {
-      const records = getLocalRecords(realTableName);
-      snapshot = records.find((r: any) => String(r.id || r.ID || r.ID_Xe || r.id_dntt) === String(id));
-    } catch (e) {}
-  }
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: HEADERS
+      });
 
-  const detailSummary = snapshot ? extractRecordSummary(snapshot, realTableName) : `ID ${id}`;
-  const snapStr = snapshot ? ` | SNAPSHOT: ${JSON.stringify(snapshot)}` : '';
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Lỗi xóa ${realTableName}: ${errorText}`);
+      }
 
-  if (API_MODE === 'MOCK') {
-    const success = deleteLocalRecord(id, tableName);
-    if (success) {
+      invalidateCache(realTableName);
       void writeLog('XÓA DỮ LIỆU', `Bảng: ${realTableName} | ID: ${id} | ${detailSummary}${snapStr}`);
+      return true;
+    } catch (err: any) {
+      console.error(`🔴 Giao tiếp Supabase thất bại cho bảng ${tableName}:`, err.message);
+      throw err;
     }
-    return success;
-  }
+  })();
 
+  inFlightDeletes.set(deleteKey, deletePromise);
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${realTableName}?id=eq.${id}`, {
-      method: 'DELETE',
-      headers: HEADERS
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Lỗi xóa ${realTableName}: ${errorText}`);
-    }
-
-    invalidateCache(realTableName);
-    void writeLog('XÓA DỮ LIỆU', `Bảng: ${realTableName} | ID: ${id} | ${detailSummary}${snapStr}`);
-    return true;
-  } catch (err: any) {
-    console.error(`🔴 Giao tiếp Supabase thất bại cho bảng ${tableName}:`, err.message);
-    throw err;
+    return await deletePromise;
+  } finally {
+    inFlightDeletes.delete(deleteKey);
   }
 }
 
@@ -496,7 +597,7 @@ export async function restoreRecord(tableName: string, recordData: any): Promise
 
 // 🟢 HELPER KHÁM SỨC KHỎE ĐỊNH KỲ & BỆNH NGHỀ NGHIỆP
 export async function getKhamSucKhoeCampaigns(forceRefresh = false): Promise<any[]> {
-  return getWithFallback('hs_kham_suc_khoe', forceRefresh);
+  return getWithFallback('hs_kham_suc_khoe', forceRefresh, HS_KHAM_SUC_KHOE_COLUMNS);
 }
 
 export async function saveKhamSucKhoeCampaign(data: any, action: 'create' | 'update'): Promise<any> {
@@ -517,7 +618,7 @@ export async function deleteKhamSucKhoeCampaign(id: string): Promise<boolean> {
 }
 
 export async function getConfigKhamSucKhoe(forceRefresh = false): Promise<ConfigKhamSucKhoeRecord[]> {
-  return getWithFallback<ConfigKhamSucKhoeRecord>('config_kham_suc_khoe', forceRefresh);
+  return getWithFallback<ConfigKhamSucKhoeRecord>('config_kham_suc_khoe', forceRefresh, CONFIG_KHAM_SUC_KHOE_COLUMNS);
 }
 
 export async function saveConfigKhamSucKhoe(data: any, action: 'create' | 'update'): Promise<any> {
@@ -620,12 +721,12 @@ export async function chotKyChiPhi(
     throw new Error(`Kỳ Tháng ${thang}/${nam} đã được chốt số liệu trước đó cho phạm vi này!`);
   }
 
-  // 2. Lấy dữ liệu DNTT, Phân bổ, Pháp nhân, KMP trong kỳ
+  // 2. Lấy dữ liệu DNTT, Phân bổ, Pháp nhân, KMP trong kỳ (tận dụng cache danh mục)
   const [allDntt, allPhanBo, allPhapNhan, allKmp] = await Promise.all([
     getDntt(true),
     getDnttPhanBo(true),
-    getPhapNhan(true),
-    getDmKmp(true)
+    getPhapNhan(false),
+    getDmKmp(false)
   ]);
 
   const dnttMap = new Map(allDntt.map(d => [d.id, d]));
@@ -957,8 +1058,8 @@ export async function dongBoSnapshotChotKy(
   const [allDntt, allPhanBo, allPhapNhan, allKmp] = await Promise.all([
     getDntt(true),
     getDnttPhanBo(true),
-    getPhapNhan(true),
-    getDmKmp(true)
+    getPhapNhan(false),
+    getDmKmp(false)
   ]);
 
   const dnttMap = new Map(allDntt.map(d => [d.id, d]));
@@ -1096,8 +1197,8 @@ export async function updateDnttStatusBulk(
   }
 
   const [allDntt, chotKyList] = await Promise.all([
-    getDntt(true),
-    getChiPhiChotKy(true)
+    getDntt(false),
+    getChiPhiChotKy(false)
   ]);
 
   const activeClosedPeriods = chotKyList.filter(ck => ck.trang_thai === 'da_chot');
