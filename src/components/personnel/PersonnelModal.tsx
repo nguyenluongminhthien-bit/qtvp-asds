@@ -193,7 +193,7 @@ export default function PersonnelModal({
       'Khối KD Xuất khẩu',
       'khối KD Cơ khí và CNHT',
       'Khối KD xe & DVPT xe DL',
-      'Khối KD xe  DVPT xe TM'
+      'Khối KD xe  DVPT xe TM',
       'Khối Bán lẻ',
       'NVQT Chuyên ngành',
       'NVQT Cơ bản',
