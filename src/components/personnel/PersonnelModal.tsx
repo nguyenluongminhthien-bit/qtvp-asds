@@ -184,16 +184,17 @@ export default function PersonnelModal({
 
   const khoiOptions = useMemo(() => {
     const base = [
-      'Khối Bán lẻ',
-      'Khối Thu mua',
-      'Khối KD Xuất khẩu',
-      'Khối KD Cơ khí và CNHT',
-      'Khối KD xe & DV SBH xe DL',
-      'Khối KD xe & DV SBH xe Thương mại',
       'Khối Sản xuất Cơ khí và TBCD',
-      'Khối Công nghiệp nặng',
-      'Khối Công nghệ và Giải pháp số hoá',
-      'Khối SX Ô tô, Đầu máy & Toa xe và LKPT',
+      'Dự án Công nghiệp nặng',
+      'Khối Công nghệ và Giải pháp Số hoá',
+      'Khối Thu mua',
+      'Trung tâm R&D',
+      'Khối SX Ô Tô, đầu máy & toa xe và LKPT',
+      'Khối KD Xuất khẩu',
+      'khối KD Cơ khí và CNHT',
+      'Khối KD xe & DVPT xe DL',
+      'Khối KD xe  DVPT xe TM'
+      'Khối Bán lẻ',
       'NVQT Chuyên ngành',
       'NVQT Cơ bản',
       'Nghiệp vụ'
