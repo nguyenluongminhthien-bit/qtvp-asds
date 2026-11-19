@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   X, Plus, Trash2, CheckCircle2, AlertTriangle, 
-  Layers, Calendar, Calculator, Star, Lock
+  Layers, Calendar, Calculator, Star, Lock,
+  Search, ChevronDown, Check
 } from 'lucide-react';
 import { DnttChiTiet, DnttPhanBo, DmKmp, DmBoPhan, BoPhanCap1, BoPhanCap2, ChiPhiChotKy } from '../../types';
 import { toast } from '../../utils/toast';
 import { getCostGroupStyle } from '../../utils/costGroupColors';
+import { stripAccents } from '../../utils/formatters';
 
 interface Props {
   isOpen: boolean;
@@ -185,6 +187,70 @@ export default function DnttAllocationModal({
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'vi'));
   }, [kmpList]);
+
+  // Combobox tìm kiếm Khoản mục phí (KMP)
+  const [kmpSearchTerm, setKmpSearchTerm] = useState('');
+  const [isKmpDropdownOpen, setIsKmpDropdownOpen] = useState(false);
+  const kmpDropdownRef = useRef<HTMLDivElement>(null);
+
+  // KMP hiện tại đang chọn
+  const currentKmp = useMemo(() => {
+    return kmpList.find(k => k.id === selectedKmpId);
+  }, [kmpList, selectedKmpId]);
+
+  // Đồng bộ text ô tìm kiếm với KMP đang chọn khi đóng dropdown
+  useEffect(() => {
+    if (!isKmpDropdownOpen) {
+      if (currentKmp) {
+        setKmpSearchTerm(currentKmp.ma_b7 ? `${currentKmp.ma_b7} - ${currentKmp.dien_giai || ''}` : (currentKmp.dien_giai || ''));
+      } else {
+        setKmpSearchTerm('');
+      }
+    }
+  }, [currentKmp, isKmpDropdownOpen]);
+
+  // Đóng dropdown khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (kmpDropdownRef.current && !kmpDropdownRef.current.contains(e.target as Node)) {
+        setIsKmpDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Lọc danh sách Khoản mục phí thông minh (hỗ trợ có dấu và không dấu theo mã B7, tên KMP, nhóm chi phí)
+  const filteredGroupedKmp = useMemo(() => {
+    const currentLabel = currentKmp ? stripAccents(currentKmp.ma_b7 ? `${currentKmp.ma_b7} - ${currentKmp.dien_giai || ''}` : (currentKmp.dien_giai || '')) : '';
+    const cleanSearch = stripAccents(kmpSearchTerm);
+    const isFiltering = isKmpDropdownOpen && cleanSearch !== '' && cleanSearch !== currentLabel;
+
+    const map = new Map<string, DmKmp[]>();
+    kmpList.forEach(k => {
+      if (k.active === false) return;
+      if (isFiltering) {
+        const dienGiaiMatch = stripAccents(k.dien_giai || '').includes(cleanSearch);
+        const maB7Match = stripAccents(k.ma_b7 || '').includes(cleanSearch);
+        const nhomMatch = stripAccents(k.nhom_chi_phi || '').includes(cleanSearch);
+        const idMatch = stripAccents(k.id || '').includes(cleanSearch);
+        if (!dienGiaiMatch && !maB7Match && !nhomMatch && !idMatch) {
+          return;
+        }
+      }
+      const grp = k.nhom_chi_phi?.trim() || 'Chi phí khác';
+      if (!map.has(grp)) map.set(grp, []);
+      map.get(grp)!.push(k);
+    });
+
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'vi'));
+  }, [kmpList, kmpSearchTerm, isKmpDropdownOpen, currentKmp]);
+
+  const handleSelectKmp = (k: DmKmp) => {
+    handleKmpChange(k.id);
+    setKmpSearchTerm(k.ma_b7 ? `${k.ma_b7} - ${k.dien_giai || ''}` : (k.dien_giai || ''));
+    setIsKmpDropdownOpen(false);
+  };
 
   // Khởi tạo và đồng bộ dữ liệu khi mở modal
   useEffect(() => {
@@ -556,9 +622,9 @@ export default function DnttAllocationModal({
         </div>
 
         {/* Lựa chọn KMP & Kỳ (T/N) dùng chung cho toàn bộ dòng nội dung */}
-        <div className="p-3 sm:p-4 bg-amber-50/40 dark:bg-slate-700/30 border-b border-amber-200/60 dark:border-slate-700 grid grid-cols-1 md:grid-cols-12 gap-3 shrink-0 items-start">
+        <div className="p-3 sm:p-4 bg-amber-50/40 dark:bg-slate-700/30 border-b border-amber-200/60 dark:border-slate-700 grid grid-cols-1 md:grid-cols-12 gap-3 shrink-0 items-start relative z-20">
           {/* Cột trái: Khoản mục phí (KMP) */}
-          <div className="md:col-span-8 p-3 bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-slate-600 shadow-2xs">
+          <div className="md:col-span-8 p-3 bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-slate-600 shadow-2xs relative z-30">
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <label className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
                 <Layers size={14} className="text-[#D97706]" />
@@ -569,27 +635,106 @@ export default function DnttAllocationModal({
               </span>
             </div>
 
-            <select
-              required
-              value={selectedKmpId}
-              onChange={(e) => handleKmpChange(e.target.value)}
-              className="w-full p-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-xs text-gray-900 dark:text-gray-100 font-semibold focus:ring-2 focus:ring-[#D97706] focus:border-[#D97706]"
-            >
-              <option value="">-- Chọn Khoản mục phí --</option>
-              {groupedKmp.map(([groupName, items]) => (
-                <optgroup key={groupName} label={`📂 ${groupName.toUpperCase()}`}>
-                  {items.map(k => (
-                    <option key={k.id} value={k.id}>
-                      {k.ma_b7 ? `${k.ma_b7} - ` : ''}{k.dien_giai || k.nhom_chi_phi} {k.trong_yeu ? '⭐' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            {/* Ô tìm kiếm thông minh kết hợp gợi ý */}
+            <div ref={kmpDropdownRef} className="relative">
+              <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={kmpSearchTerm}
+                  onChange={(e) => {
+                    setKmpSearchTerm(e.target.value);
+                    if (!isKmpDropdownOpen) setIsKmpDropdownOpen(true);
+                  }}
+                  onFocus={(e) => {
+                    setIsKmpDropdownOpen(true);
+                    e.target.select();
+                  }}
+                  placeholder="Tìm kiếm Khoản mục phí..."
+                  className="w-full pl-8 pr-16 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-xs text-gray-900 dark:text-gray-100 font-semibold focus:ring-2 focus:ring-[#D97706] focus:border-[#D97706] outline-none transition-all shadow-2xs"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                  {kmpSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKmpSearchTerm('');
+                        setIsKmpDropdownOpen(true);
+                      }}
+                      className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+                      title="Xóa tìm kiếm"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsKmpDropdownOpen(prev => !prev)}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+                    title={isKmpDropdownOpen ? 'Đóng gợi ý' : 'Mở danh sách'}
+                  >
+                    <ChevronDown size={14} className={`transition-transform duration-150 ${isKmpDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Danh sách gợi ý Dropdown */}
+              {isKmpDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-64 overflow-y-auto bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 custom-scrollbar animate-in fade-in zoom-in-95 duration-100">
+                  {filteredGroupedKmp.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-gray-400 italic">
+                      Không tìm thấy Khoản mục phí phù hợp
+                    </div>
+                  ) : (
+                    filteredGroupedKmp.map(([groupName, items]) => (
+                      <div key={groupName} className="border-b last:border-b-0 border-gray-100 dark:border-slate-700">
+                        <div className="px-3 py-1.5 text-[10.5px] font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-700/60 sticky top-0 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+                          <span>📂 {groupName.toUpperCase()}</span>
+                          <span className="text-[10px] text-gray-400 font-normal">({items.length})</span>
+                        </div>
+                        <div className="divide-y divide-gray-50 dark:divide-slate-700/50">
+                          {items.map(k => {
+                            const isSelected = k.id === selectedKmpId;
+                            return (
+                              <button
+                                key={k.id}
+                                type="button"
+                                onClick={() => handleSelectKmp(k)}
+                                className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 hover:bg-amber-50 dark:hover:bg-slate-700 transition-colors cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-amber-100/70 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-bold'
+                                    : 'text-gray-700 dark:text-gray-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {k.ma_b7 && (
+                                    <span className="shrink-0 px-1.5 py-0.5 rounded font-mono text-[10px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-slate-600">
+                                      {k.ma_b7}
+                                    </span>
+                                  )}
+                                  <span className="truncate">
+                                    {k.dien_giai || k.nhom_chi_phi}
+                                  </span>
+                                  {k.trong_yeu && (
+                                    <Star size={12} className="shrink-0 fill-amber-500 text-amber-500" title="KMP Trọng yếu" />
+                                  )}
+                                </div>
+                                {isSelected && (
+                                  <Check size={14} className="text-[#D97706] shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Nhãn chi tiết nhóm chi phí & trọng yếu */}
             {(() => {
-              const currentKmp = kmpList.find(k => k.id === selectedKmpId);
               if (!currentKmp) return null;
               const style = getCostGroupStyle(currentKmp.nhom_chi_phi);
               return (
