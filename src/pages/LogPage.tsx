@@ -83,7 +83,8 @@ export default function LogPage() {
     if (act?.includes('CẬP NHẬT') || act?.includes('SỬA')) return 'bg-blue-50 text-blue-700 border-blue-200';
     if (act?.includes('XÓA')) return 'bg-red-50 text-red-700 border-red-200';
     if (act?.includes('ĐĂNG NHẬP')) return 'bg-purple-50 text-purple-700 border-purple-200';
-    if (act?.includes('ĐĂNG XUẤT')) return 'bg-gray-100 text-gray-600 border-gray-300';
+    if (act?.includes('ĐĂNG XUẤT')) return 'bg-amber-50 text-amber-700 border-amber-200';
+    if (act?.includes('TRUY CẬP')) return 'bg-sky-50 text-sky-700 border-sky-200';
     return 'bg-gray-50 text-gray-700 border-gray-200';
   };
 
@@ -107,7 +108,7 @@ export default function LogPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-black text-[#05469B] flex items-center gap-2"><ClipboardList size={28} /> Nhật ký Hệ thống (Audit Logs)</h2>
-          <p className="text-sm font-medium text-gray-500 mt-1">Giám sát toàn bộ thao tác của người dùng trên hệ thống</p>
+          <p className="text-sm font-medium text-gray-500 mt-1">Giám sát hoạt động đăng nhập, đăng xuất và truy cập phân hệ (Tối đa 500 bản ghi mới nhất)</p>
         </div>
         <div className="relative w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />

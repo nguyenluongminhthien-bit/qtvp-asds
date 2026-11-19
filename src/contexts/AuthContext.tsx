@@ -63,11 +63,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const getSessionExpiryMs = () => sessionDays * 24 * 60 * 60 * 1000;
 
   useEffect(() => {
-    // 🟢 TỰ ĐỘNG DỌN DẸP NHẬT KÝ HỆ THỐNG CŨ (> 5 ngày) CHẠY NGẦM
-    apiService.cleanOldLogs?.(5).catch(err => {
-      console.warn("Lỗi tự động dọn dẹp log:", err);
-    });
-
     // 🟢 1. KIỂM TRA PHIÊN BẢN ỨNG DỤNG (APP VERSIONING)
     const currentVersion = localStorage.getItem('appVersion');
     if (currentVersion !== APP_VERSION) {

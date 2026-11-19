@@ -2424,8 +2424,11 @@ export default function PersonnelPage() {
         tgd = unitStaff.find(p => String(p.chuc_vu).toLowerCase().includes('chủ tịch')) || {};
       } else {
         tgd = unitStaff.find(p => {
-          const cv = String(p.chuc_vu).trim().toLowerCase();
-          return cv.includes('chủ tịch') || cv === 'tổng giám đốc' || cv.includes('thường trực');
+          const cv = String(p.chuc_vu || '').trim().toLowerCase();
+          const dvName = tenDV.trim().toLowerCase();
+          // Khớp: "tổng giám đốc thaco auto an giang"
+          // hoặc chứa cả "tổng giám đốc" VÀ tên đơn vị (xử lý trường hợp có thêm dấu "-", "công ty"...)
+          return cv.includes('tổng giám đốc') && cv.includes(dvName);
         }) || {};
       }
 
@@ -2865,23 +2868,27 @@ export default function PersonnelPage() {
   const [selectedDiaDiem, setSelectedDiaDiem] = useState<string[]>([]);
 
   const availableNgachLuong = useMemo(() => {
-    const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
+    const activeStaff = data.filter(p => p.trang_thai !== 'Đã nghỉ việc');
     const ngachList = activeStaff.map(p => p.ngach_luong).filter(n => n && n.trim() !== '');
     return Array.from(new Set(ngachList)).sort();
-  }, [filteredPersonnel]);
+  }, [data]);
 
   const availableDiaDiem = useMemo(() => {
-    const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
+    const activeStaff = data.filter(p => p.trang_thai !== 'Đã nghỉ việc');
     const locationList = activeStaff.map(p => (p as any).dia_diem_lam_viec || (p as any).noi_lam_viec).filter(n => n && String(n).trim() !== '');
     return Array.from(new Set(locationList)).sort();
-  }, [filteredPersonnel]);
+  }, [data]);
 
   const handleCopyTargetEmails = (type: string) => {
     const activeStaff = filteredPersonnel.filter(p => p.trang_thai !== 'Đã nghỉ việc');
     let targetPersonnel: any[] = [];
 
     if (type === 'lanh_dao') {
-      targetPersonnel = activeStaff.filter(p => p.chuc_danh === 'Lãnh đạo' && String(p.chuc_vu).trim() === 'Tổng Giám đốc');
+      targetPersonnel = activeStaff.filter(p => {
+        const cd = String(p.chuc_danh || '').toLowerCase();
+        const cv = String(p.chuc_vu || '').toLowerCase();
+        return cd.includes('lãnh đạo') || cv.includes('tổng giám đốc') || cv.includes('giám đốc') || cv.includes('chủ tịch');
+      });
     } else if (type === 'pt_qtvp') {
       targetPersonnel = activeStaff.filter(p =>
         p.chuc_danh === 'PT QTVP & ASĐS' ||
@@ -3329,8 +3336,8 @@ export default function PersonnelPage() {
               onChange={(id) => setActiveTab(id as any)}
               activeSubTab={
                 activeTab === 'info' ? activeSubTabPersonnel :
-                activeTab === 've_phep' ? activeSubTabVePhep :
-                activeSubTabStats
+                  activeTab === 've_phep' ? activeSubTabVePhep :
+                    activeSubTabStats
               }
               onSubChange={(id) => {
                 if (activeTab === 'info') setActiveSubTabPersonnel(id as any);

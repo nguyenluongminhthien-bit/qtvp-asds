@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { apiService } from './services/api';
 import Sidebar from './components/Sidebar';
 import Login from './pages/LoginPage';
 
@@ -63,6 +64,35 @@ function AppContent() {
   const navigateToTab = (newTab: string) => {
     setActiveTab(newTab);
   };
+
+  const lastLoggedTabRef = useRef<string | null>(null);
+
+  // 🟢 GHI NHẬT KÝ TRUY CẬP PHÂN HỆ (Chỉ ghi khi chuyển sang phân hệ mới, chống ghi lặp)
+  useEffect(() => {
+    if (!user || !activeTab) return;
+    if (lastLoggedTabRef.current === activeTab) return;
+    lastLoggedTabRef.current = activeTab;
+
+    const TAB_MODULE_NAMES: Record<string, string> = {
+      dashboard: 'Tổng quan',
+      personnel: 'Nhân sự',
+      departments: 'Công ty & Đơn vị',
+      vehicles: 'Phương tiện',
+      equipments: 'Thiết bị & Tài sản',
+      cphc: 'Chi phí',
+      suppliers: 'Nhà cung cấp',
+      documents: 'Văn bản - Thông báo',
+      policies: 'Quy định - Quy trình',
+      firesafety: 'PCCC',
+      atvsld: 'ATVSLĐ',
+      accounts: 'Quản lý tài khoản',
+      logs: 'Nhật ký hệ thống',
+      reports: 'Báo cáo thống kê'
+    };
+
+    const moduleName = TAB_MODULE_NAMES[activeTab] || activeTab;
+    apiService.writeLog('TRUY CẬP', `Phân hệ: ${moduleName}`);
+  }, [user, activeTab]);
 
   // 🟢 TỰ ĐỘNG CHUYỂN TAB NẾU KHÔNG CÓ QUYỀN TRUY CẬP TAB HIỆN TẠI (Ví dụ: Dashboard)
   useEffect(() => {

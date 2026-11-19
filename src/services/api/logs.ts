@@ -2,9 +2,19 @@ import { SUPABASE_URL, HEADERS, API_MODE } from './client';
 import { currentUser } from './auth';
 import { saveLocalRecord, getLocalRecords } from './localStore';
 
+// Danh sách hành động cho phép ghi log: Chỉ ghi Đăng nhập, Đăng xuất và Truy cập phân hệ
+const ALLOWED_LOG_ACTIONS = new Set(['ĐĂNG NHẬP', 'ĐĂNG XUẤT', 'TRUY CẬP']);
+
 export async function writeLog(hanhDong: string, chiTiet: string): Promise<void> {
   try {
     if (!currentUser) return; // Nếu chưa đăng nhập thì không ghi log
+
+    const actionUpper = (hanhDong || '').trim().toUpperCase();
+    const isAllowed = ALLOWED_LOG_ACTIONS.has(actionUpper) || actionUpper.startsWith('TRUY CẬP');
+    if (!isAllowed) {
+      // Bỏ qua các log chi tiết nghiệp vụ (Thêm/Sửa/Xóa/Snapshot) để tiết kiệm băng thông và dung lượng DB
+      return;
+    }
     
     const logData: any = {
       id: `LOG${Date.now()}${Math.floor(Math.random() * 1000)}`,
@@ -31,7 +41,7 @@ export async function writeLog(hanhDong: string, chiTiet: string): Promise<void>
       method: 'POST',
       headers: {
         ...HEADERS,
-        'Prefer': 'return=representation'
+        'Prefer': 'return=minimal'
       },
       body: JSON.stringify(logData)
     });
@@ -60,39 +70,8 @@ export async function writeLog(hanhDong: string, chiTiet: string): Promise<void>
   }
 }
 
-export async function cleanOldLogs(days = 5): Promise<void> {
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - days);
-  const cutoffIso = cutoffDate.toISOString();
-
-  // 1. MOCK mode: xóa trong LocalStorage
-  if (API_MODE === 'MOCK') {
-    try {
-      const allLogs = getLocalRecords('sys_logs') || [];
-      const newLogs = allLogs.filter((log: any) => {
-        if (!log.thoi_gian) return false;
-        return new Date(log.thoi_gian).getTime() >= cutoffDate.getTime();
-      });
-      localStorage.setItem('db_sys_logs', JSON.stringify(newLogs));
-    } catch (e) {
-      console.error("Lỗi xóa Log Mock:", e);
-    }
-    return;
-  }
-
-  // 2. Supabase mode: gọi DELETE API qua REST
-  try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/sys_logs?thoi_gian=lt.${encodeURIComponent(cutoffIso)}`, {
-      method: 'DELETE',
-      headers: {
-        ...HEADERS
-      }
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lỗi xóa Log Supabase:", errorText);
-    }
-  } catch (error) {
-    console.error("Lỗi hệ thống khi xóa Log:", error);
-  }
+export async function cleanOldLogs(_days = 5): Promise<void> {
+  // Người dùng chủ động quản trị và xóa log trực tiếp trên Supabase.
+  // Ứng dụng không tự động xóa để bảo toàn dữ liệu lịch sử.
+  return;
 }

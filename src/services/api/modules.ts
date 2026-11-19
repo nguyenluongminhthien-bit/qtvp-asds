@@ -63,7 +63,30 @@ export const getPCTT = () => getWithFallback<any>('hs_pctt');
 export const getPCCC = () => getWithFallback<any>('hs_pccc', false, HS_PCCC_COLUMNS);
 export const getTsPCCC = () => getWithFallback<any>('ts_pccc', false, TS_PCCC_COLUMNS);
 export const getUsers = () => getWithFallback<User>('config_users', false, CONFIG_USERS_SELECT_COLUMNS);
-export const getLogs = () => getWithFallback<SysLog>('sys_logs', false, SYS_LOGS_COLUMNS);
+export const getLogs = async (limit = 500): Promise<SysLog[]> => {
+  if (API_MODE === 'MOCK') {
+    const local = (getLocalRecords('sys_logs') || []) as SysLog[];
+    return local
+      .sort((a: any, b: any) => new Date(b.thoi_gian || 0).getTime() - new Date(a.thoi_gian || 0).getTime())
+      .slice(0, limit);
+  }
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/sys_logs?select=${SYS_LOGS_COLUMNS}&order=thoi_gian.desc&limit=${limit}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: HEADERS
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn("Lỗi tải sys_logs từ Supabase:", errText);
+      return (getLocalRecords('sys_logs') as SysLog[]) || [];
+    }
+    return (await response.json()) as SysLog[];
+  } catch (err) {
+    console.warn("⚠️ Không thể tải sys_logs từ Supabase:", err);
+    return (getLocalRecords('sys_logs') as SysLog[]) || [];
+  }
+};
 export const getThueBao = () => getWithFallback<ThueBao>('dm_thue_bao', false, DM_THUE_BAO_COLUMNS);
 export const getCuocThang = () => getWithFallback<CuocThang>('cp_cuoc_thang', false, CP_CUOC_THANG_COLUMNS);
 export const getKhoaHuanLuyen = (forceRefresh = false) => getWithFallback<any>('hs_khoa_huan_luyen', forceRefresh, HS_KHOA_HUAN_LUYEN_COLUMNS);
